@@ -11,8 +11,8 @@ comando**; lo que se supone va en "deuda conocida".
 
 | Señal | Resultado |
 |---|---|
-| self-test | verde — ~390 verificaciones (+ portado de los 8 perfiles, cada uno con su self-test/lint/link-check) |
-| mutaciones | 27/27 ponen rojo el self-test (incluye cada hallazgo de la revisión del 2026-09-30) |
+| self-test | verde — 533 verificaciones (incluye el portado de los 8 perfiles, cada uno con su self-test/lint/link-check) |
+| mutaciones | 28/28 ponen rojo el self-test (cada hallazgo de la revisión y la consola cp1252 de Windows; en Windows 1 sale «no aplica», con su motivo) |
 | `hermes plugins doctor plugin --ci` | OK: manifiesto, import y registro; 4 hooks |
 | `scripts/hermes_e2e.py` | 70 verificaciones dentro de Hermes (directivas de `pre_tool_call`, V4A, cwd de sesión, `pre_verify`, `pre_llm_call`, `transform_tool_result`, sección del prompt) |
 | CI (GitHub Actions) | verde en Linux, macOS y Windows × Python 3.11 y 3.13 (`b17207b`); en CI las 2 señales de Hermes salen OMITIDAS |
