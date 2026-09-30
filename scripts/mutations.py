@@ -73,7 +73,18 @@ CONFIG = {
 }
 
 
+# Mutaciones de ramas que sólo EXISTEN fuera de una plataforma: ahí el código mutado nunca corre y
+# la mutación es un no-op, no un freno sin prueba. Se reporta "no aplica" con el motivo — visible,
+# nunca contada como verde ni como sobreviviente. Lo destapó la matriz de CI en Windows.
+NO_APLICA = {
+    "ruta de Windows tomada como del repo": ("nt", "la rama sólo corre fuera de Windows (una ruta C:\\ vista desde POSIX)"),
+}
+
+
 def probar(nombre: str, mut) -> tuple[str, str]:
+    plataforma, motivo = NO_APLICA.get(nombre, (None, ""))
+    if plataforma == os.name:
+        return nombre, f"no aplica en {os.name}: {motivo}"
     with tempfile.TemporaryDirectory() as tmp:
         dst = Path(tmp) / "repo"
         shutil.copytree(REPO, dst, ignore=shutil.ignore_patterns("__pycache__", ".git"))
@@ -96,9 +107,9 @@ def main() -> int:
     todas = list(CODIGO.items()) + list(CONFIG.items())
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 2)) as ex:
         resultados = list(ex.map(lambda nm: probar(*nm), todas))
-    malas = [(n, r) for n, r in resultados if r != "roja"]
+    malas = [(n, r) for n, r in resultados if r != "roja" and not r.startswith("no aplica")]
     for n, r in resultados:
-        print(f"  {'✓' if r == 'roja' else '✗'} {n}: {r}")
+        print(f"  {'✓' if r == 'roja' else ('·' if r.startswith('no aplica') else '✗')} {n}: {r}")
     if malas:
         print(f"\nmutations: {len(malas)} de {len(todas)} no pusieron rojo el self-test.")
         return 1
