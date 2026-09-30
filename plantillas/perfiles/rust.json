@@ -1,0 +1,51 @@
+{
+  "$comment": "Perfil rust: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "rust",
+  "codeExtensions": [
+    ".rs"
+  ],
+  "codeGlobs": [
+    "src/",
+    "tests/",
+    "crates/"
+  ],
+  "commitCodePattern": "\\.rs$|^(src|crates|tests)/",
+  "protectedPaths": [
+    {
+      "id": "cargo-lock",
+      "pattern": "^Cargo\\.lock$",
+      "example": "Cargo.lock",
+      "reason": "Cargo.lock lo escribe cargo."
+    },
+    {
+      "id": "target",
+      "pattern": "^target/",
+      "example": "target/debug/x",
+      "reason": "artefacto de build."
+    }
+  ],
+  "signals": [
+    {
+      "name": "cargo clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--quiet",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "fastSkip": true,
+      "why": "lo que compila pero el linter del lenguaje rechaza"
+    },
+    {
+      "name": "cargo test",
+      "command": [
+        "cargo",
+        "test",
+        "--quiet"
+      ],
+      "why": "el comportamiento"
+    }
+  ]
+}

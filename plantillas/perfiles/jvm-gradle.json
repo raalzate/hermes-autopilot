@@ -1,0 +1,41 @@
+{
+  "$comment": "Perfil jvm-gradle: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "jvm-gradle",
+  "codeExtensions": [
+    ".java",
+    ".kt",
+    ".kts",
+    ".scala",
+    ".gradle"
+  ],
+  "codeGlobs": [
+    "src/",
+    "app/"
+  ],
+  "commitCodePattern": "^(src|app)/|\\.gradle(\\.kts)?$",
+  "protectedPaths": [
+    {
+      "id": "gradle-lock",
+      "pattern": "(^|/)gradle\\.lockfile$",
+      "example": "gradle.lockfile",
+      "reason": "lo regenera gradle."
+    },
+    {
+      "id": "build",
+      "pattern": "(^|/)(build|\\.gradle)/",
+      "example": "build/libs/x.jar",
+      "reason": "artefacto de build."
+    }
+  ],
+  "signals": [
+    {
+      "name": "gradle check",
+      "command": [
+        "./gradlew",
+        "check",
+        "-q"
+      ],
+      "why": "compila, testea y corre los chequeos"
+    }
+  ]
+}

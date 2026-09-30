@@ -1,0 +1,47 @@
+{
+  "$comment": "Perfil go: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "go",
+  "codeExtensions": [
+    ".go"
+  ],
+  "codeGlobs": [
+    "cmd/",
+    "internal/",
+    "pkg/"
+  ],
+  "commitCodePattern": "\\.go$|^(cmd|internal|pkg)/",
+  "protectedPaths": [
+    {
+      "id": "go-sum",
+      "pattern": "^go\\.sum$",
+      "example": "go.sum",
+      "reason": "go.sum lo escribe `go mod tidy`, no el agente."
+    },
+    {
+      "id": "vendor",
+      "pattern": "^vendor/",
+      "example": "vendor/x/y.go",
+      "reason": "vendor: derivado de go.mod."
+    }
+  ],
+  "signals": [
+    {
+      "name": "go vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "why": "errores que compilan pero están mal"
+    },
+    {
+      "name": "go test",
+      "command": [
+        "go",
+        "test",
+        "./..."
+      ],
+      "why": "el comportamiento"
+    }
+  ]
+}

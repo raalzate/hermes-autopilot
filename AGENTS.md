@@ -1,0 +1,82 @@
+# AGENTS.md — Hermes Harness
+
+Hermes carga este archivo en cada sesión de este repo. Los principios que no se negocian están en
+`CONSTITUTION.md` (Hermes no resuelve imports: leelo cuando la tarea toque el arnés).
+
+## Qué es este repo
+
+El producto **es el arnés**: un plugin de Hermes, frenos, gate, self-test, skills y docs para que
+otro repo —en cualquier lenguaje— tenga reglas que se hacen cumplir solas cuando lo trabaja
+Hermes Agent. Es el hermano de `agent-harness` (hecho para Claude Code), rehecho para el modelo de
+extensión de Hermes. Python de la biblioteca estándar, sin dependencias.
+
+Este repo se audita a sí mismo: si algo acá no cumple lo que el arnés predica, eso **es** el bug.
+
+## Arquitectura en una frase
+
+`.hermes/harness.config.json` declara las reglas; `plugin/harness/` las decide con funciones puras;
+`plugin/__init__.py` y `scripts/hook.py` son dos adaptadores finos al contrato de Hermes.
+
+```
+.hermes/harness.config.json  la única fuente de especificidad (reglas, rutas, nombres de herramientas)
+plugin/                      el plugin `repo-harness`: pre_tool_call · transform_tool_result · pre_verify · pre_llm_call
+plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (frenos) · rules (lint) · turn (turno)
+scripts/hook.py              el mismo núcleo como shell hook de Hermes (para quien no habilita plugins)
+scripts/gate.py              ejecuta gate.signals; no sabe de stacks
+scripts/selftest.py          prueba de vida: los casos salen del `example` de cada regla
+scripts/lint.py              5 clases de regla; incluye la que evita que Hermes descarte AGENTS.md
+scripts/install.py           instalador en otro repo (dry-run por defecto, perfil de stack)
+scripts/mutations.py         la prueba de vida del self-test: 27 mutaciones, todas tienen que ponerlo rojo
+scripts/hermes_e2e.py        cada `example` por el despacho del Hermes REAL (señal del gate; OMITIDA sin Hermes)
+scripts/doctor.py            lo que el gate no ve: el Hermes de esta máquina
+.hermes/skills/              gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
+plantillas/                  lo que se copia al repo destino, y los perfiles de stack
+docs/                        lo que se lee
+```
+
+## Reglas de desarrollo
+
+- **Nada específico de un repo, de un lenguaje ni de una versión de Hermes entra al código.** Un
+  literal de dominio, una extensión o un nombre de herramienta va al config. El lint lo verifica
+  sobre `plugin/harness/guards.py`.
+- **Toda regla del config trae `example`**, y el self-test lo pasa por el plugin real. Una clase de
+  regla nueva o un freno nuevo llega con su caso escrito a mano en `scripts/selftest.py`.
+- **Validación doble, siempre:** `python3 scripts/selftest.py` (¿muerde?) y `python3 scripts/lint.py`
+  (¿no muerde de más?). La segunda es la que se olvida.
+- **El plugin nunca lanza.** En Hermes, un `pre_tool_call` que lanza o se pasa de tiempo **bloquea**
+  la herramienta. Todo callback pasa por `_seguro`: un arnés roto deja pasar.
+- **Los frenos no lanzan procesos.** Corren en cada tool call, dentro del proceso de Hermes.
+- **Shell hook: exit 2 bloquea, exit 1 no.** Nunca exit 1.
+- **Los mensajes de bloqueo explican el porqué.** El `reason` es lo único que el agente lee cuando
+  lo frenás: qué pasó, por qué importa, qué hacer.
+- **El config se edita con `write_file`/`patch`, no con un heredoc**: contiene los patrones que
+  prohíbe y el freno de terminal los ve.
+- **Lo que se escribe en archivos de contexto se cuida del escáner de Hermes.** Una línea que
+  parezca inyección hace que Hermes descarte el archivo entero. La regla `CONTEXTO` del lint
+  lista los patrones.
+
+## Antes de dar algo por terminado
+
+```bash
+python3 scripts/gate.py          # EL entregable: self-test · link-check · lint · plugin y contrato en Hermes real
+python3 scripts/selftest.py      # ¿los frenos muerden?
+python3 scripts/lint.py          # ¿el repo pasa con las reglas activas?
+python3 scripts/lint.py --rules  # ¿qué reglas están activas?
+python3 scripts/doctor.py        # ¿el arnés está vivo en ESTA máquina?
+```
+
+- CI (`.github/workflows/ci.yml`) corre el mismo gate en Linux, macOS y Windows.
+- Hooks de git: `python3 scripts/githooks.py install`. Saltarse la verificación está prohibido.
+- Al cambiar el arnés, probá también el portado: `python3 scripts/install.py <repo>` en dry-run.
+
+## Documentación: qué va dónde
+
+| Contenido | Archivo |
+|---|---|
+| cómo se engancha a Hermes (hooks, plugin, contexto, skills, memoria) | `docs/hermes.md` |
+| el arnés de ESTE repo | `docs/arnes.md` |
+| qué hace cada clave del config y quién la lee | `docs/config-reference.md` |
+| cómo se instala en otro repo | `docs/portar.md` |
+| de agent-harness (Claude Code) a este | `docs/desde-claude-code.md` |
+| incidentes (formato fijo, lo exige el lint) | `docs/gotchas.md` |
+| por qué está hecho así | `docs/decisions/` |

@@ -1,0 +1,34 @@
+{
+  "$comment": "Perfil jvm-maven: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "jvm-maven",
+  "codeExtensions": [
+    ".java",
+    ".kt",
+    ".kts",
+    ".scala",
+    ".xml"
+  ],
+  "codeGlobs": [
+    "src/"
+  ],
+  "commitCodePattern": "^src/|(^|/)pom\\.xml$",
+  "protectedPaths": [
+    {
+      "id": "target",
+      "pattern": "(^|/)target/",
+      "example": "target/classes/X.class",
+      "reason": "artefacto de build."
+    }
+  ],
+  "signals": [
+    {
+      "name": "mvn verify",
+      "command": [
+        "mvn",
+        "-q",
+        "verify"
+      ],
+      "why": "compila, testea y corre los plugins del ciclo"
+    }
+  ]
+}

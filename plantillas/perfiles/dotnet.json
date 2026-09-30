@@ -1,0 +1,41 @@
+{
+  "$comment": "Perfil dotnet: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "dotnet",
+  "codeExtensions": [
+    ".cs",
+    ".fs",
+    ".vb",
+    ".csproj",
+    ".razor"
+  ],
+  "codeGlobs": [
+    "src/",
+    "tests/"
+  ],
+  "commitCodePattern": "\\.(cs|fs|vb|csproj|razor)$",
+  "protectedPaths": [
+    {
+      "id": "dotnet-lock",
+      "pattern": "(^|/)packages\\.lock\\.json$",
+      "example": "src/App/packages.lock.json",
+      "reason": "lo regenera `dotnet restore`."
+    },
+    {
+      "id": "dotnet-bin",
+      "pattern": "(^|/)(bin|obj)/",
+      "example": "src/App/obj/x.cs",
+      "reason": "artefacto de build."
+    }
+  ],
+  "signals": [
+    {
+      "name": "dotnet test",
+      "command": [
+        "dotnet",
+        "test",
+        "--nologo"
+      ],
+      "why": "el comportamiento (y compila la solución)"
+    }
+  ]
+}

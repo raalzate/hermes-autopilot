@@ -1,0 +1,40 @@
+{
+  "$comment": "Perfil python: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "python",
+  "codeExtensions": [
+    ".py",
+    ".pyi"
+  ],
+  "codeGlobs": [
+    "src/",
+    "tests/",
+    "app/"
+  ],
+  "commitCodePattern": "^(src|app|tests)/",
+  "protectedPaths": [
+    {
+      "id": "py-lock",
+      "pattern": "^(uv\\.lock|poetry\\.lock|Pipfile\\.lock|pdm\\.lock)$",
+      "example": "uv.lock",
+      "reason": "el lockfile se regenera con el gestor (`uv lock`, `poetry lock`), no a mano."
+    },
+    {
+      "id": "py-venv",
+      "pattern": "^(\\.venv|venv|\\.tox|__pycache__)/",
+      "example": ".venv/lib/x.py",
+      "reason": "entorno virtual: derivado, se recrea."
+    }
+  ],
+  "signals": [
+    {
+      "name": "tests (pytest)",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "why": "el comportamiento: ninguna otra señal ejecuta el código"
+    }
+  ]
+}

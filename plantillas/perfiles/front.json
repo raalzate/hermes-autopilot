@@ -1,0 +1,62 @@
+{
+  "$comment": "Perfil front: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "front",
+  "codeExtensions": [
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".vue",
+    ".svelte",
+    ".css",
+    ".scss"
+  ],
+  "codeGlobs": [
+    "src/",
+    "app/",
+    "components/"
+  ],
+  "commitCodePattern": "^(src|app|components)/",
+  "protectedPaths": [
+    {
+      "id": "node-lock",
+      "pattern": "^(package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|bun\\.lockb)$",
+      "example": "pnpm-lock.yaml",
+      "reason": "el lockfile se regenera con el gestor."
+    },
+    {
+      "id": "build",
+      "pattern": "^(dist|build|\\.next|\\.nuxt|\\.svelte-kit)/",
+      "example": "dist/app.js",
+      "reason": "artefacto de build: derivado."
+    },
+    {
+      "id": "node-modules",
+      "pattern": "(^|/)node_modules/",
+      "example": "node_modules/x/index.js",
+      "reason": "dependencias: se cambian por manifiesto + install."
+    }
+  ],
+  "signals": [
+    {
+      "name": "build",
+      "command": [
+        "npm",
+        "run",
+        "build",
+        "--silent"
+      ],
+      "fastSkip": true,
+      "why": "el tipo y el bundle: los tests no compilan la app entera"
+    },
+    {
+      "name": "tests",
+      "command": [
+        "npm",
+        "test",
+        "--silent"
+      ],
+      "why": "el comportamiento"
+    }
+  ]
+}

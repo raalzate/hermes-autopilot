@@ -1,0 +1,44 @@
+{
+  "$comment": "Perfil node: HECHOS del stack (qué es código, qué es derivado, cómo se testea). Nunca reglas: las reglas del repo se escriben con sus cicatrices.",
+  "name": "node",
+  "codeExtensions": [
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs"
+  ],
+  "codeGlobs": [
+    "src/",
+    "test/",
+    "tests/",
+    "lib/"
+  ],
+  "commitCodePattern": "^(src|lib|test|tests)/",
+  "protectedPaths": [
+    {
+      "id": "node-lock",
+      "pattern": "^(package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|bun\\.lockb)$",
+      "example": "package-lock.json",
+      "reason": "el lockfile se regenera con el gestor, no a mano."
+    },
+    {
+      "id": "node-modules",
+      "pattern": "(^|/)node_modules/",
+      "example": "node_modules/x/index.js",
+      "reason": "dependencias: se cambian por manifiesto + install."
+    }
+  ],
+  "signals": [
+    {
+      "name": "tests (npm test)",
+      "command": [
+        "npm",
+        "test",
+        "--silent"
+      ],
+      "why": "el comportamiento: ninguna otra señal ejecuta el código"
+    }
+  ]
+}
