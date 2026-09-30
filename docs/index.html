@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes Harness</title>
+<meta name="description" content="Un arnés de repo para Hermes Agent: frenos, gate, self-test y skills que se hacen cumplir solos — también donde Hermes aprende y donde corre sin nadie mirando.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+/* Misma familia visual que la landing de agent-harness; el acento cambia de verde azulado a
+   índigo para que se sepa, de un vistazo, cuál de los dos arneses se está leyendo. */
+:root {
+  --paper: #eeeff4; --surface: #ffffff; --surface-2: #e4e6ef;
+  --ink: #141824; --ink-soft: #485063; --ink-faint: #7d8599;
+  --rule: #cdd1de; --rule-soft: #dee1ea;
+  --accent: #4b3fb0; --accent-ink: #362c8c;
+  --verde: #1e7a3c; --rojo: #b3261e; --ocre: #8a6d2b;
+  --term-bg: #11141d; --term-ink: #cbd2e0; --term-faint: #6d7588; --term-rule: #242a38;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --step--1: clamp(.78rem, .76rem + .1vw, .84rem);
+  --step-0: clamp(1rem, .97rem + .15vw, 1.08rem);
+  --step-1: clamp(1.2rem, 1.14rem + .3vw, 1.4rem);
+  --step-2: clamp(1.5rem, 1.38rem + .6vw, 1.95rem);
+  --step-3: clamp(2rem, 1.7rem + 1.5vw, 3.1rem);
+  --step-4: clamp(2.6rem, 2rem + 3vw, 4.6rem);
+  --measure: 68ch; --pad: clamp(1rem, 4vw, 2.5rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f121a; --surface: #161a25; --surface-2: #1e2330;
+    --ink: #e6e9f2; --ink-soft: #a9b0c2; --ink-faint: #787f93;
+    --rule: #2c3242; --rule-soft: #232837;
+    --accent: #a99bff; --accent-ink: #c3b9ff;
+    --verde: #5cc47c; --rojo: #ef8a80; --ocre: #d3ae5e;
+    --term-bg: #0a0c12; --term-ink: #cdd4e2; --term-rule: #1c2130;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f121a; --surface: #161a25; --surface-2: #1e2330;
+  --ink: #e6e9f2; --ink-soft: #a9b0c2; --ink-faint: #787f93;
+  --rule: #2c3242; --rule-soft: #232837;
+  --accent: #a99bff; --accent-ink: #c3b9ff;
+  --verde: #5cc47c; --rojo: #ef8a80; --ocre: #d3ae5e;
+  --term-bg: #0a0c12; --term-ink: #cdd4e2; --term-rule: #1c2130;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: var(--step-0); line-height: 1.62; overflow-x: hidden; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; line-height: 1.08; letter-spacing: -.015em; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+a { color: var(--accent-ink); text-underline-offset: .18em; text-decoration-thickness: 1px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+code { font-family: var(--f-mono); font-size: .88em; background: var(--surface-2); padding: .05em .3em; border-radius: 2px; overflow-wrap: anywhere; }
+.wrap { max-width: 78rem; margin: 0 auto; padding-inline: var(--pad); }
+.col { max-width: var(--measure); }
+.stack { display: flex; flex-direction: column; gap: 1.1rem; }
+
+/* barra */
+.bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--rule-soft); }
+.bar .wrap { display: flex; align-items: center; gap: 1rem; height: 3.2rem; }
+.brand { font-family: var(--f-display); font-weight: 800; text-decoration: none; color: var(--ink); white-space: nowrap; }
+.brand span { color: var(--accent-ink); }
+.nav { display: flex; gap: 1rem; overflow-x: auto; scrollbar-width: none; font-family: var(--f-mono); font-size: var(--step--1); margin-left: auto; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a { color: var(--ink-soft); text-decoration: none; white-space: nowrap; }
+.nav a:hover { color: var(--accent-ink); }
+.theme { appearance: none; border: 1px solid var(--rule); background: var(--surface); color: var(--ink-soft); font-family: var(--f-mono); font-size: var(--step--1); border-radius: 3px; padding: .2rem .5rem; cursor: pointer; }
+
+/* secciones */
+section { border-top: 1px solid var(--rule-soft); }
+.sec-inner { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: clamp(1rem, 3vw, 2.75rem); padding-block: clamp(2.5rem, 6vw, 4.5rem); }
+/* Un hijo de grilla mide, por defecto, lo que su contenido más ancho: una línea de comando con
+   `white-space: pre` ensanchaba la columna entera y la página se desplazaba en el celular. */
+.sec-inner > *, .hero > * { min-width: 0; }
+.rail { font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-faint); border-right: 1px solid var(--rule-soft); padding-right: .75rem; text-align: right; position: sticky; top: 4.2rem; align-self: start; line-height: 1.5; }
+.rail b { display: block; color: var(--ink-soft); font-size: 1.35em; }
+@media (max-width: 46rem) {
+  .sec-inner { grid-template-columns: 1fr; gap: .8rem; }
+  .rail { position: static; border-right: 0; border-bottom: 1px solid var(--rule-soft); text-align: left; padding: 0 0 .5rem; }
+  .rail b { display: inline; font-size: 1em; margin-right: .4rem; }
+}
+.eyebrow { font-family: var(--f-mono); font-size: var(--step--1); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+.lede { font-size: var(--step-1); color: var(--ink-soft); }
+h2 { font-size: var(--step-2); }
+
+/* héroe */
+.hero { padding-block: clamp(2.2rem, 6vw, 4.5rem) clamp(2rem, 5vw, 3.5rem); display: grid; gap: clamp(2rem, 4vw, 3rem); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 62rem) { .hero { grid-template-columns: minmax(0, 26rem) minmax(0, 1fr); align-items: start; } }
+h1 { font-size: var(--step-3); }
+h1 .sub { display: block; font-family: var(--f-mono); font-weight: 500; font-size: var(--step--1); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 1rem; }
+.thesis { font-size: var(--step-1); margin-top: 1.2rem; }
+.thesis em { font-style: normal; box-shadow: inset 0 -.45em 0 color-mix(in srgb, var(--accent) 20%, transparent); }
+.meta { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .45rem .6rem; font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-faint); }
+.chip { border: 1px solid var(--rule); padding: .15rem .5rem; border-radius: 2px; background: var(--surface); }
+.cta { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .6rem; }
+.btn { display: inline-flex; align-items: center; font-family: var(--f-mono); font-size: var(--step--1); text-decoration: none; border-radius: 3px; padding: .55rem .9rem; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); }
+.btn-1 { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+:root[data-theme="dark"] .btn-1 { color: #11141d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-1 { color: #11141d; } }
+
+/* terminal */
+.term { background: var(--term-bg); color: var(--term-ink); border-radius: 4px; overflow: hidden; box-shadow: 0 18px 40px -28px rgba(9,12,20,.6); min-width: 0; }
+.pick { display: flex; flex-wrap: wrap; gap: .35rem; padding: .75rem .9rem; border-bottom: 1px solid var(--term-rule); }
+.pick .lbl { flex: 1 0 100%; font-family: var(--f-mono); font-size: var(--step--1); letter-spacing: .08em; text-transform: uppercase; color: var(--term-faint); }
+.pick button { appearance: none; cursor: pointer; font-family: var(--f-mono); font-size: var(--step--1); padding: .28rem .55rem; border-radius: 2px; border: 1px solid var(--term-rule); background: transparent; color: var(--term-faint); }
+.pick button:hover { color: var(--term-ink); }
+.pick button[aria-pressed="true"] { color: var(--term-bg); background: var(--term-ink); border-color: var(--term-ink); }
+.tbody { padding: 1rem 1.1rem 1.25rem; overflow-x: auto; min-height: 15rem; }
+.tbody pre { margin: 0; font-family: var(--f-mono); font-size: clamp(.7rem, .66rem + .25vw, .82rem); line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
+.usr { color: #9fbaf5; font-weight: 700; } .tl { color: #d3ae5e; } .no { color: #ef8a80; font-weight: 700; } .ok { color: #5cc47c; font-weight: 700; } .dim { color: var(--term-faint); } .ap { color: #d3ae5e; font-weight: 700; }
+.tnote { border-top: 1px solid var(--term-rule); padding: .75rem 1.1rem; font-family: var(--f-mono); font-size: var(--step--1); color: var(--term-faint); }
+
+/* grillas */
+.grid { display: grid; gap: 1px; background: var(--rule-soft); border: 1px solid var(--rule-soft); border-radius: 3px; grid-template-columns: minmax(0, 1fr); margin-top: 1.6rem; }
+@media (min-width: 48rem) { .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cell { background: var(--surface); padding: 1.15rem 1.25rem 1.3rem; display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+.cell h3 { font-size: var(--step-1); }
+.cell .mark { font-family: var(--f-mono); font-size: var(--step--1); color: var(--accent-ink); letter-spacing: .08em; text-transform: uppercase; }
+.cell .foot { font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-faint); border-top: 1px dashed var(--rule); padding-top: .55rem; margin-top: auto; }
+.stat b { font-family: var(--f-display); font-size: var(--step-3); line-height: 1; }
+.stat .lbl { font-family: var(--f-mono); font-size: var(--step--1); text-transform: uppercase; letter-spacing: .08em; color: var(--accent-ink); }
+.stat .why { font-size: var(--step--1); color: var(--ink-soft); }
+.stat .cmd { font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-faint); overflow-wrap: anywhere; }
+
+/* pasos */
+ol.steps { list-style: none; margin: 1.6rem 0 0; padding: 0; counter-reset: s -1; }
+ol.steps li { counter-increment: s; position: relative; padding: 1rem 0 1rem 4.4rem; border-top: 1px solid var(--rule-soft); }
+ol.steps li:last-child { border-bottom: 1px solid var(--rule-soft); }
+ol.steps li::before { content: "paso " counter(s); position: absolute; left: 0; top: 1.05rem; font-family: var(--f-mono); font-size: var(--step--1); color: var(--accent-ink); }
+ol.steps h3 { font-size: var(--step-0); font-weight: 600; }
+ol.steps p { color: var(--ink-soft); margin-top: .25rem; }
+.cmdline { display: block; margin-top: .5rem; font-family: var(--f-mono); font-size: var(--step--1); background: var(--term-bg); color: var(--term-ink); padding: .6rem .8rem; border-radius: 3px; overflow-x: auto; white-space: pre; }
+.cmdline .dim { color: var(--term-faint); }
+
+/* par config → bloqueo */
+.pair { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); margin-top: 1.6rem; }
+@media (min-width: 54rem) { .pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+figure { margin: 0; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; min-width: 0; }
+.panel figcaption { font-family: var(--f-mono); font-size: var(--step--1); text-transform: uppercase; letter-spacing: .09em; color: var(--ink-faint); padding: .55rem .9rem; border-bottom: 1px solid var(--rule-soft); background: var(--surface-2); }
+.panel pre { margin: 0; padding: .9rem; overflow-x: auto; font-family: var(--f-mono); font-size: clamp(.7rem, .67rem + .2vw, .8rem); line-height: 1.7; }
+.panel .k { color: var(--accent-ink); } .panel .r { color: var(--rojo); font-weight: 700; }
+
+/* tablas */
+.tscroll { overflow-x: auto; margin-top: 1.6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+th, td { text-align: left; padding: .65rem .85rem; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+thead th { font-family: var(--f-mono); text-transform: uppercase; letter-spacing: .08em; font-size: .92em; color: var(--ink-faint); font-weight: 500; background: var(--surface-2); white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-family: var(--f-display); font-weight: 600; }
+
+/* leyes */
+ol.laws { list-style: none; margin: 1.6rem 0 0; padding: 0; counter-reset: l; display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--rule-soft); }
+@media (min-width: 54rem) { ol.laws { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.5rem; } }
+ol.laws li { counter-increment: l; position: relative; padding: .8rem 0 .8rem 2.8rem; border-bottom: 1px solid var(--rule-soft); color: var(--ink-soft); font-size: calc(var(--step-0) * .96); }
+ol.laws li::before { content: "P" counter(l); position: absolute; left: 0; top: .82rem; font-family: var(--f-mono); font-size: var(--step--1); color: var(--accent-ink); }
+ol.laws b { color: var(--ink); font-weight: 600; }
+.tag { font-family: var(--f-mono); font-size: .72em; padding: .05em .35em; border-radius: 2px; border: 1px solid var(--rule); color: var(--ink-faint); margin-left: .3rem; white-space: nowrap; }
+.tag.new { color: var(--accent-ink); border-color: var(--accent); }
+
+/* cicatrices */
+.scar { border-left: 3px solid var(--rojo); padding: .2rem 0 .2rem 1rem; }
+.scar h3 { font-size: var(--step-0); }
+.scar p { color: var(--ink-soft); font-size: calc(var(--step-0) * .96); margin-top: .3rem; }
+.scar p b { color: var(--ink); }
+
+footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-faint); }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="wrap">
+    <a class="brand" href="#top">Hermes <span>Harness</span></a>
+    <nav class="nav" aria-label="Secciones">
+      <a href="#tesis">Tesis</a><a href="#prueba">Prueba</a><a href="#onboarding">Onboarding</a>
+      <a href="#piezas">Piezas</a><a href="#contrato">Contrato</a><a href="#aprende">Aprende</a>
+      <a href="#cicatrices">Cicatrices</a><a href="#portar">Portar</a><a href="#principios">Principios</a>
+      <a href="#docs">Docs</a>
+    </nav>
+    <button class="theme" id="theme" type="button" aria-label="Cambiar tema">tema</button>
+  </div>
+</div>
+
+<header id="top">
+  <div class="wrap hero">
+    <div>
+      <h1><span class="sub">arnés de repo · Hermes Agent</span>Hermes aprende. El arnés decide qué no se aprende.</h1>
+      <p class="thesis">Reglas de tu repo que se hacen cumplir solas mientras <a href="https://hermes-ai.net/">Hermes</a> trabaja en él —
+        en la CLI, en el gateway y en los cron—, incluidas las dos superficies que Claude Code no tenía:
+        <em>lo que el agente guarda para siempre</em> y <em>lo que corre sin nadie mirando</em>.</p>
+      <div class="meta">
+        <span class="chip">Python stdlib · 0 dependencias</span>
+        <span class="chip">plugin en proceso</span>
+        <span class="chip">verificado en Hermes real</span>
+        <span class="chip">Linux · macOS · Windows</span>
+      </div>
+      <div class="cta">
+        <a class="btn btn-1" href="#onboarding">Empezar: onboarding</a>
+        <a class="btn" href="https://github.com/raalzate/hermes-harness">GitHub</a>
+        <a class="btn" href="https://github.com/raalzate/hermes-harness/blob/main/docs/hermes.md">Cómo se engancha</a>
+      </div>
+    </div>
+
+    <div class="term" aria-label="Demostración: lo que el agente lee cuando el arnés lo frena">
+      <div class="pick" role="group" aria-label="¿Qué intentó el agente?">
+        <span class="lbl">¿Qué intentó el agente?</span>
+        <button type="button" data-k="force" aria-pressed="true">push --force</button>
+        <button type="button" data-k="v4a" aria-pressed="false">patch V4A a .env</button>
+        <button type="button" data-k="memoria" aria-pressed="false">guardar un secreto</button>
+        <button type="button" data-k="skill" aria-pressed="false">skill que saltea hooks</button>
+        <button type="button" data-k="cron" aria-pressed="false">cron cada 5m</button>
+        <button type="button" data-k="desarmar" aria-pressed="false">desarmar el arnés</button>
+        <button type="button" data-k="push" aria-pressed="false">git push</button>
+        <button type="button" data-k="inocente" aria-pressed="false">inocente</button>
+      </div>
+      <div class="tbody"><pre id="tout"></pre></div>
+      <div class="tnote" id="tnote"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="tesis"><div class="wrap sec-inner">
+  <div class="rail"><b>01</b>tesis</div>
+  <div class="stack col">
+    <h2>Un agente que aprende repite sus errores con disciplina</h2>
+    <p class="lede">Hermes escribe su propia memoria, crea y parchea skills, y corre tareas programadas en Telegram, Slack o un cron. Eso lo vuelve útil, y también vuelve permanente cualquier cosa que aprenda mal.</p>
+    <p>Un secreto que Hermes guarda en <code>MEMORY.md</code> no se filtra una vez: entra al prompt de <b>cada sesión futura, en cada plataforma</b>. Una skill que enseña a usar <code>--no-verify</code> no apaga un freno hoy: lo apaga cada vez que alguien la cargue. Y en un cron no hay humano para aprobar el comando peligroso: lo que la tarea puede hacer se decide cuando se crea, o no se decide.</p>
+    <p>Este arnés pone frenos en esos lugares además de en la terminal y los archivos, y define "terminado" con un gate: no por lo que el agente dice, sino por lo que un comando imprime. Es el hermano de <a href="https://raalzate.github.io/agent-harness/">agent-harness</a> (hecho para Claude Code), rehecho sobre el modelo de extensión de Hermes y verificado contra su código, no contra su documentación.</p>
+  </div>
+</div></section>
+
+<section id="prueba"><div class="wrap sec-inner">
+  <div class="rail"><b>02</b>prueba</div>
+  <div>
+    <div class="col stack">
+      <h2>Cada número de esta página lo imprime un comando</h2>
+      <p class="lede">Y cada freno tiene una prueba de que muerde, otra de que no muerde de más, y una tercera de que la prueba misma muerde.</p>
+    </div>
+    <div class="grid three">
+      <div class="cell stat"><span class="lbl">señales del gate</span><b>6/6</b><span class="why">verdes con Hermes instalado; sin Hermes, 4 verdes y 2 <em>omitidas</em> — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
+      <div class="cell stat"><span class="lbl">verificaciones</span><b>533</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
+      <div class="cell stat"><span class="lbl">mutaciones</span><b>28/28</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
+      <div class="cell stat"><span class="lbl">dentro de Hermes</span><b>70</b><span class="why">verificaciones con el despacho real de Hermes: directivas, <code>pre_verify</code>, ruteo, lint tras escribir, sección del prompt.</span><span class="cmd">python3 scripts/hermes_e2e.py</span></div>
+      <div class="cell stat"><span class="lbl">perfiles de stack</span><b>8</b><span class="why">python, node, front, go, rust, .NET, Maven, Gradle — cada uno instalado en un repo temporal con su gate.</span><span class="cmd">self-test §11</span></div>
+      <div class="cell stat"><span class="lbl">dependencias</span><b>0</b><span class="why">Python de la biblioteca estándar. Donde hay Hermes, hay todo lo que el arnés necesita.</span><span class="cmd">regla patterns[dependencia]</span></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="onboarding"><div class="wrap sec-inner">
+  <div class="rail"><b>03</b>onboarding</div>
+  <div>
+    <div class="col stack">
+      <h2>De cero a un arnés vivo, en siete pasos</h2>
+      <p class="lede">Cada paso dice qué tiene que salir. Si no sale, el <a href="https://github.com/raalzate/hermes-harness/blob/main/docs/onboarding.md#tablero-de-problemas">tablero de problemas</a> tiene la causa: cada fila es un tropiezo real.</p>
+    </div>
+    <ol class="steps">
+      <li><h3>Requisitos</h3><p>Python ≥ 3.11, git y Hermes Agent. En Windows, la terminal de Git for Windows o WSL2 (y sin el alias de <code>python3</code> de la Microsoft Store).</p>
+        <span class="cmdline">python3 --version &amp;&amp; git --version &amp;&amp; hermes --version</span></li>
+      <li><h3>Instalar Hermes</h3><p>Con el instalador oficial. Bajá el script y leelo antes de correrlo: es la misma regla que el arnés le aplica al agente.</p>
+        <span class="cmdline">hermes doctor   <span class="dim"># → sin errores rojos</span></span></li>
+      <li><h3>Traer el arnés y ver el gate verde</h3><p>Tiene que terminar en <code>GATE VERDE — 6 señales</code> (o con 2 omitidas si Hermes no está en el PATH).</p>
+        <span class="cmdline">git clone https://github.com/raalzate/hermes-harness.git
+cd hermes-harness &amp;&amp; python3 scripts/gate.py</span></li>
+      <li><h3>Instalar en tu repo, primero en seco</h3><p>Sin <code>--apply</code> sólo muestra la lista. <code>+</code> es nuevo, <code>=</code> ya existía y no se toca: nunca sobreescribe.</p>
+        <span class="cmdline">python3 scripts/install.py ~/code/mi-repo --profile python
+python3 scripts/install.py ~/code/mi-repo --profile python --apply</span></li>
+      <li><h3>Conectarlo a Hermes (lo hace el humano)</h3><p>El instalador no toca tu <code>config.yaml</code>: qué frenos existen lo decidís vos.</p>
+        <span class="cmdline">cd ~/code/mi-repo
+python3 .hermes/harness/scripts/githooks.py install
+hermes skills trust .
+python3 .hermes/harness/scripts/install.py . --link-plugin --apply
+hermes plugins enable repo-harness</span></li>
+      <li><h3>Verificar que quedó vivo</h3><p><code>doctor.py</code> encuentra el "instalado y muerto": plugin sin habilitar, skills sin confiar, un <code>.hermes.md</code> que tapa a <code>AGENTS.md</code>, secretos ya guardados en la memoria.</p>
+        <span class="cmdline">python3 .hermes/harness/scripts/gate.py
+python3 .hermes/harness/scripts/doctor.py      <span class="dim"># → 0 rojo(s)</span></span></li>
+      <li><h3>La prueba de humo con el agente</h3><p>Pedile a Hermes un <code>git reset --hard</code>, escribir en <code>.env</code> y guardar una key en su memoria: las tres tienen que frenar con el motivo. Después <code>/harness</code> para ver los frenos activos. Y desde ahí, las reglas de tu repo se escriben con tus incidentes (<code>/lesson</code>, <code>/new-guardrail</code>).</p></li>
+    </ol>
+    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-harness/blob/main/docs/onboarding.md">Onboarding completo</a></p>
+  </div>
+</div></section>
+
+<section id="piezas"><div class="wrap sec-inner">
+  <div class="rail"><b>04</b>piezas</div>
+  <div>
+    <div class="col stack">
+      <h2>Seis piezas, cada una contra una falla concreta</h2>
+    </div>
+    <div class="grid two">
+      <div class="cell"><span class="mark">plugin/</span><h3>El plugin <code>repo-harness</code></h3><p>Frena en <code>pre_tool_call</code> la terminal, la escritura (incluido el patch V4A), la memoria, las skills y los cron. Corre en proceso: una llamada de función por herramienta, no un proceso.</p><span class="foot">falla: el agente hace lo que la regla en prosa decía que no</span></div>
+      <div class="cell"><span class="mark">.hermes/harness.config.json</span><h3>Un solo archivo de reglas</h3><p>Reglas, rutas y hasta los nombres de las herramientas de Hermes. Cada regla trae su <code>example</code>: el self-test lo pasa por el plugin y es rojo si no frena.</p><span class="foot">falla: reglas cableadas en el código que nadie se anima a tocar</span></div>
+      <div class="cell"><span class="mark">scripts/gate.py</span><h3>El gate</h3><p>La única definición de "terminado", declarativa, igual en CI. <code>pre_verify</code> no deja cerrar el turno con código editado y el gate pendiente.</p><span class="foot">falla: "listo" dicho por el agente, no impreso por un comando</span></div>
+      <div class="cell"><span class="mark">regla CONTEXTO</span><h3>El lint que conoce el escáner de Hermes</h3><p>Si una línea de <code>AGENTS.md</code> parece inyección, Hermes descarta el archivo <b>entero</b>. El lint te dice la línea antes de que pase, y el tope de 20 000 caracteres antes de que trunque.</p><span class="foot">falla: el agente arranca sin reglas y nadie se entera</span></div>
+      <div class="cell"><span class="mark">.hermes/skills/</span><h3>Seis skills</h3><p><code>/gate</code>, <code>/lesson</code>, <code>/new-guardrail</code>, <code>/harness-audit</code>, <code>/harness-review</code> (el revisor, vía <code>delegate_task</code>) y <code>/harness-port</code>.</p><span class="foot">falla: el método vive en la cabeza de quien lo inventó</span></div>
+      <div class="cell"><span class="mark">doctor · e2e · mutaciones</span><h3>Los sensores del propio arnés</h3><p><code>doctor.py</code> mira tu máquina; <code>hermes_e2e.py</code> corre cada ejemplo dentro de Hermes; <code>mutations.py</code> prueba que el self-test muerde.</p><span class="foot">falla: instalado y muerto</span></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="freno"><div class="wrap sec-inner">
+  <div class="rail"><b>05</b>freno</div>
+  <div>
+    <div class="col stack">
+      <h2>Editás JSON. El agente lee el motivo.</h2>
+      <p class="lede">El <code>reason</code> es lo único que el agente ve cuando lo frenás. Es la diferencia entre que entienda y que reintente con otra forma.</p>
+    </div>
+    <div class="pair">
+      <figure class="panel"><figcaption>.hermes/harness.config.json</figcaption><pre><span class="k">"terminal"</span>: { <span class="k">"deny"</span>: [{
+  <span class="k">"id"</span>: "force-push",
+  <span class="k">"pattern"</span>: "git(?:\\s+-[Cc]\\s+\\S+)*\\s+push\\b…",
+  <span class="k">"example"</span>: "git push origin main --force",
+  <span class="k">"moreExamples"</span>: ["git -C . push --force",
+                   "git push -f origin main",
+                   "git push origin +main"],
+  <span class="k">"reason"</span>: "reescribe historia remota. Usá
+    --force-with-lease y pedí confirmación."
+}]}</pre></figure>
+      <figure class="panel"><figcaption>lo que Hermes le devuelve al modelo</figcaption><pre>{"action": "block", "message":
+<span class="r">COMANDO BLOQUEADO por el arnés del repo:</span>
+`git push origin main --force`
+Motivo: reescribe historia remota. Usá
+--force-with-lease y pedí confirmación.
+Reformulá el comando o pedí confirmación
+explícita al humano. No lo reintentes igual.}</pre></figure>
+    </div>
+    <p class="col" style="margin-top:1.2rem;color:var(--ink-soft)">Y el <code>example</code> más cada <code>moreExamples</code> se prueban solos: en el self-test contra el plugin, y en el e2e contra el despacho real de Hermes. Una regla sin ejemplo no entra.</p>
+  </div>
+</div></section>
+
+<section id="contrato"><div class="wrap sec-inner">
+  <div class="rail"><b>06</b>contrato</div>
+  <div>
+    <div class="col stack">
+      <h2>Lo que Hermes promete, leído en su código</h2>
+      <p class="lede">La diferencia que más importa: en Hermes, un <code>pre_tool_call</code> que lanza una excepción <b>bloquea</b> la herramienta. Un arnés con un bug no "deja de frenar": frena todo. Por eso ningún callback del plugin lanza, y el self-test lo prueba con un freno que divide por cero.</p>
+    </div>
+    <div class="tscroll"><table>
+      <thead><tr><th>Necesidad</th><th>Punto de Hermes</th><th>Contrato</th></tr></thead>
+      <tbody>
+        <tr><td>frenar una herramienta</td><td><code>pre_tool_call</code></td><td><code>{"action":"block","message"}</code> — sin mensaje, Hermes lo ignora</td></tr>
+        <tr><td>pedir aprobación humana</td><td><code>pre_tool_call</code></td><td><code>{"action":"approve"}</code> → el gate de aprobación de Hermes; en cron se niega solo</td></tr>
+        <tr><td>no cerrar con el gate pendiente</td><td><code>pre_verify</code></td><td><code>{"action":"continue","message"}</code>, sólo si el turno editó archivos, máx. 3</td></tr>
+        <tr><td>lint del archivo recién escrito</td><td><code>transform_tool_result</code></td><td>el primer <code>str</code> reemplaza el resultado que ve el modelo</td></tr>
+        <tr><td>estado del repo al abrir</td><td><code>register_system_prompt_section</code></td><td>≤ 4000 caracteres, congelada por sesión</td></tr>
+        <tr><td>pistas según el pedido</td><td><code>pre_llm_call</code></td><td><code>{"context"}</code> se suma al mensaje del usuario</td></tr>
+        <tr><td>el directorio correcto</td><td><code>_authoritative_workspace_root</code></td><td>el cwd de la <b>sesión</b>, no el del proceso (gateway, cron, Desktop)</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div></section>
+
+<section id="aprende"><div class="wrap sec-inner">
+  <div class="rail"><b>07</b>aprende</div>
+  <div>
+    <div class="col stack">
+      <h2>Lo aprendido pasa por los mismos frenos que lo ejecutado</h2>
+      <p class="lede">Tres familias de frenos que un arnés para Claude Code no necesitaba.</p>
+    </div>
+    <div class="grid three">
+      <div class="cell"><span class="mark">memory</span><h3>La memoria</h3><p>Filtra secretos y "reglas" que contradicen a un freno. Mira sólo lo que se <b>guarda</b>: sacar un secreto que ya estaba tiene que poder hacerse. <code>doctor.py</code> encuentra lo que se guardó antes de instalar el arnés.</p></div>
+      <div class="cell"><span class="mark">skill_manage</span><h3>Las skills</h3><p>Una skill que enseña un paso prohibido es un freno apagado en todas las sesiones que la carguen. Se le aplica <code>terminal.deny</code> a lo que escribe, dentro de <code>operations[]</code>.</p></div>
+      <div class="cell"><span class="mark">cronjob_manage</span><h3>Lo desatendido</h3><p>Sin humano, la aprobación no tiene a quién preguntar. El freno decide al crear: nada que publique, y un intervalo mínimo (entiende <code>30s</code>, listas y rangos de cron).</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="cicatrices"><div class="wrap sec-inner">
+  <div class="rail"><b>08</b>cicatrices</div>
+  <div class="stack col">
+    <h2>Lo que costó aprenderlo</h2>
+    <p class="lede">Cada una terminó en un mecanismo (y en <a href="https://github.com/raalzate/hermes-harness/blob/main/docs/gotchas.md">docs/gotchas.md</a>), no en una advertencia.</p>
+    <div class="scar"><h3>El plugin pasaba el self-test y en Hermes no importaba</h3><p><b>Causa:</b> Hermes copia el directorio del plugin para validarlo e instalarlo; el núcleo vivía afuera. <b>Mecanismo:</b> núcleo dentro del plugin, self-test que carga desde una copia, y <code>hermes plugins doctor</code> en el gate.</p></div>
+    <div class="scar"><h3>Un <code>patch</code> en modo V4A se salteaba los frenos de escritura</h3><p><b>Causa:</b> ese modo no trae <code>path</code>; las rutas van en encabezados dentro del texto. <b>Mecanismo:</b> la gramática V4A va al config; el freno evalúa cada ruta y cada línea agregada.</p></div>
+    <div class="scar"><h3>El arnés se apagaba en el gateway y en cron</h3><p><b>Causa:</b> buscaba el repo desde el cwd del proceso, no desde el de la sesión. <b>Mecanismo:</b> el plugin le pregunta a Hermes el cwd de la sesión; caso en el e2e con el proceso afuera y la sesión adentro.</p></div>
+    <div class="scar"><h3>En Windows el gate no fallaba: desaparecía</h3><p><b>Causa:</b> consola cp1252; imprimir <code>✓</code> reventaba antes de verificar nada. <b>Mecanismo:</b> salida UTF-8 forzada y un caso del self-test que emula cp1252 — lo cazó la matriz de CI.</p></div>
+  </div>
+</div></section>
+
+<section id="portar"><div class="wrap sec-inner">
+  <div class="rail"><b>09</b>portar</div>
+  <div>
+    <div class="col stack">
+      <h2>Plugin o shell hook: el mismo núcleo, dos adaptadores</h2>
+      <p class="lede">El plugin es el camino recomendado. El shell hook existe para quien no puede habilitar plugins.</p>
+    </div>
+    <div class="tscroll"><table>
+      <thead><tr><th></th><th>Plugin</th><th>Shell hook</th></tr></thead>
+      <tbody>
+        <tr><td>dónde</td><td><code>$HERMES_HOME/plugins/repo-harness</code> + <code>plugins.enabled</code></td><td><code>hooks:</code> en <code>config.yaml</code></td></tr>
+        <tr><td>costo</td><td>una llamada de función</td><td>un proceso de Python por herramienta</td></tr>
+        <tr><td>si revienta</td><td><code>_seguro</code> → deja pasar</td><td>exit ≠ 2 → deja pasar; nunca <code>exit 1</code></td></tr>
+        <tr><td>cwd de la sesión</td><td>se lo pide a Hermes</td><td><code>workdir</code> o <code>TERMINAL_CWD</code></td></tr>
+        <tr><td>lint tras escribir</td><td>se inyecta en el resultado</td><td>queda en el log</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tscroll"><table>
+      <thead><tr><th>Perfil</th><th>Qué es código</th><th>Qué es derivado</th><th>Señal de tests</th></tr></thead>
+      <tbody>
+        <tr><td>python</td><td><code>.py .pyi</code></td><td><code>uv.lock poetry.lock .venv/</code></td><td><code>pytest -q</code></td></tr>
+        <tr><td>node · front</td><td><code>.ts .tsx .js .vue .svelte…</code></td><td><code>package-lock.json node_modules/ dist/</code></td><td><code>npm test</code> (+ build)</td></tr>
+        <tr><td>go</td><td><code>.go</code></td><td><code>go.sum vendor/</code></td><td><code>go vet</code> + <code>go test</code></td></tr>
+        <tr><td>rust</td><td><code>.rs</code></td><td><code>Cargo.lock target/</code></td><td><code>cargo clippy</code> + <code>cargo test</code></td></tr>
+        <tr><td>dotnet</td><td><code>.cs .fs .csproj .razor</code></td><td><code>bin/ obj/ packages.lock.json</code></td><td><code>dotnet test</code></td></tr>
+        <tr><td>jvm-maven · jvm-gradle</td><td><code>.java .kt .scala…</code></td><td><code>target/ build/</code></td><td><code>mvn verify</code> · <code>gradlew check</code></td></tr>
+      </tbody>
+    </table></div>
+    <p class="col" style="margin-top:1rem;color:var(--ink-soft)">Un perfil trae <b>hechos</b> del stack, nunca reglas de otro repo: las reglas se escriben con tus incidentes.</p>
+  </div>
+</div></section>
+
+<section id="principios"><div class="wrap sec-inner">
+  <div class="rail"><b>10</b>principios</div>
+  <div>
+    <div class="col stack">
+      <h2>Dieciséis principios, cada uno con su comando</h2>
+      <p class="lede">Un principio que dice BLOCKING nombra el comando que falla. Los nuevos respecto de agent-harness están marcados.</p>
+    </div>
+    <ol class="laws">
+      <li><b>Nada se entrega sin gate verde.</b> Omitido no es verde.</li>
+      <li><b>Todo freno prueba que muerde</b> — con su <code>example</code>.</li>
+      <li><b>Todo freno prueba que no muerde de más</b> — con sus inocentes.</li>
+      <li><b>La especificidad va en el config</b>, incluidos los nombres de herramientas de Hermes.</li>
+      <li><b>El contrato del plugin se respeta:</b> ningún callback lanza.</li>
+      <li><b>Cada señal del gate declara qué error atrapa.</b></li>
+      <li><b>El arnés no escribe en el árbol de fuentes.</b></li>
+      <li><b>Rutas protegidas</b>, incluidas las de <code>~/.hermes/</code>.</li>
+      <li><b>Acciones amplias: dry-run y reversibilidad.</b></li>
+      <li><b>La documentación no apunta a la nada.</b></li>
+      <li><b>El trabajo queda registrado</b> en cada commit.</li>
+      <li><b>Lo que el agente aprende pasa por los mismos frenos.</b><span class="tag new">nuevo</span></li>
+      <li><b>Lo desatendido se decide al crearlo.</b><span class="tag new">nuevo</span></li>
+      <li><b>El contexto tiene presupuesto.</b><span class="tag new">nuevo</span></li>
+      <li><b>Cada incidente deja infraestructura.</b></li>
+      <li><b>Conducta ante el error:</b> dos intentos, al tercero se escala.<span class="tag">review</span></li>
+    </ol>
+  </div>
+</div></section>
+
+<section id="docs"><div class="wrap sec-inner">
+  <div class="rail"><b>11</b>docs</div>
+  <div>
+    <div class="col stack"><h2>Todo lo que esta página resume, en largo</h2></div>
+    <div class="grid three">
+      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/onboarding.md" style="text-decoration:none;color:inherit"><span class="mark">empezá acá</span><h3>Onboarding</h3><p>El setup paso a paso y el tablero de problemas.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/hermes.md" style="text-decoration:none;color:inherit"><span class="mark">contrato</span><h3>Cómo se engancha a Hermes</h3><p>Hooks, contexto, skills y memoria, verificado en su código.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/config-reference.md" style="text-decoration:none;color:inherit"><span class="mark">config</span><h3>Referencia del config</h3><p>Cada clave, y quién la lee.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/arnes.md" style="text-decoration:none;color:inherit"><span class="mark">mapa</span><h3>El arnés de este repo</h3><p>Qué guía, freno o sensor actúa en cada momento, y su prueba.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/portar.md" style="text-decoration:none;color:inherit"><span class="mark">portar</span><h3>Instalar en otro repo</h3><p>Plugin o shell hook, perfiles, <code>--upgrade</code>.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/desde-claude-code.md" style="text-decoration:none;color:inherit"><span class="mark">origen</span><h3>Desde agent-harness</h3><p>El mapa pieza por pieza desde Claude Code.</p></a>
+    </div>
+  </div>
+</div></section>
+
+<section id="limites"><div class="wrap sec-inner">
+  <div class="rail"><b>12</b>límites</div>
+  <div class="stack col">
+    <h2>Lo que este arnés todavía no hace</h2>
+    <p>La terminal escribe archivos de muchas formas: el freno ve las redirecciones (<code>&gt;</code>, <code>tee</code>), no un <code>cp</code> ni un <code>python -c</code>. Para eso está el pre-commit, que no deja entrar lo protegido al historial.</p>
+    <p>Los patrones del escáner de inyección de Hermes están copiados a mano en el config: si Hermes suma uno, el lint no lo sabe hasta que alguien lo copie.</p>
+    <p>Sin panel ni medición de latencia todavía: la fuente equivalente en Hermes es <code>~/.hermes/state.db</code>, y queda como trabajo futuro.</p>
+  </div>
+</div></section>
+
+</main>
+
+<footer><div class="wrap">Hermes Harness · Apache-2.0 · <a href="https://github.com/raalzate/hermes-harness">github.com/raalzate/hermes-harness</a> · hermano de <a href="https://raalzate.github.io/agent-harness/">agent-harness</a></div></footer>
+
+<script>
+// Los mensajes son los que imprime el arnés de verdad (plugin/harness/guards.py con el config de
+// este repo); no se redactan a mano. Si cambia un `reason`, se regeneran.
+const CASOS = {
+  force: { tool: "terminal", args: '{"command": "git push origin main --force"}', kind: "block",
+    msg: "COMANDO BLOQUEADO por el arnés del repo: `git push origin main --force`\nMotivo: reescribe historia remota. Usá --force-with-lease y pedí confirmación.\nReformulá el comando o pedí confirmación explícita al humano. No lo reintentes igual.",
+    nota: "terminal.deny · también frena `git -C . push --force`, `push -f` y `push origin +main`." },
+  v4a: { tool: "patch", args: '{"mode": "patch", "patch": "*** Update File: docs/notas.md …\\n*** Update File: .env.local …"}', kind: "block",
+    msg: "RUTA PROTEGIDA: `.env.local` no se edita desde el agente.\nMotivo: .env* es la llave del reino: lo edita el humano, nunca el agente.\nSi el cambio hace falta de verdad, pedíselo al humano y que lo haga él.",
+    nota: "protectedPaths · el patch V4A no trae `path`: el freno lee cada encabezado del texto." },
+  memoria: { tool: "memory", args: '{"action": "add", "content": "la key de prod es sk-live_…"}', kind: "block",
+    msg: "MEMORIA RECHAZADA: esa entrada no se guarda en la memoria persistente.\nMotivo: un secreto en la memoria se filtra en cada sesión y en cada plataforma del gateway.\nSi es una regla del repo, va a AGENTS.md o al config del arnés, con commit y revisión.",
+    nota: "memory.deny · un `remove` del mismo texto sí pasa: limpiar no se frena." },
+  skill: { tool: "skill_manage", args: '{"operations": [{"action": "create", "content": "… git commit -m wip --no-verify"}]}', kind: "block",
+    msg: "SKILL RECHAZADA: la skill enseña algo que el arnés de este repo prohíbe.\nMotivo: saltarse los hooks de verificación está prohibido. Si el gate estorba, se arregla el gate.\nUna skill es memoria procedimental: lo que enseña se repite en cada sesión. Reescribí el procedimiento sin ese paso.",
+    nota: "skills hereda terminal.deny · mira lo que la skill escribe, dentro de operations[]." },
+  cron: { tool: "cronjob_manage", args: '{"action": "create", "schedule": "every 5m", "prompt": "revisá el build"}', kind: "block",
+    msg: "CRON RECHAZADO: `every 5m` corre cada 5 min y el mínimo del repo es 15.\nCada corrida es un turno completo del modelo: se paga en tokens aunque no haga nada.",
+    nota: "cron.minIntervalMinutes · también entiende `0-59 * * * *`, listas y `every 30s`." },
+  desarmar: { tool: "terminal", args: '{"command": "hermes plugins disable repo-harness"}', kind: "block",
+    msg: "COMANDO BLOQUEADO por el arnés del repo: `hermes plugins disable repo-harness`\nMotivo: el agente no desarma el arnés que lo frena. Si un freno estorba, se arregla el freno (con su caso en el self-test).\nReformulá el comando o pedí confirmación explícita al humano. No lo reintentes igual.",
+    nota: "terminal.deny · lo mismo con `--yolo`, `hooks revoke` y `config set plugins…`." },
+  push: { tool: "terminal", args: '{"command": "git push origin feat/x"}', kind: "approve",
+    msg: "El arnés del repo pide aprobación humana para `git push origin feat/x`: empujar publica el trabajo: se confirma con el humano (y en cron no hay a quién preguntarle, así que no se empuja).",
+    nota: "terminal.ask → {\"action\": \"approve\"} · el hueco que Hermes no cubre por config." },
+  inocente: { tool: "terminal", args: '{"command": "git commit -m \'docs: por qué git push --force está prohibido\'"}', kind: "pass",
+    msg: "", nota: "terminal.dataArgs · el mensaje de commit es dato, no instrucción: no muerde de más." },
+};
+const out = document.getElementById("tout"), nota = document.getElementById("tnote");
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+function pintar(k) {
+  const c = CASOS[k];
+  let h = `<span class="usr">agente</span> <span class="dim">→</span> <span class="tl">${c.tool}</span> ${esc(c.args)}\n\n`;
+  h += `<span class="dim">pre_tool_call · repo-harness</span>\n`;
+  if (c.kind === "block") h += `<span class="no">✗ block</span>\n${esc(c.msg)}`;
+  else if (c.kind === "approve") h += `<span class="ap">? approve</span> <span class="dim">(Hermes le pregunta al humano)</span>\n${esc(c.msg)}`;
+  else h += `<span class="ok">✓ pasa</span> <span class="dim">— ningún freno tiene nada que decir</span>`;
+  out.innerHTML = h;
+  nota.textContent = c.nota;
+  document.querySelectorAll(".pick button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.k === k)));
+}
+document.querySelectorAll(".pick button").forEach((b) => b.addEventListener("click", () => pintar(b.dataset.k)));
+pintar("force");
+
+const raiz = document.documentElement;
+try { const t = localStorage.getItem("hh-tema"); if (t) raiz.dataset.theme = t; } catch (e) {}
+document.getElementById("theme").addEventListener("click", () => {
+  const oscuro = raiz.dataset.theme ? raiz.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  raiz.dataset.theme = oscuro ? "light" : "dark";
+  try { localStorage.setItem("hh-tema", raiz.dataset.theme); } catch (e) {}
+});
+</script>
+</body>
+</html>

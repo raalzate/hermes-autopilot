@@ -53,6 +53,7 @@ CODIGO = {
     "pre-commit sin renames": ("scripts/githooks.py", '"--name-only", "--diff-filter=ACMR").splitlines() if f]\n        fallas = pre_commit', '"--name-only", "--diff-filter=ACM").splitlines() if f]\n        fallas = pre_commit'),
     "pre-commit lee el disco y no el índice": ("scripts/githooks.py", '    p = subprocess.run(["git", "show", f":{f}"], cwd=REPO_ROOT, capture_output=True)', '    p = subprocess.run(["git", "show", "--no-such-flag"], cwd=REPO_ROOT, capture_output=True)'),
     "mensajes de commit comparados como comandos": ("plugin/harness/guards.py", "    comparable = _para_comparar(cmd, config)", "    comparable = cmd"),
+    "el gate imprime en la codificación de la consola (Windows cp1252)": ("scripts/gate.py", "    for _s in (sys.stdin, sys.stdout, sys.stderr):", "    for _s in ():"),
 }
 
 
@@ -87,7 +88,7 @@ def probar(nombre: str, mut) -> tuple[str, str]:
             (dst / f).write_text(texto.replace(ancla, nuevo, 1), encoding="utf-8")
         env = {k: v for k, v in os.environ.items() if k not in ("HARNESS_REPO",)}
         env["HARNESS_NESTED"] = "1"  # sin la sección de portado: acá se prueba el self-test, no el instalador
-        p = subprocess.run([sys.executable, "scripts/selftest.py"], cwd=dst, env=env, capture_output=True, text=True, timeout=300)
+        p = subprocess.run([sys.executable, "scripts/selftest.py"], cwd=dst, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
         return nombre, "roja" if p.returncode != 0 else "SOBREVIVIÓ"
 
 
@@ -106,4 +107,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Windows: la consola y los pipes son cp1252 por defecto, y `▶ ✓ ✗` o una `ñ` revientan el
+    # print ANTES de verificar nada — el gate no fallaba, desaparecía (lo cazó la matriz de CI).
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

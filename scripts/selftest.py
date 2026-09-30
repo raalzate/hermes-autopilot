@@ -439,7 +439,7 @@ def main() -> int:
     def run_hook(payload, env_extra=None, cwd=None, raw=None):
         env = {**os.environ, **(env_extra or {})}
         return subprocess.run([sys.executable, str(hook)], input=raw if raw is not None else json.dumps(payload),
-                              capture_output=True, text=True, env=env, cwd=cwd or REPO_ROOT, timeout=30)
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=cwd or REPO_ROOT, timeout=30)
 
     base = {"hook_event_name": "pre_tool_call", "tool_name": tools["shell"][0], "session_id": "s",
             "cwd": str(REPO_ROOT), "profile": "default", "extra": {}}
@@ -457,7 +457,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         env = {k: v for k, v in os.environ.items() if k != "HARNESS_REPO"}
         p = subprocess.run([sys.executable, str(hook)], input=json.dumps({**base, "cwd": tmp, "tool_input": {"command": ej_deny}}),
-                           capture_output=True, text=True, env=env, cwd=tmp, timeout=30)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=tmp, timeout=30)
         check(p.returncode == 0, f"shell hook fuera de un repo con config: exit {p.returncode} (debía dejar pasar)")
 
     # ── 6. El turno: gate pendiente, lint tras escribir, estado, ruteo ──────
@@ -543,7 +543,7 @@ def main() -> int:
     if "plugin/__init__.py" in con_inv:
         check(bool(rules.rule_invariante(config, "plugin/__init__.py", "def _seguro(\n@_seguro\ndef on_pre_tool_call\n    raise X\n")), "INVARIANTE: no caza un `raise` en el plugin")
     p = subprocess.run([sys.executable, str(HARNESS_HOME / "scripts" / "lint.py"), "--stdin", (ctxc.get("files") or ["AGENTS.md"])[0]],
-                       input="x" * ((ctxc.get("maxChars") or 10) + 1), capture_output=True, text=True, cwd=REPO_ROOT, timeout=60)
+                       input="x" * ((ctxc.get("maxChars") or 10) + 1), capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=REPO_ROOT, timeout=60)
     check(p.returncode == 1, f"lint --stdin no falla con un hallazgo (exit {p.returncode})")
 
     # ── 8. Señales del gate (P6) ─────────────────────────────────────────────
@@ -557,6 +557,25 @@ def main() -> int:
         for a in cmd[1:]:
             if isinstance(a, str) and a.endswith(".py"):
                 check((REPO_ROOT / a).is_file(), f"señal `{s.get('name')}` apunta a {a}, que no existe")
+
+    # Windows: consola cp1252. El gate imprime `▶ ✓ ✗` y reventaba antes de verificar nada (la
+    # matriz de CI lo cazó). Se emula forzando cp1252 en cada script que imprime no-ASCII.
+    cp1252 = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+    for script, args in (("lint.py", ["--rules"]), ("linkcheck.py", []), ("doctor.py", [])):
+        p = subprocess.run([sys.executable, str(HARNESS_HOME / "scripts" / script), *args], cwd=REPO_ROOT,
+                           env=cp1252, capture_output=True, timeout=120)
+        check(b"UnicodeEncodeError" not in p.stderr, f"{script} revienta con una consola cp1252 (Windows): {p.stderr[-200:]!r}")
+    with tempfile.TemporaryDirectory() as tmp:
+        troot = Path(tmp)
+        for d in ("plugin", "scripts"):
+            shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+        (troot / ".hermes").mkdir()
+        mini = {"gate": {"marker": ".git/harness-gate-dirty", "signals": [
+            {"name": "señal trivial ✓", "command": ["python3", "-c", "print('ñ ✓')"], "why": "prueba de consola"}]}}
+        (troot / ".hermes" / "harness.config.json").write_text(json.dumps(mini), encoding="utf-8")
+        p = subprocess.run([sys.executable, str(troot / "scripts" / "gate.py")], cwd=troot, env=cp1252, capture_output=True, timeout=120)
+        check(p.returncode == 0 and b"UnicodeEncodeError" not in p.stderr,
+              f"gate.py revienta con una consola cp1252 (Windows): rc {p.returncode} {p.stderr[-200:]!r}")
 
     # ── 9. Hooks de git: registro del trabajo (P11) y rutas protegidas ───────
     section("9. hooks de git (pre-commit, commit-msg)")
@@ -596,7 +615,7 @@ def main() -> int:
                 shutil.copytree(ghooks, troot / ".githooks")
             (troot / ".hermes").mkdir()
             shutil.copy(CONFIG_PATH, troot / ".hermes" / "harness.config.json")
-            g = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True)  # noqa: E731
+            g = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True, encoding="utf-8", errors="replace")  # noqa: E731
             g("init", "-q")
             g("config", "user.email", "t@t")
             g("config", "user.name", "t")
@@ -669,7 +688,7 @@ def main() -> int:
         env_hijo["HARNESS_NESTED"] = "1"
 
         def correr(args, cwd):
-            return subprocess.run([sys.executable, *args], cwd=cwd, env=env_hijo, capture_output=True, text=True, timeout=300)
+            return subprocess.run([sys.executable, *args], cwd=cwd, env=env_hijo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
 
         with tempfile.TemporaryDirectory() as tmp:
             p = correr([str(install), tmp, "--profile", perfiles[0].stem if perfiles else "python"], REPO_ROOT)
@@ -701,9 +720,9 @@ def main() -> int:
                     # --link-plugin en un HERMES_HOME temporal: nunca en el del usuario.
                     hh = t / "hermes-home"
                     env_link = {**env_hijo, "HERMES_HOME": str(hh)}
-                    p = subprocess.run([sys.executable, str(install), tmp, "--link-plugin"], env=env_link, capture_output=True, text=True, timeout=60)
+                    p = subprocess.run([sys.executable, str(install), tmp, "--link-plugin"], env=env_link, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
                     check(p.returncode == 0 and not hh.exists(), "--link-plugin sin --apply escribió")
-                    p = subprocess.run([sys.executable, str(install), tmp, "--link-plugin", "--apply"], env=env_link, capture_output=True, text=True, timeout=60)
+                    p = subprocess.run([sys.executable, str(install), tmp, "--link-plugin", "--apply"], env=env_link, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
                     enlazado = hh / "plugins" / "repo-harness" / "__init__.py"
                     check(p.returncode == 0 and enlazado.is_file(), f"--link-plugin --apply no dejó el plugin: {p.stdout}{p.stderr}")
 
@@ -722,4 +741,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Windows: la consola y los pipes son cp1252 por defecto, y `▶ ✓ ✗` o una `ñ` revientan el
+    # print ANTES de verificar nada — el gate no fallaba, desaparecía (lo cazó la matriz de CI).
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

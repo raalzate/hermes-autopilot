@@ -73,6 +73,7 @@ python3 scripts/doctor.py        # ¿el arnés está vivo en ESTA máquina?
 
 | Contenido | Archivo |
 |---|---|
+| setup de cero, paso a paso, y tablero de problemas | `docs/onboarding.md` |
 | cómo se engancha a Hermes (hooks, plugin, contexto, skills, memoria) | `docs/hermes.md` |
 | el arnés de ESTE repo | `docs/arnes.md` |
 | qué hace cada clave del config y quién la lee | `docs/config-reference.md` |

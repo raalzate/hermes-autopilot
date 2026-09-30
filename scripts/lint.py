@@ -28,7 +28,7 @@ from harness.rules import TEXT_EXT, _re, lint_one  # noqa: E402
 def tracked_files() -> list[str]:
     try:
         out = subprocess.run(["git", "ls-files", "-co", "--exclude-standard"], cwd=REPO_ROOT,
-                             capture_output=True, text=True, check=True).stdout
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
         return [f for f in out.splitlines() if (REPO_ROOT / f).is_file()]
     except (OSError, subprocess.CalledProcessError):
         return [p.relative_to(REPO_ROOT).as_posix() for p in REPO_ROOT.rglob("*")
@@ -86,4 +86,9 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    # Windows: la consola y los pipes son cp1252 por defecto, y `▶ ✓ ✗` o una `ñ` revientan el
+    # print ANTES de verificar nada — el gate no fallaba, desaparecía (lo cazó la matriz de CI).
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main(sys.argv[1:]))

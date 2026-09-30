@@ -48,6 +48,7 @@ python3 .hermes/harness/scripts/doctor.py
 
 ## Leer después
 
+- [`docs/onboarding.md`](docs/onboarding.md) — **empezá acá**: de cero a un arnés vivo, paso a paso, con qué tiene que salir en cada paso.
 - [`docs/hermes.md`](docs/hermes.md) — cómo se engancha a Hermes, verificado contra su código.
 - [`CONSTITUTION.md`](CONSTITUTION.md) — los principios y qué comando hace cumplir cada uno.
 - [`docs/portar.md`](docs/portar.md) — instalar en otro repo, con plugin o con shell hook.

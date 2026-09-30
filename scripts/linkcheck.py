@@ -33,7 +33,7 @@ def git_files() -> set[str]:
         # El ÍNDICE (versionado + staged), no el disco ni los no rastreados: un puntero a un
         # archivo que nunca se agregó es verde acá y rojo en CI, la peor variante (P10).
         out = subprocess.run(["git", "ls-files"], cwd=REPO_ROOT,
-                             capture_output=True, text=True, check=True).stdout
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
     except (OSError, subprocess.CalledProcessError):
         print("linkcheck: no hay git: no se puede medir contra lo versionado.")
         sys.exit(1)
@@ -104,4 +104,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Windows: la consola y los pipes son cp1252 por defecto, y `▶ ✓ ✗` o una `ñ` revientan el
+    # print ANTES de verificar nada — el gate no fallaba, desaparecía (lo cazó la matriz de CI).
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

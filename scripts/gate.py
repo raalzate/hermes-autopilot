@@ -102,7 +102,9 @@ def main() -> None:
 
         print(f"\n▶ {nombre}")
         inicio = time.monotonic()
-        proc = subprocess.run(argv, cwd=REPO_ROOT, env={**os.environ, "HARNESS_IN_GATE": "1"})
+        # PYTHONIOENCODING: una señal en Python que imprime `ñ` o `✓` en una consola cp1252
+        # (Windows) revienta por el print, no por lo que verifica. El gate se lo evita a todas.
+        proc = subprocess.run(argv, cwd=REPO_ROOT, env={**os.environ, "HARNESS_IN_GATE": "1", "PYTHONIOENCODING": "utf-8"})
         dur = time.monotonic() - inicio
         corridas += 1
         if proc.returncode == 0:
@@ -142,4 +144,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Windows: la consola y los pipes son cp1252 por defecto, y `▶ ✓ ✗` o una `ñ` revientan el
+    # print ANTES de verificar nada — el gate no fallaba, desaparecía (lo cazó la matriz de CI).
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     main()
