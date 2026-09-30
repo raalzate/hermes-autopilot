@@ -15,11 +15,12 @@ comando**; lo que se supone va en "deuda conocida".
 | mutaciones | 27/27 ponen rojo el self-test (incluye cada hallazgo de la revisión del 2026-09-30) |
 | `hermes plugins doctor plugin --ci` | OK: manifiesto, import y registro; 4 hooks |
 | `scripts/hermes_e2e.py` | 70 verificaciones dentro de Hermes (directivas de `pre_tool_call`, V4A, cwd de sesión, `pre_verify`, `pre_llm_call`, `transform_tool_result`, sección del prompt) |
+| CI (GitHub Actions) | verde en Linux, macOS y Windows × Python 3.11 y 3.13 (`b17207b`); en CI las 2 señales de Hermes salen OMITIDAS |
+| GitHub Pages | https://raalzate.github.io/hermes-harness/ publicado desde `main:/docs` |
 | shell hook | probado a mano con `hermes hooks test pre_tool_call --for-tool terminal`: bloqueo parseado en la forma de Hermes, inocente pasa |
 
 ## Deuda conocida
 
-- CI todavía no corrió (el repo no tiene commits ni remoto): la matriz de Windows no está verificada.
 - `context.blockedPatterns` es una copia a mano de un subconjunto del escáner de Hermes.
 - Escrituras por la terminal que no son redirección (`cp`, `mv`, `python -c`): ver `docs/arnes.md`.
 - Sin panel ni medición de latencia todavía (ver `docs/desde-claude-code.md`).
