@@ -134,6 +134,9 @@ def main() -> int:
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     tools = config.get("tools") or {}
     os.environ["HARNESS_REPO"] = str(REPO_ROOT)
+    # Cientos de bloqueos de prueba no pueden llenar el panel del humano: el registro de eventos
+    # se apaga acá y la sección 13 lo enciende en un repo temporal.
+    os.environ["HARNESS_NO_EVENTS"] = "1"
 
     # ── 1. El plugin carga y registra lo que su manifiesto promete ───────────
     section("1. plugin: carga y registro")
@@ -793,6 +796,172 @@ def main() -> int:
         check(os.environ.get("HARNESS_REPO") == str(REPO_ROOT), "timing: no restauró HARNESS_REPO")
         check(bool(marcador and marcador.exists()) == habia, "timing: la medición tocó el marcador del gate del repo real (P7)")
         check(timing_mod.presupuesto({"budgetMs": 7, "budgets": {"pre_verify": 9}}, "pre_verify") == 9, "timing: ignora `budgets`")
+
+    # ── 13. Autonomía: eventos, loop, CLI y panel (P21) ──────────────────────
+    section("13. autonomía: registro de eventos, loop autónomo, CLI y panel")
+    import cli as cli_mod  # noqa: E402
+    import loop as loop_mod  # noqa: E402
+    import panel as panel_mod  # noqa: E402
+    from harness import events as events_mod  # noqa: E402
+
+    obs_ev = (config.get("observability") or {}).get("events")
+    check(isinstance(obs_ev, dict) and bool(obs_ev.get("file")), "observability.events no declara `file`: el panel no ve nada")
+    deny0 = next((r for r in (config.get("terminal") or {}).get("deny") or [] if r.get("example")), None)
+
+    # Eventos: el plugin registra lo que frena, sólo eso, con techo y sin lanzar jamás.
+    with tempfile.TemporaryDirectory() as tmp:
+        troot = Path(tmp).resolve()
+        subprocess.run(["git", "init", "-q"], cwd=troot, capture_output=True)
+        (troot / ".hermes").mkdir()
+        cfg_ev = {**config, "observability": {**(config.get("observability") or {}), "events": {"file": ".git/harness-events.jsonl", "maxBytes": 400}}}
+        (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_ev), encoding="utf-8")
+        os.environ["HARNESS_REPO"] = str(troot)
+        os.environ.pop("HARNESS_NO_EVENTS", None)
+        try:
+            if deny0 and tools.get("shell"):
+                pre(tool_name=tools["shell"][0], args={"command": deny0["example"]}, session_id="selftest")
+                evs = events_mod.tail(cfg_ev, troot)
+                check(any(e.get("kind") == "block" and e.get("rule") == deny0.get("id") for e in evs),
+                      f"el plugin no registró el bloqueo de `{deny0.get('id')}` en el registro de eventos")
+                antes_ev = len(events_mod.tail(cfg_ev, troot))
+                pre(tool_name=tools["shell"][0], args={"command": "git status"}, session_id="selftest")
+                check(len(events_mod.tail(cfg_ev, troot)) == antes_ev, "el plugin registra eventos de lo que deja pasar")
+                for _ in range(20):
+                    events_mod.record(cfg_ev, troot, "x", relleno="y" * 40)
+                p_ev = events_mod.path(cfg_ev, troot)
+                check(p_ev.stat().st_size < 400 + 200 and p_ev.with_name(p_ev.name + ".1").exists(),
+                      "el registro de eventos no rota pasado `maxBytes`: crece sin techo")
+            os.environ["HARNESS_NO_EVENTS"] = "1"
+            n_ev = len(events_mod.tail(cfg_ev, troot))
+            events_mod.record(cfg_ev, troot, "apagado")
+            check(len(events_mod.tail(cfg_ev, troot)) == n_ev, "HARNESS_NO_EVENTS no apaga el registro")
+        finally:
+            os.environ["HARNESS_REPO"] = str(REPO_ROOT)
+            os.environ["HARNESS_NO_EVENTS"] = "1"
+    try:
+        events_mod.record({"observability": {"events": {"file": "no/existe/\0/x"}}}, Path("/nonexistent-dir-xyz"), "x")
+        check(True, "")
+    except Exception as e:  # noqa: BLE001
+        check(False, f"events.record lanzó ({e!r}): en pre_tool_call eso BLOQUEARÍA la herramienta (P5)")
+
+    # Loop — decisiones puras: la salida es el gate, el mismo rojo escala (P16), hay topes y freno de mano.
+    lspec = config.get("loop") or {}
+    check(bool(lspec), "el config no declara `loop`")
+    if lspec:
+        check(bool(lspec.get("agentCommand")) and any("{prompt}" in str(a) for a in lspec["agentCommand"]),
+              "loop.agentCommand no lleva `{prompt}`: el agente no recibiría la tarea")
+        check(int(lspec.get("sameFailureLimit", 0)) >= 1 and int(lspec.get("maxIterations", 0)) >= 1 and float(lspec.get("maxMinutes", 0)) > 0,
+              "loop sin topes (`sameFailureLimit`, `maxIterations`, `maxMinutes`): un loop sin tope no es autónomo, es desatendido")
+    sp = {"maxIterations": 4, "sameFailureLimit": 2, "maxMinutes": 60}
+    roja = lambda f: {"green": False, "signature": f}  # noqa: E731
+    check(loop_mod.decidir([roja("a"), {"green": True}], sp, 1, False)[0] == "verde", "loop: un gate verde no termina la tarea")
+    check(loop_mod.decidir([roja("a")], sp, 1, False)[0] == "seguir", "loop: no reintenta tras un primer rojo")
+    check(loop_mod.decidir([roja("a"), roja("a")], sp, 1, False)[0] == "escalar", "loop: el mismo rojo dos veces no escala (P16)")
+    check(loop_mod.decidir([roja("a"), roja("b")], sp, 1, False)[0] == "seguir", "loop: escala con rojos DISTINTOS (hay hipótesis nueva)")
+    check(loop_mod.decidir([roja("a"), roja("b"), roja("c"), roja("d")], sp, 1, False)[0] == "escalar", "loop: sin tope de iteraciones")
+    check(loop_mod.decidir([roja("a")], sp, 3601, False)[0] == "escalar", "loop: sin tope de tiempo")
+    check(loop_mod.decidir([roja("a")], sp, 1, True)[0] == "parado", "loop: ignora el freno de mano (`stopFile`)")
+    check(loop_mod.firma("▶ x\n✗ lint (exit 1, 0.3s)\n✗ self-test (exit 1, 9.1s)\n") == "lint · self-test",
+          "loop: la firma de un rojo del gate no son sus señales rojas")
+    check(loop_mod.firma("✗ lint (exit 1, 0.3s)") == loop_mod.firma("✗ lint (exit 1, 7.9s)"),
+          "loop: la duración cambia la firma (el mismo rojo parecería distinto y nunca escalaría)")
+    tl = "# t\n- [x] hecha\n- [ ] sigue\n- [ ] otra\n"
+    check(loop_mod.proxima_tarea(tl) == (2, "sigue"), "loop: no toma la primera casilla vacía")
+    check(loop_mod.marcar(tl, 2, "!", "motivo").splitlines()[2] == "- [!] sigue — motivo", "loop: no marca la escalada")
+
+    # Loop — de punta a punta, con un agente de mentira, en un repo temporal sobre una rama protegida.
+    if shutil.which("git"):
+        agente = ("import pathlib;p=pathlib.Path('n.txt');n=int(p.read_text()) if p.exists() else 0;p.write_text(str(n+1));"
+                  "import sys;pathlib.Path('.git/harness-loop.stop').write_text('x') if 'PARAR' in sys.argv[1] else None")
+        gate_ok2 = "import pathlib,sys;n=int(pathlib.Path('n.txt').read_text());print('✗ tests (exit 1)') if n<2 else None;sys.exit(0 if n>=2 else 1)"
+
+        def loop_en(tmp, gate_src, tareas="# t\n- [ ] una tarea\n"):
+            troot = Path(tmp)
+            g_ = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True)  # noqa: E731
+            g_("init", "-q", "-b", "main")
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            (troot / ".hermes" / "loop").mkdir(parents=True)
+            cfg_l = {"branches": {"protected": ["main"]}, "observability": {"events": {"file": ".git/harness-events.jsonl"}},
+                     "loop": {**sp, "tasksFile": ".hermes/loop/tasks.md", "agentCommand": ["python3", "-c", agente, "{prompt}"],
+                              "gateCommand": ["python3", "-c", gate_src]}}
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_l), encoding="utf-8")
+            (troot / ".hermes" / "loop" / "tasks.md").write_text(tareas, encoding="utf-8")
+            g_("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x")
+            env_l = {k: v for k, v in os.environ.items() if k not in ("HARNESS_REPO", "HARNESS_NO_EVENTS")}
+            p_ = subprocess.run([sys.executable, str(troot / "scripts" / "loop.py"), "--apply"], cwd=troot, env=env_l,
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+            est = json.loads((troot / ".git" / "harness-loop.json").read_text(encoding="utf-8")) if (troot / ".git" / "harness-loop.json").is_file() else {}
+            return troot, p_, est, g_
+
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, p_, est, g_ = loop_en(tmp, gate_ok2)
+            check(p_.returncode == 0 and est.get("phase") == "verde" and len(est.get("attempts") or []) == 2,
+                  f"loop real: no llegó a verde en el intento 2 (el gate decide, no el agente): rc={p_.returncode} {est}\n{p_.stdout[-600:]}")
+            check("- [x] una tarea" in (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8"), "loop real: no marcó la tarea verde")
+            check(g_("branch", "--show-current").stdout.strip().startswith("loop/"), "loop real: trabajó sobre la rama protegida")
+            kinds = [e.get("kind") for e in events_mod.tail({"observability": {"events": {"file": ".git/harness-events.jsonl"}}}, troot)]
+            check("loop-iter" in kinds and "loop-verde" in kinds, f"loop real: no dejó sus eventos para el panel ({kinds})")
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, p_, est, _ = loop_en(tmp, "print('✗ lint (exit 1, 0.1s)');raise SystemExit(1)")
+            check(p_.returncode == 2 and est.get("phase") == "escalar" and len(est.get("attempts") or []) == 2,
+                  f"loop real: el mismo rojo dos veces no escaló con exit 2: rc={p_.returncode} {est.get('phase')} {len(est.get('attempts') or [])}")
+            check("- [!] una tarea" in (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8"), "loop real: no marcó la escalada")
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, p_, est, _ = loop_en(tmp, "raise SystemExit(1)", "# t\n- [ ] PARAR ya\n")
+            check(p_.returncode == 2 and est.get("phase") == "parado" and len(est.get("attempts") or []) == 1,
+                  f"loop real: el freno de mano no paró entre iteraciones: {est.get('phase')} {len(est.get('attempts') or [])}")
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            (troot / ".hermes").mkdir()
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps({"loop": {**sp}}), encoding="utf-8")
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            p_ = subprocess.run([sys.executable, str(troot / "scripts" / "loop.py"), "--task", "x"], cwd=troot, capture_output=True,
+                                text=True, encoding="utf-8", errors="replace", timeout=60)
+            check(p_.returncode == 0 and "DRY-RUN" in p_.stdout and not (troot / "n.txt").exists(), "loop: sin --apply ejecutó algo (P9)")
+
+    # CLI: una regla se prueba por el plugin ANTES de escribirse.
+    buena = {"id": "selftest-nueva", "pattern": r"\bzzq-selftest\b", "example": "zzq-selftest --go", "reason": "prueba."}
+    check(not cli_mod.validar(config, "terminal.deny", buena), f"cli: rechaza una regla buena: {cli_mod.validar(config, 'terminal.deny', buena)}")
+    check(any("no frena" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "example": "otra cosa"})),
+          "cli: acepta una regla cuyo ejemplo no frena (P2)")
+    check(any("falta `example`" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "example": ""})), "cli: acepta una regla sin example")
+    inoc = ((config.get("terminal") or {}).get("innocent") or ["git status"])[0]
+    check(any("muerde de más" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "pattern": re.escape(inoc) + "|zzq-selftest"})),
+          "cli: acepta una regla que muerde un inocente (P3)")
+    gate_cmd = (config.get("gate") or {}).get("command", "python3 scripts/gate.py")
+    sin_inoc = {**config, "terminal": {**(config.get("terminal") or {}), "innocent": []}}
+    check(any(gate_cmd in e for e in cli_mod.validar(sin_inoc, "terminal.deny", {**buena, "pattern": re.escape(gate_cmd) + "|zzq-selftest"})),
+          "cli: acepta una regla que veda el gate (el agente y el loop no podrían terminar nunca)")
+    if deny0:
+        check(any("ya lo frena" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "pattern": "zzq|" + deny0["pattern"], "example": deny0["example"]})),
+              "cli: acepta una regla cuyo ejemplo ya frenaba otra (no prueba nada propio)")
+        check(any("ya hay" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "id": deny0["id"]})), "cli: acepta un id repetido")
+    check(cli_mod.get_ruta(cli_mod.set_ruta({"a": {"b": [1, 2]}}, "a.b.1", 9), "a.b.1") == 9, "cli: set/get por ruta con índice")
+
+    # Panel: el estado como dato, sólo local, y empuja por SSE.
+    st_ = panel_mod.estado(config, REPO_ROOT)
+    for k in ("branch", "gate", "rules", "loop", "events", "status"):
+        check(k in st_, f"panel: el estado no trae `{k}`")
+    srv = panel_mod.servidor(REPO_ROOT, port=0, intervalo=0.1)
+    check(srv.server_address[0] == "127.0.0.1", f"panel: escucha en {srv.server_address[0]} por defecto, no sólo en esta máquina")
+    import threading
+    import urllib.request
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+        with urllib.request.urlopen(base + "/api/state", timeout=10) as r:
+            check(r.status == 200 and "rules" in json.loads(r.read().decode("utf-8")), "panel: /api/state no devuelve el estado")
+        with urllib.request.urlopen(base + "/", timeout=10) as r:
+            check("EventSource" in r.read().decode("utf-8"), "panel: la página no se suscribe al stream")
+        with urllib.request.urlopen(base + "/api/stream", timeout=10) as r:
+            check(r.readline().decode("utf-8").startswith("event: state"), "panel: el stream no empuja el estado")
+    except OSError as e:
+        check(False, f"panel: no respondió ({e})")
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
     # ── 11. Portado: el instalador y cada perfil, en un repo temporal ────────
     # (Primero, porque la sección 10 mira que nada quede en la raíz.)

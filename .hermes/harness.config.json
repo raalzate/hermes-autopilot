@@ -650,7 +650,7 @@
     "reason": "el trabajo entra por pull request, con su revisión y su gate verde en CI."
   },
   "observability": {
-    "$comment": "EL COSTO DEL ARNÉS, MEDIDO (P19). Lo lee `scripts/timing.py`, señal del gate. `budgetMs` es el presupuesto de la mediana por callback; `budgets` lo ajusta por callback. Holgado a propósito: los callbacks puros miden fracciones de ms y un runner de CI cargado mide más; lo que caza es el orden de magnitud (un subprocess dentro de un freno). `probe` es el caso sintético: `filePath` tiene que ser CÓDIGO para este repo, o `transform_tool_result` toma el atajo y se mide el camino barato.",
+    "$comment": "EL COSTO DEL ARNÉS, MEDIDO (P19). Lo lee `scripts/timing.py`, señal del gate. `budgetMs` es el presupuesto de la mediana por callback; `budgets` lo ajusta por callback. Holgado a propósito: los callbacks puros miden fracciones de ms y un runner de CI cargado mide más; lo que caza es el orden de magnitud (un subprocess dentro de un freno). `probe` es el caso sintético: `filePath` tiene que ser CÓDIGO para este repo, o `transform_tool_result` toma el atajo y se mide el camino barato. `events`: el registro de lo que el arnés hizo (bloqueos, escaladas, lint, gate, loop), una línea JSON por evento bajo `.git/`; lo leen el panel y `cli.py status`. Sin `events` no se escribe nada.",
     "budgetMs": 50,
     "runs": 20,
     "budgets": {},
@@ -660,7 +660,11 @@
       "content": "x = 1\n",
       "prompt": "¿cómo está el arnés?"
     },
-    "reason": "en Hermes un pre_tool_call que se pasa de tiempo BLOQUEA la herramienta: un freno lento frena todo."
+    "reason": "en Hermes un pre_tool_call que se pasa de tiempo BLOQUEA la herramienta: un freno lento frena todo.",
+    "events": {
+      "file": ".git/harness-events.jsonl",
+      "maxBytes": 524288
+    }
   },
   "drift": {
     "$comment": "EL BARRIDO DE DERIVA (P20): lo que se degrada sin que ningún cambio lo rompa. Lo lee `scripts/drift.py`. NO es señal del gate: depende del reloj. Lo corre `runner`, programado, y el self-test verifica que el runner lo invoque (encendido y sin nadie que lo corra es «instalado y muerto»). `statusDatePattern` extrae (grupo 1) la fecha del veredicto de `status.file`; más vieja que `statusMaxAgeDays` es ROJO. Una regla de `patterns` que no casó con nada en `historyCommits` commits es AVISO.",
@@ -670,6 +674,31 @@
     "runner": ".github/workflows/drift.yml",
     "command": "scripts/drift.py",
     "reason": "un veredicto viejo que se lee como actual es peor que no tener veredicto."
+  },
+  "loop": {
+    "$comment": "EL LOOP AUTÓNOMO (P21, `scripts/loop.py`): tarea → agente → gate, hasta verde o hasta un tope. `agentCommand` es argv sin shell; `{prompt}` se reemplaza dentro de cada argumento. `gateCommand` decide la salida: el loop no le cree al agente, le cree al gate. `sameFailureLimit`: el mismo rojo N veces seguidas escala a un humano (P16 hecho mecanismo). `maxIterations` y `maxMinutes` son topes por tarea. `stopFile` es el freno de mano (lo crea `loop.py --stop`). Nunca publica (P13): lo verde queda en una rama `branchPrefix*`.",
+    "tasksFile": ".hermes/loop/tasks.md",
+    "agentCommand": [
+      "hermes",
+      "chat",
+      "-q",
+      "{prompt}"
+    ],
+    "gateCommand": [
+      "python3",
+      "scripts/gate.py"
+    ],
+    "maxIterations": 4,
+    "sameFailureLimit": 2,
+    "maxMinutes": 90,
+    "agentTimeoutMinutes": 30,
+    "gateTimeoutMinutes": 20,
+    "branchPrefix": "loop/",
+    "stopFile": ".git/harness-loop.stop",
+    "stateFile": ".git/harness-loop.json",
+    "prompt": "Tarea del loop autónomo: {task}\n\nTrabajá en este repo siguiendo AGENTS.md y CONSTITUTION.md. Terminado = `{gate}` verde: el loop lo corre después de vos y es lo único que decide. No empujes ni abras PR (lo publica un humano). Si la tarea choca con un freno, no lo rodees: explicá el choque y terminá el turno.",
+    "retryPrompt": "Intento {attempt} de la tarea: {task}\n\nEl gate salió ROJO. Señales: {failures}\nCola de la salida:\n{gate_tail}\n\nLeé la salida real y probá una hipótesis NUEVA (P16): el mismo rojo dos veces seguidas detiene el loop y escala a un humano. Terminado = `{gate}` verde.",
+    "reason": "un agente que reintenta sin tope ni criterio de salida quema horas en el mismo error; el que se declara terminado sin gate entrega lo que no funciona."
   },
   "taxonomy": {
     "$comment": "EL ARNÉS COMO SISTEMA DE CONTROL (docs/guias-y-sensores.md). Lo lee `scripts/map.py`, señal del gate. Cada pieza tiene dirección (guía: antes de decidir · freno: decidido y no ejecutado · sensor: después), tipo (computacional · inferencial) y etapa. La dirección de un hook del plugin la pone el HOOK de Hermes. Una pieza sin clasificar es rojo; una etapa vacía es un hueco que se informa.",
@@ -767,6 +796,19 @@
         "file": "scripts/hook.py",
         "direction": "freno",
         "stage": "acción decidida"
+      },
+      "loop autónomo (scripts/loop.py)": {
+        "file": "scripts/loop.py",
+        "direction": "sensor",
+        "stage": [
+          "fin del turno",
+          "continuo"
+        ]
+      },
+      "panel en vivo (scripts/panel.py)": {
+        "file": "scripts/panel.py",
+        "direction": "sensor",
+        "stage": "continuo"
       }
     },
     "pipelines": {

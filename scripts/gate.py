@@ -34,6 +34,7 @@ from pathlib import Path
 # al instalarlo y al validarlo, y lo que quede afuera no viaja (docs/gotchas.md).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugin"))
 from harness.core import REPO_ROOT, CONFIG_PATH, marker_path  # noqa: E402
+from harness import events  # noqa: E402
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "full"
 
@@ -121,6 +122,9 @@ def main() -> None:
         estado.write_text(json.dumps({"mode": MODE, "at": time.time(), "signals": resultados}, indent=1))
     except OSError:
         pass
+    # Y al registro de eventos: el panel muestra el veredicto apenas sale, no al recargar.
+    veredicto = "roja" if fallidas else ("fast" if MODE == "fast" else ("verde-con-omitidas" if omitidas else "verde"))
+    events.record(config, REPO_ROOT, "gate", mode=MODE, verdict=veredicto, failed=fallidas, skipped=omitidas)
 
     print("\n" + "─" * 60)
     if fallidas:

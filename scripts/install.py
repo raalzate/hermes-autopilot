@@ -28,7 +28,7 @@ from pathlib import Path
 HOME = Path(__file__).resolve().parent.parent  # el repo del arnés (o una copia instalada)
 PLANT = HOME / "plantillas"
 CODE_FILES = ["gate.py", "lint.py", "linkcheck.py", "selftest.py", "hook.py", "githooks.py", "install.py", "doctor.py",
-              "drift.py", "map.py", "timing.py"]
+              "drift.py", "map.py", "timing.py", "cli.py", "loop.py", "panel.py"]
 DEST_CODE = Path(".hermes") / "harness"
 
 
@@ -88,6 +88,7 @@ def plan(target: Path, profile: str | None, upgrade: bool) -> list[tuple[str, Pa
     add(target / "AGENTS.md", PLANT / "AGENTS.md")
     add(target / "STATUS.md", PLANT / "STATUS.md")
     add(target / "docs" / "gotchas.md", PLANT / "gotchas.md")
+    add(target / ".hermes" / "loop" / "tasks.md", PLANT / "tasks.md")
     add(target / ".github" / "workflows" / "harness.yml", PLANT / "ci.yml")
     add(target / ".github" / "workflows" / "harness-drift.yml", PLANT / "drift.yml")
     for h in ("pre-commit", "commit-msg", "pre-push"):
@@ -175,7 +176,11 @@ Siguiente (lo hace el humano — el instalador no toca el config de Hermes):
   3. python3 .hermes/harness/scripts/install.py {target} --link-plugin --apply
      hermes plugins enable repo-harness     # los plugins generales son opt-in
   4. python3 .hermes/harness/scripts/gate.py
-  5. Editá .hermes/harness.config.json: las reglas de ESTE repo, cada una con su `example`.""")
+  5. Las reglas de ESTE repo, cada una con su `example` (la CLI la prueba antes de escribirla):
+     python3 .hermes/harness/scripts/cli.py rule add terminal.deny --id … --pattern … --example … --reason …
+  6. Panel en vivo y loop autónomo:
+     python3 .hermes/harness/scripts/cli.py panel
+     python3 .hermes/harness/scripts/cli.py task add "…" && python3 .hermes/harness/scripts/cli.py loop""")
     return 0
 
 

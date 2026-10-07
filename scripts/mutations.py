@@ -63,6 +63,17 @@ CODIGO = {
     "deriva: el historial no cuenta": ("scripts/drift.py", "                vistas.add(i)", "                pass"),
     "mapa: un hook de git sin clasificar pasa": ("scripts/map.py", '                sin.append(f"hook de git', '                pass  # sin.append(f"hook de git'),
     "timing no mide": ("scripts/timing.py", "                tiempos.append((time.perf_counter() - t0) * 1000)", "                tiempos.append(0.0)"),
+    # La autonomía (P21): el loop, la CLI, el panel y el registro de eventos.
+    "loop: el mismo rojo no escala (P16)": ("scripts/loop.py", "    if limite > 0 and len(firmas) >= limite and len(set(firmas[-limite:])) == 1:", "    if False:"),
+    "loop: sin tope de iteraciones": ("scripts/loop.py", "    if len(intentos) >= tope:", "    if False:"),
+    "loop: ignora el freno de mano": ("scripts/loop.py", "    if parar:\n        return \"parado\"", "    if False:\n        return \"parado\""),
+    "loop: le cree al agente y no al gate": ("scripts/loop.py", '"green": rc_gate == 0,', '"green": rc_agente == 0,'),
+    "loop: la duración cambia la firma del rojo": ("scripts/loop.py", r'(?:\s+\(|:|$)', r'(?:$)'),
+    "cli: acepta un ejemplo que no frena": ("scripts/cli.py", "        if hizo != espera:", "        if False:"),
+    "cli: no mira los inocentes ni el gate": ("scripts/cli.py", "    for texto in dict.fromkeys(inocentes):", "    for texto in []:"),
+    "panel: escucha en todas las interfaces": ("scripts/panel.py", 'HOST = "127.0.0.1"', 'HOST = "0.0.0.0"'),
+    "eventos: el plugin no registra los bloqueos": ("plugin/__init__.py", "    if d.block or d.approve:\n        # Lo que el freno", "    if False:\n        # Lo que el freno"),
+    "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
 }
 
 
@@ -81,6 +92,7 @@ CONFIG = {
     "un inocente que muerde": _config(lambda c: c["terminal"]["innocent"].append(c["terminal"]["deny"][1]["example"])),
     "la deriva encendida y nadie que la corra": _config(lambda c: c["drift"].update(command="scripts/otro.py")),
     "una skill fuera del mapa": _config(lambda c: c["taxonomy"]["skills"].pop("lesson")),
+    "un loop sin tope": _config(lambda c: c["loop"].update(sameFailureLimit=0)),
 }
 
 

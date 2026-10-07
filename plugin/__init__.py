@@ -24,7 +24,7 @@ import os
 # (`hermes_plugins.<slug>`, con `__path__` en su directorio) y lo COPIA para validarlo e
 # instalarlo: un núcleo afuera del directorio, o un `sys.path` apuntando al repo del arnés, se
 # rompe exactamente ahí (docs/gotchas.md).
-from .harness import core, guards, turn
+from .harness import core, events, guards, turn
 
 logger = logging.getLogger("repo-harness")
 
@@ -81,7 +81,12 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
     if not config:
         return None
     ev = core.Event(tool=tool_name, args=args, cwd=cwd, session_id=session_id)
-    return guards.evaluate(ev, config, root).to_hermes()
+    d = guards.evaluate(ev, config, root)
+    if d.block or d.approve:
+        # Lo que el freno decidió, para el panel: sin esto se ve sólo dentro de esta conversación.
+        events.record(config, root, "block" if d.block else "ask", rule=(d.rule or {}).get("id", "?"),
+                      tool=tool_name, session=session_id)
+    return d.to_hermes()
 
 
 @_seguro
@@ -96,6 +101,7 @@ def on_transform_tool_result(tool_name: str = "", args=None, result=None, status
     hallazgos = turn.after_write(core.Event(tool=tool_name, args=args, cwd=cwd), config, root)
     if not hallazgos:
         return None
+    events.record(config, root, "lint", tool=tool_name, findings=len(hallazgos), first=hallazgos[0][:200])
     return (
         result
         + "\n\n[repo-harness] el archivo quedó escrito, pero el lint del repo lo marca:\n  "
@@ -108,6 +114,8 @@ def on_transform_tool_result(tool_name: str = "", args=None, result=None, status
 def on_pre_verify(task_id: str = "", **_):
     root, config = _contexto(_cwd_de_sesion(task_id) or None)
     msg = turn.verify(config, root) if config else None
+    if msg:
+        events.record(config, root, "verify-pending", session=task_id)
     return {"action": "continue", "message": msg} if msg else None
 
 
