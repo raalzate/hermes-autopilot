@@ -865,6 +865,8 @@ def main() -> int:
           "loop: la firma de un rojo del gate no son sus señales rojas")
     check(loop_mod.firma("✗ lint (exit 1, 0.3s)") == loop_mod.firma("✗ lint (exit 1, 7.9s)"),
           "loop: la duración cambia la firma (el mismo rojo parecería distinto y nunca escalaría)")
+    check(loop_mod.firma("✗ tests (unittest) (exit 1, 0.3s)\n✗ docs: no existe el ejecutable `x`\n") == "docs · tests (unittest)",
+          "loop: la firma corta el nombre de una señal con paréntesis o pierde la de un ejecutable ausente")
     tl = "# t\n- [x] hecha\n- [ ] sigue\n- [ ] otra\n"
     check(loop_mod.proxima_tarea(tl) == (2, "sigue"), "loop: no toma la primera casilla vacía")
     check(loop_mod.marcar(tl, 2, "!", "motivo").splitlines()[2] == "- [!] sigue — motivo", "loop: no marca la escalada")
@@ -911,6 +913,7 @@ def main() -> int:
             troot, p_, est, _ = loop_en(tmp, "raise SystemExit(1)", "# t\n- [ ] PARAR ya\n")
             check(p_.returncode == 2 and est.get("phase") == "parado" and len(est.get("attempts") or []) == 1,
                   f"loop real: el freno de mano no paró entre iteraciones: {est.get('phase')} {len(est.get('attempts') or [])}")
+            check(not (troot / ".git" / "harness-loop.stop").exists(), "loop real: el pedido de parada quedó después de cumplirse")
         with tempfile.TemporaryDirectory() as tmp:
             troot = Path(tmp)
             (troot / ".hermes").mkdir()
@@ -939,6 +942,12 @@ def main() -> int:
               "cli: acepta una regla cuyo ejemplo ya frenaba otra (no prueba nada propio)")
         check(any("ya hay" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "id": deny0["id"]})), "cli: acepta un id repetido")
     check(cli_mod.get_ruta(cli_mod.set_ruta({"a": {"b": [1, 2]}}, "a.b.1", 9), "a.b.1") == 9, "cli: set/get por ruta con índice")
+    multi = {"id": "zz-multi", "pattern": r"def f\(.*\n\s+return 1", "example": "def f():\n    return 1", "examplePath": "plugin/zz.py",
+             "paths": ["^plugin/"], "reason": "x."}
+    check(any("línea por línea" in e for e in cli_mod.validar(config, "patterns", multi)),
+          "cli: acepta un `patterns` multilínea, que frena un write_file y nunca el lint ni un patch V4A")
+    check(any("P6" in e for e in cli_mod.validar_senal(config, {"name": "x", "command": ["true"]})), "cli: acepta una señal del gate sin `why` (P6)")
+    check(not cli_mod.validar_senal(config, {"name": "zz-nueva", "why": "porque", "command": ["true"]}), "cli: rechaza una señal buena")
 
     # Panel: el estado como dato, sólo local, y empuja por SSE.
     st_ = panel_mod.estado(config, REPO_ROOT)
@@ -970,6 +979,13 @@ def main() -> int:
     perfiles_dir = HARNESS_HOME / "plantillas" / "perfiles"
     if os.environ.get("HARNESS_NESTED"):
         print("  (omitida: corrida anidada dentro del portado)")
+    elif HARNESS_HOME.resolve() != REPO_ROOT.resolve():
+        # En un repo INSTALADO el código vive en `.hermes/harness/` y los hooks y skills en la raíz:
+        # re-portar desde ahí no tiene de dónde copiarlos. Corría igual y dejaba el gate de todo
+        # repo recién instalado en ROJO (lo destapó el ensayo del workshop; el portado anidado de
+        # este self-test corre con HARNESS_NESTED y no lo veía). El portado se prueba acá, en el
+        # repo del arnés, contra cada perfil.
+        print("  (omitida: repo instalado — el portado se prueba en el repo del arnés)")
     elif not install.is_file():
         check(False, "no existe scripts/install.py")
     else:
@@ -1017,6 +1033,21 @@ def main() -> int:
                     p = correr([str(t / ".hermes" / "harness" / "scripts" / script)], t)
                     check(p.returncode == 0, f"[{pf.stem}] {script} del repo instalado sale rojo:\n{(p.stdout + p.stderr)[-800:]}")
                 if pf == perfiles[0]:
+                    # El self-test del repo instalado, como lo corre su gate: SIN la marca de anidado.
+                    env_real = {k: v for k, v in env_hijo.items() if k != "HARNESS_NESTED"}
+                    try:
+                        p = subprocess.run([sys.executable, str(t / ".hermes" / "harness" / "scripts" / "selftest.py")], cwd=t, env=env_real,
+                                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+                        check(p.returncode == 0, f"[{pf.stem}] el self-test de un repo recién instalado (sin HARNESS_NESTED) sale rojo:\n{(p.stdout + p.stderr)[-800:]}")
+                    except subprocess.TimeoutExpired:
+                        check(False, f"[{pf.stem}] el self-test de un repo recién instalado no termina (¿re-porta el arnés desde la instalación?)")
+                    # Lo instalado se tiene que poder COMMITEAR: el lint de un repo recién instalado
+                    # no tiene nada versionado y pasa vacío; el pre-commit mira lo staged de verdad
+                    # (la plantilla del config trae el ejemplo de la clave privada, por ejemplo).
+                    subprocess.run(["git", "add", ".hermes", ".githooks", ".github", "AGENTS.md", "STATUS.md", "docs"],
+                                   cwd=t, capture_output=True)
+                    p = correr([str(t / ".hermes" / "harness" / "scripts" / "githooks.py"), "pre-commit"], t)
+                    check(p.returncode == 0, f"[{pf.stem}] lo que instala el instalador no pasa su propio pre-commit:\n{(p.stdout + p.stderr)[-600:]}")
                     # Nunca sobreescribe; --upgrade toca sólo el código del arnés.
                     (t / "AGENTS.md").write_text("# mío\n", encoding="utf-8")
                     core_py = t / ".hermes" / "harness" / "plugin" / "harness" / "core.py"

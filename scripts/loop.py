@@ -55,7 +55,7 @@ def firma(salida: str) -> str:
     Del gate: los nombres de las señales `✗`. De otro comando: la última línea no vacía.
     Dos rojos con la misma firma son el mismo error, aunque el texto exacto difiera.
     """
-    rojas = sorted({m.group(1).strip() for m in re.finditer(r"^✗\s+(.+?)(?:\s+\(|:|$)", salida, re.M)})
+    rojas = sorted({m.group(1).strip() for m in re.finditer(r"^✗\s+(.+?)(?:\s+\(exit\b.*|:\s.*)?$", salida, re.M)})
     if rojas:
         return " · ".join(rojas)
     ultima = next((l for l in reversed(salida.strip().splitlines()) if l.strip()), "")
@@ -154,9 +154,11 @@ def argv_de(plantilla: list, prompt: str = "") -> list[str]:
 
 
 def correr(argv: list[str], root: Path, timeout_s: float) -> tuple[int, str]:
+    """stdin cerrado: en el loop no hay humano. Un `pdb` o una aprobación interactiva reciben EOF y
+    terminan, en vez de esperar una terminal hasta el timeout (lo desatendido se decide al crearlo, P13)."""
     try:
-        p = subprocess.run(argv, cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=timeout_s, env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+        p = subprocess.run(argv, cwd=root, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=timeout_s, env={**os.environ, "PYTHONIOENCODING": "utf-8"})
         return p.returncode, (p.stdout or "") + (p.stderr or "")
     except subprocess.TimeoutExpired as e:
         salida = e.stdout.decode("utf-8", "replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
@@ -209,6 +211,11 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
         log(f"{'✓' if intento['green'] else '✗'} intento {n}: {'verde' if intento['green'] else intento['signature']}")
 
         resultado, motivo = decidir(intentos, spec, time.time() - inicio, bool(stop and stop.exists()))
+        if resultado == "parado" and stop is not None:
+            try:
+                stop.unlink()  # pedido cumplido: si quedara, el panel diría «parada pedida» para siempre
+            except OSError:
+                pass
         if resultado != "seguir":
             estado.update(phase=resultado, reason=motivo, endedAt=time.time())
             guardar_estado(spec, root, estado)

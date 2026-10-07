@@ -1,5 +1,5 @@
 {
-  "$comment": "Config del arnés para ESTE repo (lo instaló hermes-harness). Es el único archivo específico: el plugin y los scripts de .hermes/harness/ son genéricos. Toda regla trae `example` (un caso que DEBE frenar) y el self-test lo prueba solo. Las reglas de acá son un piso mínimo: agregá las de tus incidentes, no las de otro repo. Referencia: docs/config-reference.md del repo hermes-harness.",
+  "$comment": "Config del arnés para ESTE repo (lo instaló hermes-autopilot). Es el único archivo específico: el plugin y los scripts de .hermes/harness/ son genéricos. Toda regla trae `example` (un caso que DEBE frenar) y el self-test lo prueba solo. Las reglas de acá son un piso mínimo: agregá las de tus incidentes, no las de otro repo. Referencia: docs/config-reference.md del repo hermes-autopilot.",
   "tools": {
     "shell": [
       "terminal"
@@ -232,7 +232,8 @@
       "id": "clave-privada",
       "pattern": "-----BEGIN [A-Z ]*PRIVATE KEY-----",
       "exceptPaths": [
-        "^\\.hermes/harness\\.config\\.json$"
+        "^\\.hermes/harness\\.config\\.json$",
+        "^\\.hermes/harness/plantillas/harness\\.config\\.json$"
       ],
       "example": "-----BEGIN RSA PRIVATE KEY-----",
       "examplePath": "docs/x.md",

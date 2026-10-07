@@ -68,7 +68,7 @@ CODIGO = {
     "loop: sin tope de iteraciones": ("scripts/loop.py", "    if len(intentos) >= tope:", "    if False:"),
     "loop: ignora el freno de mano": ("scripts/loop.py", "    if parar:\n        return \"parado\"", "    if False:\n        return \"parado\""),
     "loop: le cree al agente y no al gate": ("scripts/loop.py", '"green": rc_gate == 0,', '"green": rc_agente == 0,'),
-    "loop: la duración cambia la firma del rojo": ("scripts/loop.py", r'(?:\s+\(|:|$)', r'(?:$)'),
+    "loop: la duración cambia la firma del rojo": ("scripts/loop.py", r'(?:\s+\(exit\b.*|:\s.*)?$', r'$'),
     "cli: acepta un ejemplo que no frena": ("scripts/cli.py", "        if hizo != espera:", "        if False:"),
     "cli: no mira los inocentes ni el gate": ("scripts/cli.py", "    for texto in dict.fromkeys(inocentes):", "    for texto in []:"),
     "panel: escucha en todas las interfaces": ("scripts/panel.py", 'HOST = "127.0.0.1"', 'HOST = "0.0.0.0"'),

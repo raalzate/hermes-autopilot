@@ -9,6 +9,7 @@
     python3 scripts/cli.py rule test <familia> "texto"    ¿qué regla lo frena?
     python3 scripts/cli.py config get [ruta.con.puntos]
     python3 scripts/cli.py config set <ruta> <valor> [--apply]   el valor se lee como JSON si se puede
+    python3 scripts/cli.py signal list | signal add "nombre" --why "…" [--apply] -- cmd args… | signal rm "nombre" [--apply]
     python3 scripts/cli.py profile list
     python3 scripts/cli.py task add "texto" | task list           la cola del loop autónomo
     python3 scripts/cli.py gate|selftest|lint|map|timing|doctor|drift|install|loop|panel [args…]
@@ -165,6 +166,12 @@ def validar(config: dict, familia: str, regla: dict, root: Path = REPO_ROOT) -> 
         elif (d.rule or {}).get("id") not in (rid, None):
             errores.append(f"el ejemplo «{texto}» ya lo frena `{d.rule.get('id')}`: la regla nueva no prueba nada propio")
 
+    # `patterns` también lo mira el lint (y un patch V4A, que sólo trae las líneas agregadas):
+    # los dos van línea por línea. Un patrón con `\n` frena un write_file y nunca el lint.
+    if familia == "patterns" and not any(f"PATRON[{rid}]" in h for h in rules.lint_one(nuevo, regla["examplePath"], ej)):
+        errores.append("el lint no caza el ejemplo en `examplePath`: `patterns` se evalúa línea por línea "
+                       "(un `\\n` en el patrón frena un write_file pero nunca el lint ni un patch V4A)")
+
     # P3: ni los inocentes de la familia ni el gate del repo quedan frenados.
     inocentes = list(get_ruta(nuevo, donde_inocentes) or []) if donde_inocentes else []
     if familia.startswith("terminal"):
@@ -194,8 +201,15 @@ def escribir(nuevo: dict, apply: bool, que: str) -> int:
         print(f"DRY-RUN — {que}. Nada se escribió: repetí con --apply.")
         return 0
     CONFIG_PATH.write_text(json.dumps(nuevo, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"✓ {que}\n  {CONFIG_PATH}\nSiguiente: `cli.py selftest` (¿muerde?) y `cli.py lint` (¿no muerde de más?).")
+    print(f"✓ {que}\n  {CONFIG_PATH}\nSiguiente: `python3 {_rel(Path(__file__))} selftest` (¿muerde?) y `… lint` (¿no muerde de más?).")
     return 0
+
+
+def _rel(p: Path) -> str:
+    try:
+        return p.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(p)
 
 
 def _valor(texto: str):
@@ -363,6 +377,56 @@ def cmd_config(args: list[str]) -> int:
     return escribir(nuevo, "--apply" in args, f"`{ruta}` actualizado")
 
 
+def validar_senal(config: dict, senal: dict) -> list[str]:
+    """Una señal del gate nueva: con `why` (P6), con argv y con un nombre que no se repite."""
+    errores = []
+    if not senal.get("name"):
+        errores.append("falta el nombre")
+    if any(s.get("name") == senal.get("name") for s in (config.get("gate") or {}).get("signals") or []):
+        errores.append(f"ya hay una señal `{senal.get('name')}`")
+    if not senal.get("why"):
+        errores.append("falta `why`: qué error atrapa que ninguna otra señal ve (P6)")
+    if not isinstance(senal.get("command"), list) or not senal["command"]:
+        errores.append("falta el comando (después de `--`, como argv: sin shell)")
+    return errores
+
+
+def cmd_signal(args: list[str]) -> int:
+    config = leer_config()
+    senales = (config.get("gate") or {}).get("signals") or []
+    if not args or args[0] == "list":
+        for s in senales:
+            print(f"  {s.get('name', '?'):<40} {' '.join(s.get('command') or [])}")
+        return 0
+    apply = "--apply" in args
+    if args[0] == "rm" and len(args) > 1:
+        quedan = [s for s in senales if s.get("name") != args[1]]
+        if len(quedan) == len(senales):
+            print(f"no hay una señal `{args[1]}`")
+            return 1
+        if not quedan:
+            print("el gate quedaría sin señales: no verifica nada.")
+            return 1
+        return escribir(set_ruta(config, "gate.signals", quedan), apply, f"quitar la señal `{args[1]}`")
+    if args[0] == "add" and "--" in args:
+        corte = args.index("--")
+        opciones, argv = [a for a in args[1:corte] if a != "--apply"], args[corte + 1:]
+        senal = {"name": opciones[0] if opciones and not opciones[0].startswith("--") else ""}
+        if "--why" in opciones and opciones.index("--why") + 1 < len(opciones):
+            senal["why"] = opciones[opciones.index("--why") + 1]
+        senal["command"] = argv
+        if "--fast-skip" in opciones:
+            senal["fastSkip"] = True
+        problemas = validar_senal(config, senal)
+        print(json.dumps(senal, indent=2, ensure_ascii=False))
+        if problemas:
+            print("\n✗ la señal no entra:\n  - " + "\n  - ".join(problemas))
+            return 1
+        return escribir(set_ruta(config, "gate.signals", senales + [senal]), apply, f"agregar la señal `{senal['name']}` al gate")
+    print('uso: harness signal list | add "nombre" --why "…" [--fast-skip] [--apply] -- cmd args… | rm "nombre" [--apply]')
+    return 1
+
+
 def cmd_profile(args: list[str]) -> int:
     d = HARNESS_HOME / "plantillas" / "perfiles"
     for p in sorted(d.glob("*.json")):
@@ -398,7 +462,7 @@ def cmd_task(args: list[str]) -> int:
         previo = f.read_text(encoding="utf-8") if f.is_file() else "# Tareas del loop autónomo\n\n"
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(previo + ("" if previo.endswith("\n") else "\n") + f"- [ ] {texto}\n", encoding="utf-8")
-        print(f"+ {texto}\n  → {f.relative_to(REPO_ROOT)}. Correla: python3 scripts/cli.py loop --apply")
+        print(f"+ {texto}\n  → {f.relative_to(REPO_ROOT)}. Correla: python3 {_rel(Path(__file__))} loop --apply")
         return 0
     print('uso: harness task add "texto" | task list')
     return 1
@@ -422,7 +486,8 @@ def main(argv: list[str]) -> int:
     if not CONFIG_PATH.is_file():
         print(f"harness: no hay {CONFIG_PATH}. Instalalo primero (`harness install <repo>`).")
         return 1
-    fn = {"status": cmd_status, "rule": cmd_rule, "config": cmd_config, "profile": cmd_profile, "task": cmd_task}.get(cmd)
+    fn = {"status": cmd_status, "rule": cmd_rule, "config": cmd_config, "profile": cmd_profile, "task": cmd_task,
+          "signal": cmd_signal}.get(cmd)
     if fn is None:
         print(f"harness: comando desconocido `{cmd}`.\n")
         print(__doc__)
