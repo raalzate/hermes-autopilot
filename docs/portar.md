@@ -17,8 +17,19 @@ el gate pendiente nunca se marca y `pre_verify` no frena nada.
 .hermes/harness.config.json   las reglas de ESE repo (arrancan con un piso mínimo, cada una con example)
 .hermes/harness/              el código del arnés: harness/, plugin/, scripts/, plantillas/
 .hermes/skills/               gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
-AGENTS.md  STATUS.md  docs/gotchas.md  .githooks/  .github/workflows/harness.yml
+.hermes/loop/tasks.md         la cola del loop autónomo (vacía)
+AGENTS.md  STATUS.md  docs/gotchas.md  .githooks/ (pre-commit · commit-msg · pre-push)
+.github/workflows/harness.yml         el gate en CI
+.github/workflows/harness-drift.yml   la deriva, semanal (depende del reloj: no va en el gate)
 ```
+
+`branches.protected` arranca vacío: si el equipo trabaja por PR, poné ahí la rama principal y
+`pre-push` frena el empujón directo. También es lo que hace que el loop autónomo abra una rama
+`loop/…` en vez de trabajar sobre `main`. `observability.probe.filePath` lo completa el perfil, y
+`observability.events` (el registro que lee el panel) viene encendido.
+
+Todo se parametriza con la CLI del repo instalado: `python3 .hermes/harness/scripts/cli.py`.
+Ver [`cli-y-panel.md`](cli-y-panel.md).
 
 Lo que ya existía se reporta con `=` y no se toca. `--upgrade` reemplaza sólo el código de
 `.hermes/harness/` (nunca el config, `AGENTS.md`, las skills ni los docs).

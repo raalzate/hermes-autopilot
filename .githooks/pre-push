@@ -1,0 +1,15 @@
+#!/bin/sh
+# Envoltorio: la decisión vive en githooks.py (en Windows lo corre el sh de Git for Windows).
+# Busca el arnés en los dos lugares donde vive: la raíz (el repo del arnés) o `.hermes/harness/`
+# (un repo donde se instaló).
+# En Windows `python3` suele ser el alias de la Microsoft Store: existe, no corre (exit 9009) y
+# rechazaría todos los commits. Se usa el primero que DE VERDAD ejecuta.
+PY=""
+for C in python3 python "py -3"; do
+  if $C -c "import sys" >/dev/null 2>&1; then PY="$C"; break; fi
+done
+[ -n "$PY" ] || exit 0
+for S in scripts/githooks.py .hermes/harness/scripts/githooks.py; do
+  [ -f "$S" ] && exec $PY "$S" pre-push "$@"
+done
+exit 0

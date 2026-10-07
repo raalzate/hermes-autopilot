@@ -1,5 +1,5 @@
 {
-  "$comment": "Config del arnés para ESTE repo (lo instaló hermes-harness). Es el único archivo específico: el plugin y los scripts de .hermes/harness/ son genéricos. Toda regla trae `example` (un caso que DEBE frenar) y el self-test lo prueba solo. Las reglas de acá son un piso mínimo: agregá las de tus incidentes, no las de otro repo. Referencia: docs/config-reference.md del repo hermes-harness.",
+  "$comment": "Config del arnés para ESTE repo (lo instaló hermes-autopilot). Es el único archivo específico: el plugin y los scripts de .hermes/harness/ son genéricos. Toda regla trae `example` (un caso que DEBE frenar) y el self-test lo prueba solo. Las reglas de acá son un piso mínimo: agregá las de tus incidentes, no las de otro repo. Referencia: docs/config-reference.md del repo hermes-autopilot.",
   "tools": {
     "shell": [
       "terminal"
@@ -86,6 +86,22 @@
           ".hermes/harness/scripts/lint.py"
         ],
         "why": "las reglas del repo que ningún compilador ve"
+      },
+      {
+        "name": "mapa del arnés (guía · freno · sensor)",
+        "command": [
+          "python3",
+          ".hermes/harness/scripts/map.py"
+        ],
+        "why": "una skill o un hook que nadie ubicó en `taxonomy` es un control del que nadie sabe qué cubre"
+      },
+      {
+        "name": "costo del arnés (latencia por callback)",
+        "command": [
+          "python3",
+          ".hermes/harness/scripts/timing.py"
+        ],
+        "why": "en Hermes un pre_tool_call que se pasa de tiempo BLOQUEA la herramienta: un freno lento frena cada tool call"
       }
     ]
   },
@@ -216,7 +232,8 @@
       "id": "clave-privada",
       "pattern": "-----BEGIN [A-Z ]*PRIVATE KEY-----",
       "exceptPaths": [
-        "^\\.hermes/harness\\.config\\.json$"
+        "^\\.hermes/harness\\.config\\.json$",
+        "^\\.hermes/harness/plantillas/harness\\.config\\.json$"
       ],
       "example": "-----BEGIN RSA PRIVATE KEY-----",
       "examplePath": "docs/x.md",
@@ -372,5 +389,192 @@
     "ignore": [
       "^\\.hermes/harness/"
     ]
+  },
+  "coherence": {
+    "$comment": "Lo que una guía recomienda en un bloque de shell, o un `reason` del config ofrece como salida, no puede estar vedado por `terminal.deny` (regla COHERENCIA). Sin `commandPattern` la regla no corre.",
+    "guides": [
+      "AGENTS.md",
+      "docs",
+      ".hermes/skills"
+    ],
+    "commandPattern": "^(git|python3?|py|hermes|sed|perl|rm|curl|wget|bash|sh)\\s",
+    "configKeys": [
+      "reason",
+      "message",
+      "hint"
+    ],
+    "reason": "una guía que recomienda lo que un freno prohíbe deja al agente en un bucle de reintentos."
+  },
+  "branches": {
+    "$comment": "Ramas a las que no se empuja directo (`.githooks/pre-push`). Vacío = el freno no corre. Lo decide el equipo: si el trabajo entra por PR, poné acá la rama principal.",
+    "protected": [],
+    "reason": "el trabajo entra por pull request, con su revisión y su gate verde en CI."
+  },
+  "observability": {
+    "$comment": "Presupuesto de latencia de cada callback del plugin (`scripts/timing.py`, señal del gate). Holgado: caza el orden de magnitud. `probe.filePath` lo completa el instalador con un archivo de código del perfil. `events`: el registro de lo que el arnés hizo (bloqueos, escaladas, lint, gate, loop), una línea JSON por evento bajo `.git/`; lo leen el panel y `cli.py status`. Sin `events` no se escribe nada.",
+    "budgetMs": 50,
+    "runs": 20,
+    "budgets": {},
+    "probe": {
+      "command": "git status",
+      "filePath": "x.txt",
+      "content": "x = 1\n",
+      "prompt": "¿cómo está el arnés?"
+    },
+    "reason": "en Hermes un pre_tool_call que se pasa de tiempo BLOQUEA la herramienta.",
+    "events": {
+      "file": ".git/harness-events.jsonl",
+      "maxBytes": 524288
+    }
+  },
+  "drift": {
+    "$comment": "El barrido de deriva (`scripts/drift.py`): un STATUS vencido es rojo, una regla que nunca cazó nada es aviso. Depende del reloj: no va en el gate, lo corre `runner`.",
+    "statusDatePattern": "Fecha del último gate completo:\\W*(\\d{4}-\\d{2}-\\d{2})",
+    "statusMaxAgeDays": 14,
+    "historyCommits": 400,
+    "runner": ".github/workflows/harness-drift.yml",
+    "command": ".hermes/harness/scripts/drift.py",
+    "reason": "un veredicto viejo que se lee como actual es peor que no tener veredicto."
+  },
+  "loop": {
+    "$comment": "EL LOOP AUTÓNOMO (P21, `scripts/loop.py`): tarea → agente → gate, hasta verde o hasta un tope. `agentCommand` es argv sin shell; `{prompt}` se reemplaza dentro de cada argumento. `gateCommand` decide la salida: el loop no le cree al agente, le cree al gate. `sameFailureLimit`: el mismo rojo N veces seguidas escala a un humano (P16 hecho mecanismo). `maxIterations` y `maxMinutes` son topes por tarea. `stopFile` es el freno de mano (lo crea `loop.py --stop`). Nunca publica (P13): lo verde queda en una rama `branchPrefix*`. En un repo instalado, el agente es el Hermes de la máquina: si lo invocás de otra forma, cambiá `agentCommand`.",
+    "tasksFile": ".hermes/loop/tasks.md",
+    "agentCommand": [
+      "hermes",
+      "chat",
+      "-q",
+      "{prompt}"
+    ],
+    "gateCommand": [
+      "python3",
+      ".hermes/harness/scripts/gate.py"
+    ],
+    "maxIterations": 4,
+    "sameFailureLimit": 2,
+    "maxMinutes": 90,
+    "agentTimeoutMinutes": 30,
+    "gateTimeoutMinutes": 20,
+    "branchPrefix": "loop/",
+    "stopFile": ".git/harness-loop.stop",
+    "stateFile": ".git/harness-loop.json",
+    "prompt": "Tarea del loop autónomo: {task}\n\nTrabajá en este repo siguiendo AGENTS.md y CONSTITUTION.md. Terminado = `{gate}` verde: el loop lo corre después de vos y es lo único que decide. No empujes ni abras PR (lo publica un humano). Si la tarea choca con un freno, no lo rodees: explicá el choque y terminá el turno.",
+    "retryPrompt": "Intento {attempt} de la tarea: {task}\n\nEl gate salió ROJO. Señales: {failures}\nCola de la salida:\n{gate_tail}\n\nLeé la salida real y probá una hipótesis NUEVA (P16): el mismo rojo dos veces seguidas detiene el loop y escala a un humano. Terminado = `{gate}` verde.",
+    "reason": "un agente que reintenta sin tope ni criterio de salida quema horas en el mismo error; el que se declara terminado sin gate entrega lo que no funciona."
+  },
+  "taxonomy": {
+    "$comment": "El arnés como sistema de control (`scripts/map.py`, señal del gate): cada pieza con dirección (guía · freno · sensor), tipo y etapa. Una pieza sin clasificar es rojo: una skill o un hook nuevo se declara acá.",
+    "stages": [
+      "sesión",
+      "pedido",
+      "acción decidida",
+      "herramienta ejecutada",
+      "fin del turno",
+      "commit",
+      "push",
+      "integración",
+      "continuo"
+    ],
+    "events": {
+      "pre_llm_call": {
+        "direction": "guía",
+        "stage": "pedido"
+      },
+      "pre_tool_call": {
+        "direction": "freno",
+        "stage": "acción decidida"
+      },
+      "transform_tool_result": {
+        "direction": "sensor",
+        "stage": "herramienta ejecutada"
+      },
+      "pre_verify": {
+        "direction": "sensor",
+        "stage": "fin del turno"
+      }
+    },
+    "gitHooksDir": ".githooks",
+    "gitHooks": {
+      "pre-commit": {
+        "direction": "sensor",
+        "stage": "commit"
+      },
+      "commit-msg": {
+        "direction": "sensor",
+        "stage": "commit"
+      },
+      "pre-push": {
+        "direction": "freno",
+        "stage": "push"
+      }
+    },
+    "gateStages": [
+      "integración",
+      "continuo"
+    ],
+    "skills": {
+      "gate": {
+        "direction": "sensor",
+        "kind": "computacional",
+        "stage": "fin del turno"
+      },
+      "lesson": {
+        "direction": "guía",
+        "stage": "continuo"
+      },
+      "new-guardrail": {
+        "direction": "guía",
+        "stage": "pedido"
+      },
+      "harness-audit": {
+        "direction": "sensor",
+        "stage": "continuo"
+      },
+      "harness-review": {
+        "direction": "sensor",
+        "stage": "fin del turno"
+      },
+      "harness-port": {
+        "direction": "guía",
+        "stage": "pedido"
+      }
+    },
+    "guides": {
+      "AGENTS.md": {
+        "stage": "sesión"
+      }
+    },
+    "pieces": {
+      "plugin · sección de estado": {
+        "file": "plugin/__init__.py",
+        "direction": "guía",
+        "stage": "sesión"
+      },
+      "shell hook (hook.py)": {
+        "file": "scripts/hook.py",
+        "direction": "freno",
+        "stage": "acción decidida"
+      },
+      "loop autónomo (loop.py)": {
+        "file": "scripts/loop.py",
+        "direction": "sensor",
+        "stage": [
+          "fin del turno",
+          "continuo"
+        ]
+      },
+      "panel en vivo (panel.py)": {
+        "file": "scripts/panel.py",
+        "direction": "sensor",
+        "stage": "continuo"
+      }
+    },
+    "pipelines": {
+      ".github/workflows/harness.yml": {
+        "stage": "integración"
+      },
+      ".github/workflows/harness-drift.yml": {
+        "stage": "continuo"
+      }
+    }
   }
 }

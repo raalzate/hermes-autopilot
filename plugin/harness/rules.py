@@ -11,10 +11,15 @@ Clases:
     INCIDENTE   `incidents`     cada incidente declara Síntoma / Causa / Regla / Mecanismo
     CONTEXTO    `context`       los archivos de contexto que Hermes inyecta caben y no se bloquean
     SKILL       `skills`        cada SKILL.md tiene frontmatter válido para Hermes (agentskills.io)
+    PERFIL      `profiles`      un perfil de stack lleva hechos del lenguaje, nunca reglas de otro repo
+    COHERENCIA  `coherence`     lo que una guía le recomienda al agente, `terminal.deny` no lo veda
 """
 from __future__ import annotations
 
+import json
 import re
+
+from .core import first_match, under_any
 
 TEXT_EXT = {".py", ".md", ".json", ".yaml", ".yml", ".sh", ".toml", ".txt", ".cfg", ".ini", ""}
 
@@ -160,8 +165,117 @@ def rule_skill(config, rel, text):
     return out
 
 
+def _en(obj, ruta: str):
+    for k in ruta.split("."):
+        obj = obj.get(k) if isinstance(obj, dict) else None
+    return obj
+
+
+def rule_perfil(config, rel, text):
+    """Un perfil de stack lleva la FORMA del lenguaje (qué es código, qué es derivado, cómo se
+    testea) y nada más. Las reglas concretas son las cicatrices de UN repo: instaladas en otro
+    son ruido que gasta contexto y se desactivan en una semana (P17). Sin esta regla, el primer
+    apuro mete `terminal.deny` en un perfil y el arnés empieza a viajar con cicatrices ajenas."""
+    spec = config.get("profiles") or {}
+    carpeta = spec.get("dir")
+    if not carpeta or not rel.endswith(".json") or not under_any(rel, [carpeta]):
+        return []
+    try:
+        perfil = json.loads(text)
+    except ValueError as e:
+        return [f"PERFIL {rel} — no es JSON válido: {e}"]
+    if not isinstance(perfil, dict):
+        return [f"PERFIL {rel} — un perfil es un objeto JSON"]
+    vacio = lambda v: v is None or (isinstance(v, (list, dict)) and not v)  # noqa: E731
+    out = [f"PERFIL {rel} — un perfil no lleva `{k}`. {spec.get('reason', '')}".rstrip()
+           for k in spec.get("forbiddenKeys") or [] if not vacio(_en(perfil, k))]
+    out += [f"PERFIL {rel} — falta `{k}`: sin eso el perfil no le aporta nada al instalador"
+            for k in spec.get("requiredKeys") or [] if vacio(_en(perfil, k))]
+    return out
+
+
+def _comando_vedado(config, comando: str):
+    """La regla de `terminal.deny` que frenaría este comando, con la MISMA función que usa el
+    freno: si COHERENCIA evaluara distinto que `terminal_guard`, mediría otro freno."""
+    return first_match((config.get("terminal") or {}).get("deny"), comando)
+
+
+def es_guia(config, rel: str) -> bool:
+    guias = (config.get("coherence") or {}).get("guides") or []
+    return rel.endswith(".md") and (rel in guias or under_any(rel, guias))
+
+
+def rule_coherencia(config, rel, text):
+    """Una guía y un freno se escriben en momentos distintos y nadie los mira juntos. Cuando
+    chocan, el agente queda en un bucle: hace lo que la guía dice, el freno lo bloquea,
+    reintenta. Qué cuenta como «recomendado», sin adivinar intención:
+
+      - en una guía (`coherence.guides`), cada línea de un bloque de shell;
+      - en el config, cada comando entre backticks de un `reason`/`message`. El que casa con la
+        PROPIA regla que lo cita es la ofensa que ese motivo describe; cualquier otro es la
+        salida que se le ofrece al agente, y tiene que pasar.
+
+    `commandPattern` es la forma de un comando en ESTE repo: sin él la regla no corre."""
+    co = config.get("coherence") or {}
+    rx = _re(co.get("commandPattern", "") or "(?!)")
+    if not co.get("commandPattern") or not rx:
+        return []
+    motivo = co.get("reason", "")
+    out = []
+
+    def denegar(linea: int, comando: str):
+        hit = _comando_vedado(config, comando)
+        if hit:
+            out.append(f"COHERENCIA {rel}:{linea} — se le recomienda al agente `{comando}` y "
+                       f"`terminal.deny[{hit.get('id', '?')}]` lo bloquea. {motivo} "
+                       "Corregí la guía o la regla: las dos no pueden tener razón.")
+
+    if rel == co.get("configFile", ".hermes/harness.config.json"):
+        try:
+            cfg = json.loads(text)
+        except ValueError:
+            return []  # un config que no parsea ya lo reporta el self-test
+        claves = set(co.get("configKeys") or ["reason", "message"])
+
+        def visitar(nodo):
+            if isinstance(nodo, list):
+                for v in nodo:
+                    visitar(v)
+            elif isinstance(nodo, dict):
+                for k, v in nodo.items():
+                    if k in claves and isinstance(v, str):
+                        for comando in re.findall(r"`([^`]+)`", v):
+                            if not rx.search(comando) or (nodo.get("pattern") and first_match([nodo], comando)):
+                                continue
+                            i = text.find(comando)
+                            denegar(_linea(text, i) if i >= 0 else 0, comando)
+                    else:
+                        visitar(v)
+
+        visitar(cfg)
+        return out
+
+    if not es_guia(config, rel):
+        return []
+    vallas = {v.lower() for v in co.get("shellFences") or ["bash", "sh", "shell", "console"]}
+    en_bloque = False
+    for n, linea in enumerate(text.splitlines(), 1):
+        m = re.match(r"^\s*```\s*([\w-]*)", linea)
+        if m:
+            en_bloque = not en_bloque and m.group(1).lower() in vallas
+            continue
+        if not en_bloque:
+            continue
+        # El `$ ` del prompt y el comentario de cola no son parte del comando.
+        comando = re.sub(r"\s+#\s.*$", "", re.sub(r"^\s*\$\s+", "", linea)).strip()
+        if comando and not comando.startswith("#") and rx.search(comando):
+            denegar(n, comando)
+    return out
+
+
 RULES = [("PATRON", rule_patron), ("INVARIANTE", rule_invariante), ("INCIDENTE", rule_incidente),
-         ("CONTEXTO", rule_contexto), ("SKILL", rule_skill)]
+         ("CONTEXTO", rule_contexto), ("SKILL", rule_skill), ("PERFIL", rule_perfil),
+         ("COHERENCIA", rule_coherencia)]
 
 
 def lint_one(config: dict, rel: str, text: str) -> list[str]:

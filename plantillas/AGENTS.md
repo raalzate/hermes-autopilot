@@ -25,6 +25,14 @@ freno está mal, se arregla el freno (con su `example`), no se rodea.
 - Presupuesto de error: 2 intentos sobre el mismo error con hipótesis nueva; al tercero, parar y
   escalar con el diagnóstico.
 
+## Cuando trabajás dentro del loop autónomo
+
+Si la tarea te llega del loop (`.hermes/loop/tasks.md`), nadie te está mirando. Terminado = el
+gate verde que el loop corre después de vos: no lo declares, dejalo verde. No empujes ni abras
+PR, que eso lo publica un humano. Si la tarea choca con un freno, no lo rodees: explicá el choque
+y terminá el turno. El mismo rojo dos veces seguidas escala a un humano, así que en cada
+reintento probá una hipótesis nueva.
+
 ## Skills del repo
 
 `.hermes/skills/` (cargan tras `hermes skills trust`): `/gate`, `/lesson`, `/harness-audit`,

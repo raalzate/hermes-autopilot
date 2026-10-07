@@ -134,6 +134,9 @@ def main() -> int:
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     tools = config.get("tools") or {}
     os.environ["HARNESS_REPO"] = str(REPO_ROOT)
+    # Cientos de bloqueos de prueba no pueden llenar el panel del humano: el registro de eventos
+    # se apaga acá y la sección 13 lo enciende en un repo temporal.
+    os.environ["HARNESS_NO_EVENTS"] = "1"
 
     # ── 1. El plugin carga y registra lo que su manifiesto promete ───────────
     section("1. plugin: carga y registro")
@@ -656,6 +659,319 @@ def main() -> int:
                 p = g("commit", "-q", "-m", f"docs: x {issue}")
                 check(p.returncode != 0, "pre-commit real leyó el disco y no el índice: el patrón staged entró al commit")
 
+    # ── 12. Las piezas traídas de agent-harness: cada una muerde y no de más ──
+    section("12. coherencia, perfiles, pre-push, deriva, mapa, costo y controles fuera del gate")
+    import drift as drift_mod  # noqa: E402
+    import map as mapa_mod  # noqa: E402
+    import timing as timing_mod  # noqa: E402
+
+    # COHERENCIA (P18): cada `example` de `terminal.deny` recomendado en una guía es rojo.
+    co = config.get("coherence") or {}
+    if co.get("commandPattern"):
+        guia = next((g for g in co.get("guides") or [] if g.endswith(".md")), None) or \
+            f"{(co.get('guides') or ['docs'])[0].rstrip('/')}/x.md"
+        check(rules.es_guia(config, guia), f"coherence.guides: `{guia}` no cuenta como guía")
+        rx = re.compile(co["commandPattern"])
+        con_forma = [r for r in (config.get("terminal") or {}).get("deny") or [] if r.get("example") and rx.search(r["example"])]
+        check(bool(con_forma), "COHERENCIA: ningún `terminal.deny[].example` tiene la forma de `commandPattern`: la regla no prueba nada")
+        for r in con_forma:
+            hall = rules.rule_coherencia(config, guia, f"# guía\n```bash\n$ {r['example']}  # así\n```\n")
+            check(any("COHERENCIA" in h for h in hall), f"COHERENCIA: no caza `{r['example']}` recomendado en {guia}")
+            check(not rules.rule_coherencia(config, guia, f"No hagas `{r['example']}`.\n"),
+                  f"COHERENCIA: muerde `{r['example']}` citado en prosa (fuera de un bloque de shell)")
+        check(not rules.rule_coherencia(config, guia, "```bash\ngit status\n```\n"), "COHERENCIA: muerde un `git status` recomendado")
+        check(not rules.rule_coherencia(config, guia, "```python\n" + (con_forma[0]["example"] if con_forma else "") + "\n```\n"),
+              "COHERENCIA: mira un bloque que no es de shell")
+        check(not rules.rule_coherencia(config, "fuera/de/las/guias.md", "```bash\n" + (con_forma[0]["example"] if con_forma else "") + "\n```\n"),
+              "COHERENCIA: mira un archivo que no es guía")
+        if len(con_forma) >= 2:
+            cfg_rel = co.get("configFile", ".hermes/harness.config.json")
+            a, b = con_forma[0], con_forma[1]
+            ofrece = json.dumps({"terminal": {"deny": [{**a, "reason": f"usá `{b['example']}` en su lugar"}, b]}})
+            check(any("COHERENCIA" in h for h in rules.rule_coherencia({**config, "terminal": json.loads(ofrece)["terminal"]}, cfg_rel, ofrece)),
+                  "COHERENCIA: no caza un `reason` que ofrece como salida un comando vedado")
+            propia = json.dumps({"terminal": {"deny": [{**a, "reason": f"`{a['example']}` es la ofensa"}]}})
+            check(not rules.rule_coherencia(config, cfg_rel, propia), "COHERENCIA: muerde la ofensa citada por su propia regla")
+
+    # PERFIL (P17): un perfil con una clave prohibida es rojo; uno sin lo obligatorio, también.
+    pf_spec = config.get("profiles") or {}
+    if pf_spec.get("dir"):
+        rel_pf = f"{pf_spec['dir'].rstrip('/')}/x.json"
+        base_pf = {k: ["x"] for k in pf_spec.get("requiredKeys") or []}
+        check(not rules.rule_perfil(config, rel_pf, json.dumps(base_pf)), "PERFIL: muerde un perfil con sólo lo obligatorio")
+        for k in pf_spec.get("forbiddenKeys") or []:
+            malo = copy.deepcopy(base_pf)
+            nodo = malo
+            *padres, hoja = k.split(".")
+            for p_ in padres:
+                nodo = nodo.setdefault(p_, {})
+            nodo[hoja] = [{"pattern": "x"}]
+            check(bool(rules.rule_perfil(config, rel_pf, json.dumps(malo))), f"PERFIL: no caza `{k}` en un perfil")
+        for k in pf_spec.get("requiredKeys") or []:
+            check(bool(rules.rule_perfil(config, rel_pf, json.dumps({x: v for x, v in base_pf.items() if x != k}))),
+                  f"PERFIL: no caza un perfil sin `{k}`")
+        check(bool(rules.rule_perfil(config, rel_pf, "{no es json")), "PERFIL: no caza un perfil que no es JSON")
+
+    # pre-push: empujar directo a una rama protegida frena; a otra rama, no.
+    for rama in (config.get("branches") or {}).get("protected") or []:
+        check(githooks.pre_push(config, [f"refs/heads/x abc refs/heads/{rama} def"]) is not None, f"pre-push deja empujar directo a `{rama}`")
+    check(githooks.pre_push({**config, "branches": {"protected": ["main"]}}, ["refs/heads/f abc refs/heads/feat/x def"]) is None,
+          "pre-push frena una rama de trabajo")
+    check(githooks.pre_push({**config, "branches": {"protected": ["main"]}}, ["refs/heads/f abc refs/heads/main def"]) is not None,
+          "pre-push no mira `branches.protected`")
+    # De punta a punta: el envoltorio de .githooks/pre-push recibe las refs por stdin de git real.
+    ghooks = next((b / ".githooks" for b in (HARNESS_HOME, REPO_ROOT) if (b / ".githooks" / "pre-push").is_file()), None)
+    if ghooks and shutil.which("git") and shutil.which("sh"):
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, remoto = Path(tmp) / "repo", Path(tmp) / "remoto.git"
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(ghooks, troot / ".githooks")
+            (troot / ".hermes").mkdir()
+            (troot / ".hermes" / "harness.config.json").write_text(
+                json.dumps({"branches": {"protected": ["main"], "reason": "por PR"}}), encoding="utf-8")
+            g = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True, encoding="utf-8", errors="replace")  # noqa: E731
+            subprocess.run(["git", "init", "-q", "--bare", str(remoto)], capture_output=True)
+            for a in (("init", "-q", "-b", "main"), ("config", "user.email", "t@t"), ("config", "user.name", "t"),
+                      ("config", "core.hooksPath", ".githooks"), ("remote", "add", "origin", str(remoto))):
+                g(*a)
+            (troot / "a.txt").write_text("a\n", encoding="utf-8")
+            g("add", "a.txt")
+            g("commit", "-q", "-m", "docs: a")
+            p = g("push", "-q", "origin", "main")
+            check(p.returncode != 0 and "rama protegida" in p.stdout + p.stderr, f"pre-push real dejó empujar a main: {p.stdout}{p.stderr}")
+            p = g("push", "-q", "origin", "main:feat/x")
+            check(p.returncode == 0, f"pre-push real frenó una rama de trabajo: {p.stdout}{p.stderr}")
+
+    # Deriva (P20): un veredicto viejo o sin fecha es rojo; uno fresco, verde.
+    dr = config.get("drift") or {}
+    if dr.get("statusDatePattern") and dr.get("statusMaxAgeDays"):
+        import datetime as dt
+        hoy = dt.date(2026, 9, 30)
+        texto = lambda d: f"- **Fecha del último gate completo:** {d}\n"  # noqa: E731
+        fresca, vieja = hoy - dt.timedelta(days=int(dr["statusMaxAgeDays"])), hoy - dt.timedelta(days=int(dr["statusMaxAgeDays"]) + 1)
+        check(bool(re.search(dr["statusDatePattern"], texto(hoy))), "drift.statusDatePattern no casa con la línea de fecha del STATUS")
+        check(not drift_mod.edad_del_veredicto(config, texto(fresca), hoy)[0], "drift: rojo con un veredicto dentro del plazo")
+        check(bool(drift_mod.edad_del_veredicto(config, texto(vieja), hoy)[0]), "drift: no caza un veredicto vencido")
+        check(bool(drift_mod.edad_del_veredicto(config, "sin fecha\n", hoy)[0]), "drift: no caza un STATUS sin fecha")
+        check(bool(drift_mod.edad_del_veredicto(config, None, hoy)[0]), "drift: no caza un STATUS que no existe")
+    pats = [r for r in config.get("patterns") or [] if r.get("example")]
+    if pats:
+        r0 = pats[0]
+        ruta = r0.get("examplePath", "x.py")
+        log = f"diff --git a/{ruta} b/{ruta}\n--- a/{ruta}\n+++ b/{ruta}\n@@ -1 +1 @@\n+{r0['example']}\n"
+        check(r0 not in drift_mod.reglas_sin_cicatriz(config, log), f"drift: no ve que `{r0.get('id')}` cazó algo en el historial")
+        check(r0 in drift_mod.reglas_sin_cicatriz(config, ""), f"drift: da por cazada a `{r0.get('id')}` sin historial")
+
+    # Controles fuera del gate: encendido y sin nadie que lo corra es «instalado y muerto».
+    for clave, spec_ in config.items():
+        if isinstance(spec_, dict) and spec_.get("runner"):
+            runner = REPO_ROOT / spec_["runner"]
+            check(runner.is_file(), f"`{clave}.runner` apunta a {spec_['runner']}, que no existe")
+            cmd_ = spec_.get("command") or ""
+            check(bool(cmd_) and runner.is_file() and Path(cmd_).name in runner.read_text(encoding="utf-8"),
+                  f"`{clave}.runner` ({spec_['runner']}) no invoca `{cmd_}`: el control está encendido y nadie lo corre")
+
+    # Mapa: el real está completo; una pieza nueva sin clasificar es rojo.
+    if config.get("taxonomy"):
+        m = mapa_mod.construir(config, REPO_ROOT, HARNESS_HOME)
+        check(m is not None and not m["sinClasificar"], f"map: hay piezas sin clasificar: {(m or {}).get('sinClasificar')}")
+        sin_git = copy.deepcopy(config)
+        sin_git["taxonomy"]["gitHooks"] = {}
+        m2 = mapa_mod.construir(sin_git, REPO_ROOT, HARNESS_HOME)
+        check(any("hook de git" in s for s in m2["sinClasificar"]), "map: no caza un hook de git sin clasificar")
+        sin_ev = copy.deepcopy(config)
+        sin_ev["taxonomy"]["events"] = {}
+        check(any("del plugin" in s for s in mapa_mod.construir(sin_ev, REPO_ROOT, HARNESS_HOME)["sinClasificar"]),
+              "map: no caza un hook del plugin sin clasificar")
+    check(mapa_mod.construir({}, REPO_ROOT, HARNESS_HOME) is None, "map: sin `taxonomy` inventa un mapa")
+
+    # Costo: con presupuesto cero todo callback está pasado; si no, la medición no mide.
+    if config.get("observability"):
+        marcador = core.marker_path(config, REPO_ROOT)
+        habia = bool(marcador and marcador.exists())
+        cero = {**config, "observability": {**config["observability"], "budgetMs": 0, "budgets": {}, "runs": 1}}
+        med = timing_mod.medir(cero, timing_mod.repo_de_prueba(config))
+        check(len(med) >= 5 and all(ms > b for _, ms, b in med), "timing: con presupuesto 0 hay callbacks que no se pasan (¿mide algo?)")
+        check(os.environ.get("HARNESS_REPO") == str(REPO_ROOT), "timing: no restauró HARNESS_REPO")
+        check(bool(marcador and marcador.exists()) == habia, "timing: la medición tocó el marcador del gate del repo real (P7)")
+        check(timing_mod.presupuesto({"budgetMs": 7, "budgets": {"pre_verify": 9}}, "pre_verify") == 9, "timing: ignora `budgets`")
+
+    # ── 13. Autonomía: eventos, loop, CLI y panel (P21) ──────────────────────
+    section("13. autonomía: registro de eventos, loop autónomo, CLI y panel")
+    import cli as cli_mod  # noqa: E402
+    import loop as loop_mod  # noqa: E402
+    import panel as panel_mod  # noqa: E402
+    from harness import events as events_mod  # noqa: E402
+
+    obs_ev = (config.get("observability") or {}).get("events")
+    check(isinstance(obs_ev, dict) and bool(obs_ev.get("file")), "observability.events no declara `file`: el panel no ve nada")
+    deny0 = next((r for r in (config.get("terminal") or {}).get("deny") or [] if r.get("example")), None)
+
+    # Eventos: el plugin registra lo que frena, sólo eso, con techo y sin lanzar jamás.
+    with tempfile.TemporaryDirectory() as tmp:
+        troot = Path(tmp).resolve()
+        subprocess.run(["git", "init", "-q"], cwd=troot, capture_output=True)
+        (troot / ".hermes").mkdir()
+        cfg_ev = {**config, "observability": {**(config.get("observability") or {}), "events": {"file": ".git/harness-events.jsonl", "maxBytes": 400}}}
+        (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_ev), encoding="utf-8")
+        os.environ["HARNESS_REPO"] = str(troot)
+        os.environ.pop("HARNESS_NO_EVENTS", None)
+        try:
+            if deny0 and tools.get("shell"):
+                pre(tool_name=tools["shell"][0], args={"command": deny0["example"]}, session_id="selftest")
+                evs = events_mod.tail(cfg_ev, troot)
+                check(any(e.get("kind") == "block" and e.get("rule") == deny0.get("id") for e in evs),
+                      f"el plugin no registró el bloqueo de `{deny0.get('id')}` en el registro de eventos")
+                antes_ev = len(events_mod.tail(cfg_ev, troot))
+                pre(tool_name=tools["shell"][0], args={"command": "git status"}, session_id="selftest")
+                check(len(events_mod.tail(cfg_ev, troot)) == antes_ev, "el plugin registra eventos de lo que deja pasar")
+                for _ in range(20):
+                    events_mod.record(cfg_ev, troot, "x", relleno="y" * 40)
+                p_ev = events_mod.path(cfg_ev, troot)
+                check(p_ev.stat().st_size < 400 + 200 and p_ev.with_name(p_ev.name + ".1").exists(),
+                      "el registro de eventos no rota pasado `maxBytes`: crece sin techo")
+            os.environ["HARNESS_NO_EVENTS"] = "1"
+            n_ev = len(events_mod.tail(cfg_ev, troot))
+            events_mod.record(cfg_ev, troot, "apagado")
+            check(len(events_mod.tail(cfg_ev, troot)) == n_ev, "HARNESS_NO_EVENTS no apaga el registro")
+        finally:
+            os.environ["HARNESS_REPO"] = str(REPO_ROOT)
+            os.environ["HARNESS_NO_EVENTS"] = "1"
+    try:
+        events_mod.record({"observability": {"events": {"file": "no/existe/\0/x"}}}, Path("/nonexistent-dir-xyz"), "x")
+        check(True, "")
+    except Exception as e:  # noqa: BLE001
+        check(False, f"events.record lanzó ({e!r}): en pre_tool_call eso BLOQUEARÍA la herramienta (P5)")
+
+    # Loop — decisiones puras: la salida es el gate, el mismo rojo escala (P16), hay topes y freno de mano.
+    lspec = config.get("loop") or {}
+    check(bool(lspec), "el config no declara `loop`")
+    if lspec:
+        check(bool(lspec.get("agentCommand")) and any("{prompt}" in str(a) for a in lspec["agentCommand"]),
+              "loop.agentCommand no lleva `{prompt}`: el agente no recibiría la tarea")
+        check(int(lspec.get("sameFailureLimit", 0)) >= 1 and int(lspec.get("maxIterations", 0)) >= 1 and float(lspec.get("maxMinutes", 0)) > 0,
+              "loop sin topes (`sameFailureLimit`, `maxIterations`, `maxMinutes`): un loop sin tope no es autónomo, es desatendido")
+    sp = {"maxIterations": 4, "sameFailureLimit": 2, "maxMinutes": 60}
+    roja = lambda f: {"green": False, "signature": f}  # noqa: E731
+    check(loop_mod.decidir([roja("a"), {"green": True}], sp, 1, False)[0] == "verde", "loop: un gate verde no termina la tarea")
+    check(loop_mod.decidir([roja("a")], sp, 1, False)[0] == "seguir", "loop: no reintenta tras un primer rojo")
+    check(loop_mod.decidir([roja("a"), roja("a")], sp, 1, False)[0] == "escalar", "loop: el mismo rojo dos veces no escala (P16)")
+    check(loop_mod.decidir([roja("a"), roja("b")], sp, 1, False)[0] == "seguir", "loop: escala con rojos DISTINTOS (hay hipótesis nueva)")
+    check(loop_mod.decidir([roja("a"), roja("b"), roja("c"), roja("d")], sp, 1, False)[0] == "escalar", "loop: sin tope de iteraciones")
+    check(loop_mod.decidir([roja("a")], sp, 3601, False)[0] == "escalar", "loop: sin tope de tiempo")
+    check(loop_mod.decidir([roja("a")], sp, 1, True)[0] == "parado", "loop: ignora el freno de mano (`stopFile`)")
+    check(loop_mod.firma("▶ x\n✗ lint (exit 1, 0.3s)\n✗ self-test (exit 1, 9.1s)\n") == "lint · self-test",
+          "loop: la firma de un rojo del gate no son sus señales rojas")
+    check(loop_mod.firma("✗ lint (exit 1, 0.3s)") == loop_mod.firma("✗ lint (exit 1, 7.9s)"),
+          "loop: la duración cambia la firma (el mismo rojo parecería distinto y nunca escalaría)")
+    check(loop_mod.firma("✗ tests (unittest) (exit 1, 0.3s)\n✗ docs: no existe el ejecutable `x`\n") == "docs · tests (unittest)",
+          "loop: la firma corta el nombre de una señal con paréntesis o pierde la de un ejecutable ausente")
+    tl = "# t\n- [x] hecha\n- [ ] sigue\n- [ ] otra\n"
+    check(loop_mod.proxima_tarea(tl) == (2, "sigue"), "loop: no toma la primera casilla vacía")
+    check(loop_mod.marcar(tl, 2, "!", "motivo").splitlines()[2] == "- [!] sigue — motivo", "loop: no marca la escalada")
+
+    # Loop — de punta a punta, con un agente de mentira, en un repo temporal sobre una rama protegida.
+    if shutil.which("git"):
+        agente = ("import pathlib;p=pathlib.Path('n.txt');n=int(p.read_text()) if p.exists() else 0;p.write_text(str(n+1));"
+                  "import sys;pathlib.Path('.git/harness-loop.stop').write_text('x') if 'PARAR' in sys.argv[1] else None")
+        gate_ok2 = "import pathlib,sys;n=int(pathlib.Path('n.txt').read_text());print('✗ tests (exit 1)') if n<2 else None;sys.exit(0 if n>=2 else 1)"
+
+        def loop_en(tmp, gate_src, tareas="# t\n- [ ] una tarea\n"):
+            troot = Path(tmp)
+            g_ = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True)  # noqa: E731
+            g_("init", "-q", "-b", "main")
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            (troot / ".hermes" / "loop").mkdir(parents=True)
+            cfg_l = {"branches": {"protected": ["main"]}, "observability": {"events": {"file": ".git/harness-events.jsonl"}},
+                     "loop": {**sp, "tasksFile": ".hermes/loop/tasks.md", "agentCommand": ["python3", "-c", agente, "{prompt}"],
+                              "gateCommand": ["python3", "-c", gate_src]}}
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_l), encoding="utf-8")
+            (troot / ".hermes" / "loop" / "tasks.md").write_text(tareas, encoding="utf-8")
+            g_("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x")
+            env_l = {k: v for k, v in os.environ.items() if k not in ("HARNESS_REPO", "HARNESS_NO_EVENTS")}
+            p_ = subprocess.run([sys.executable, str(troot / "scripts" / "loop.py"), "--apply"], cwd=troot, env=env_l,
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+            est = json.loads((troot / ".git" / "harness-loop.json").read_text(encoding="utf-8")) if (troot / ".git" / "harness-loop.json").is_file() else {}
+            return troot, p_, est, g_
+
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, p_, est, g_ = loop_en(tmp, gate_ok2)
+            check(p_.returncode == 0 and est.get("phase") == "verde" and len(est.get("attempts") or []) == 2,
+                  f"loop real: no llegó a verde en el intento 2 (el gate decide, no el agente): rc={p_.returncode} {est}\n{p_.stdout[-600:]}")
+            check("- [x] una tarea" in (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8"), "loop real: no marcó la tarea verde")
+            check(g_("branch", "--show-current").stdout.strip().startswith("loop/"), "loop real: trabajó sobre la rama protegida")
+            kinds = [e.get("kind") for e in events_mod.tail({"observability": {"events": {"file": ".git/harness-events.jsonl"}}}, troot)]
+            check("loop-iter" in kinds and "loop-verde" in kinds, f"loop real: no dejó sus eventos para el panel ({kinds})")
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, p_, est, _ = loop_en(tmp, "print('✗ lint (exit 1, 0.1s)');raise SystemExit(1)")
+            check(p_.returncode == 2 and est.get("phase") == "escalar" and len(est.get("attempts") or []) == 2,
+                  f"loop real: el mismo rojo dos veces no escaló con exit 2: rc={p_.returncode} {est.get('phase')} {len(est.get('attempts') or [])}")
+            check("- [!] una tarea" in (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8"), "loop real: no marcó la escalada")
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, p_, est, _ = loop_en(tmp, "raise SystemExit(1)", "# t\n- [ ] PARAR ya\n")
+            check(p_.returncode == 2 and est.get("phase") == "parado" and len(est.get("attempts") or []) == 1,
+                  f"loop real: el freno de mano no paró entre iteraciones: {est.get('phase')} {len(est.get('attempts') or [])}")
+            check(not (troot / ".git" / "harness-loop.stop").exists(), "loop real: el pedido de parada quedó después de cumplirse")
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            (troot / ".hermes").mkdir()
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps({"loop": {**sp}}), encoding="utf-8")
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            p_ = subprocess.run([sys.executable, str(troot / "scripts" / "loop.py"), "--task", "x"], cwd=troot, capture_output=True,
+                                text=True, encoding="utf-8", errors="replace", timeout=60)
+            check(p_.returncode == 0 and "DRY-RUN" in p_.stdout and not (troot / "n.txt").exists(), "loop: sin --apply ejecutó algo (P9)")
+
+    # CLI: una regla se prueba por el plugin ANTES de escribirse.
+    buena = {"id": "selftest-nueva", "pattern": r"\bzzq-selftest\b", "example": "zzq-selftest --go", "reason": "prueba."}
+    check(not cli_mod.validar(config, "terminal.deny", buena), f"cli: rechaza una regla buena: {cli_mod.validar(config, 'terminal.deny', buena)}")
+    check(any("no frena" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "example": "otra cosa"})),
+          "cli: acepta una regla cuyo ejemplo no frena (P2)")
+    check(any("falta `example`" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "example": ""})), "cli: acepta una regla sin example")
+    inoc = ((config.get("terminal") or {}).get("innocent") or ["git status"])[0]
+    check(any("muerde de más" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "pattern": re.escape(inoc) + "|zzq-selftest"})),
+          "cli: acepta una regla que muerde un inocente (P3)")
+    gate_cmd = (config.get("gate") or {}).get("command", "python3 scripts/gate.py")
+    sin_inoc = {**config, "terminal": {**(config.get("terminal") or {}), "innocent": []}}
+    check(any(gate_cmd in e for e in cli_mod.validar(sin_inoc, "terminal.deny", {**buena, "pattern": re.escape(gate_cmd) + "|zzq-selftest"})),
+          "cli: acepta una regla que veda el gate (el agente y el loop no podrían terminar nunca)")
+    if deny0:
+        check(any("ya lo frena" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "pattern": "zzq|" + deny0["pattern"], "example": deny0["example"]})),
+              "cli: acepta una regla cuyo ejemplo ya frenaba otra (no prueba nada propio)")
+        check(any("ya hay" in e for e in cli_mod.validar(config, "terminal.deny", {**buena, "id": deny0["id"]})), "cli: acepta un id repetido")
+    check(cli_mod.get_ruta(cli_mod.set_ruta({"a": {"b": [1, 2]}}, "a.b.1", 9), "a.b.1") == 9, "cli: set/get por ruta con índice")
+    multi = {"id": "zz-multi", "pattern": r"def f\(.*\n\s+return 1", "example": "def f():\n    return 1", "examplePath": "plugin/zz.py",
+             "paths": ["^plugin/"], "reason": "x."}
+    check(any("línea por línea" in e for e in cli_mod.validar(config, "patterns", multi)),
+          "cli: acepta un `patterns` multilínea, que frena un write_file y nunca el lint ni un patch V4A")
+    check(any("P6" in e for e in cli_mod.validar_senal(config, {"name": "x", "command": ["true"]})), "cli: acepta una señal del gate sin `why` (P6)")
+    check(not cli_mod.validar_senal(config, {"name": "zz-nueva", "why": "porque", "command": ["true"]}), "cli: rechaza una señal buena")
+
+    # Panel: el estado como dato, sólo local, y empuja por SSE.
+    st_ = panel_mod.estado(config, REPO_ROOT)
+    for k in ("branch", "gate", "rules", "loop", "events", "status"):
+        check(k in st_, f"panel: el estado no trae `{k}`")
+    srv = panel_mod.servidor(REPO_ROOT, port=0, intervalo=0.1)
+    check(srv.server_address[0] == "127.0.0.1", f"panel: escucha en {srv.server_address[0]} por defecto, no sólo en esta máquina")
+    import threading
+    import urllib.request
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+        with urllib.request.urlopen(base + "/api/state", timeout=10) as r:
+            check(r.status == 200 and "rules" in json.loads(r.read().decode("utf-8")), "panel: /api/state no devuelve el estado")
+        with urllib.request.urlopen(base + "/", timeout=10) as r:
+            check("EventSource" in r.read().decode("utf-8"), "panel: la página no se suscribe al stream")
+        with urllib.request.urlopen(base + "/api/stream", timeout=10) as r:
+            check(r.readline().decode("utf-8").startswith("event: state"), "panel: el stream no empuja el estado")
+    except OSError as e:
+        check(False, f"panel: no respondió ({e})")
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
     # ── 11. Portado: el instalador y cada perfil, en un repo temporal ────────
     # (Primero, porque la sección 10 mira que nada quede en la raíz.)
     section("11. portado: instalador y perfiles de stack")
@@ -663,6 +979,13 @@ def main() -> int:
     perfiles_dir = HARNESS_HOME / "plantillas" / "perfiles"
     if os.environ.get("HARNESS_NESTED"):
         print("  (omitida: corrida anidada dentro del portado)")
+    elif HARNESS_HOME.resolve() != REPO_ROOT.resolve():
+        # En un repo INSTALADO el código vive en `.hermes/harness/` y los hooks y skills en la raíz:
+        # re-portar desde ahí no tiene de dónde copiarlos. Corría igual y dejaba el gate de todo
+        # repo recién instalado en ROJO (lo destapó el ensayo del workshop; el portado anidado de
+        # este self-test corre con HARNESS_NESTED y no lo veía). El portado se prueba acá, en el
+        # repo del arnés, contra cada perfil.
+        print("  (omitida: repo instalado — el portado se prueba en el repo del arnés)")
     elif not install.is_file():
         check(False, "no existe scripts/install.py")
     else:
@@ -681,8 +1004,10 @@ def main() -> int:
                 check(ok, f"perfil {pf.stem}: protectedPaths[{r.get('id')}] sin example que case")
             for s in perfil.get("signals") or []:
                 check(bool(s.get("why")), f"perfil {pf.stem}: señal `{s.get('name')}` sin why")
-            check(not any(k in perfil for k in ("terminal", "memory", "patterns", "invariants")),
-                  f"perfil {pf.stem} trae REGLAS: un perfil son hechos del stack, las reglas se escriben con cicatrices")
+            if (config.get("profiles") or {}).get("dir"):
+                rel_pf = f"{config['profiles']['dir'].rstrip('/')}/{pf.name}"
+                check(not rules.rule_perfil(config, rel_pf, pf.read_text(encoding="utf-8")),
+                      f"perfil {pf.stem} trae REGLAS: un perfil son hechos del stack, las reglas se escriben con cicatrices")
 
         env_hijo = {k: v for k, v in os.environ.items() if k != "HARNESS_REPO"}
         env_hijo["HARNESS_NESTED"] = "1"
@@ -701,12 +1026,28 @@ def main() -> int:
                 p = correr([str(install), tmp, "--profile", pf.stem, "--apply"], REPO_ROOT)
                 check(p.returncode == 0, f"[{pf.stem}] install --apply falló: {p.stdout[-400:]}{p.stderr[-400:]}")
                 for f in (".hermes/harness.config.json", "AGENTS.md", ".hermes/harness/plugin/__init__.py",
-                          ".hermes/harness/plugin/harness/core.py", ".githooks/commit-msg", ".hermes/skills/gate/SKILL.md"):
+                          ".hermes/harness/plugin/harness/core.py", ".githooks/commit-msg", ".githooks/pre-push",
+                          ".github/workflows/harness-drift.yml", ".hermes/skills/gate/SKILL.md"):
                     check((t / f).is_file(), f"[{pf.stem}] el instalador no dejó {f}")
-                for script in ("selftest.py", "lint.py", "linkcheck.py"):
+                for script in ("selftest.py", "lint.py", "linkcheck.py", "map.py", "timing.py"):
                     p = correr([str(t / ".hermes" / "harness" / "scripts" / script)], t)
                     check(p.returncode == 0, f"[{pf.stem}] {script} del repo instalado sale rojo:\n{(p.stdout + p.stderr)[-800:]}")
                 if pf == perfiles[0]:
+                    # El self-test del repo instalado, como lo corre su gate: SIN la marca de anidado.
+                    env_real = {k: v for k, v in env_hijo.items() if k != "HARNESS_NESTED"}
+                    try:
+                        p = subprocess.run([sys.executable, str(t / ".hermes" / "harness" / "scripts" / "selftest.py")], cwd=t, env=env_real,
+                                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+                        check(p.returncode == 0, f"[{pf.stem}] el self-test de un repo recién instalado (sin HARNESS_NESTED) sale rojo:\n{(p.stdout + p.stderr)[-800:]}")
+                    except subprocess.TimeoutExpired:
+                        check(False, f"[{pf.stem}] el self-test de un repo recién instalado no termina (¿re-porta el arnés desde la instalación?)")
+                    # Lo instalado se tiene que poder COMMITEAR: el lint de un repo recién instalado
+                    # no tiene nada versionado y pasa vacío; el pre-commit mira lo staged de verdad
+                    # (la plantilla del config trae el ejemplo de la clave privada, por ejemplo).
+                    subprocess.run(["git", "add", ".hermes", ".githooks", ".github", "AGENTS.md", "STATUS.md", "docs"],
+                                   cwd=t, capture_output=True)
+                    p = correr([str(t / ".hermes" / "harness" / "scripts" / "githooks.py"), "pre-commit"], t)
+                    check(p.returncode == 0, f"[{pf.stem}] lo que instala el instalador no pasa su propio pre-commit:\n{(p.stdout + p.stderr)[-600:]}")
                     # Nunca sobreescribe; --upgrade toca sólo el código del arnés.
                     (t / "AGENTS.md").write_text("# mío\n", encoding="utf-8")
                     core_py = t / ".hermes" / "harness" / "plugin" / "harness" / "core.py"
