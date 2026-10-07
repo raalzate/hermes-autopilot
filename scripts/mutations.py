@@ -54,6 +54,15 @@ CODIGO = {
     "pre-commit lee el disco y no el índice": ("scripts/githooks.py", '    p = subprocess.run(["git", "show", f":{f}"], cwd=REPO_ROOT, capture_output=True)', '    p = subprocess.run(["git", "show", "--no-such-flag"], cwd=REPO_ROOT, capture_output=True)'),
     "mensajes de commit comparados como comandos": ("plugin/harness/guards.py", "    comparable = _para_comparar(cmd, config)", "    comparable = cmd"),
     "el gate imprime en la codificación de la consola (Windows cp1252)": ("scripts/gate.py", "    for _s in (sys.stdin, sys.stdout, sys.stderr):", "    for _s in ():"),
+    # Lo traído de agent-harness: cada pieza nueva tiene que poder romperse sólo con el self-test en rojo.
+    "COHERENCIA no mira los bloques de shell": ("plugin/harness/rules.py", "            en_bloque = not en_bloque and m.group(1).lower() in vallas", "            en_bloque = False"),
+    "COHERENCIA no mira los reason del config": ("plugin/harness/rules.py", '                        for comando in re.findall(r"`([^`]+)`", v):', "                        for comando in []:"),
+    "PERFIL deja pasar las reglas": ("plugin/harness/rules.py", 'for k in spec.get("forbiddenKeys") or [] if not vacio', "for k in [] if not vacio"),
+    "pre-push deja empujar a la rama protegida": ("scripts/githooks.py", "            if rama in protegidas and rama not in chocan:", "            if False:"),
+    "deriva: un veredicto vencido pasa": ("scripts/drift.py", "    if dias > maximo:", "    if False:"),
+    "deriva: el historial no cuenta": ("scripts/drift.py", "                vistas.add(i)", "                pass"),
+    "mapa: un hook de git sin clasificar pasa": ("scripts/map.py", '                sin.append(f"hook de git', '                pass  # sin.append(f"hook de git'),
+    "timing no mide": ("scripts/timing.py", "                tiempos.append((time.perf_counter() - t0) * 1000)", "                tiempos.append(0.0)"),
 }
 
 
@@ -70,6 +79,8 @@ CONFIG = {
     "una regla sin example": _config(lambda c: c["terminal"]["deny"][0].pop("example")),
     "una señal sin why": _config(lambda c: c["gate"]["signals"][0].pop("why")),
     "un inocente que muerde": _config(lambda c: c["terminal"]["innocent"].append(c["terminal"]["deny"][1]["example"])),
+    "la deriva encendida y nadie que la corra": _config(lambda c: c["drift"].update(command="scripts/otro.py")),
+    "una skill fuera del mapa": _config(lambda c: c["taxonomy"]["skills"].pop("lesson")),
 }
 
 

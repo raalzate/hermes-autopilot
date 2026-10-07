@@ -45,6 +45,12 @@ sin `example` es roja.
 | `tracker.issuePattern`, `issueExample` | qué cuenta como referencia a un ítem de trabajo |
 | `commitMsg.codePattern`, `ignoreExtensions`, `escapeLine`, `skipSubjects` | qué commits piden registro y cómo se declara la excepción |
 | `lint.ignore[]` | rutas que el lint no barre |
+| `profiles.dir`, `requiredKeys`, `forbiddenKeys`, `reason` | regla `PERFIL`: un perfil de stack lleva hechos del lenguaje, no reglas (P17). Una clave con punto (`gate.signals`) es una ruta anidada |
+| `coherence.guides`, `commandPattern`, `configKeys`, `shellFences`, `configFile`, `reason` | regla `COHERENCIA` (P18): los comandos de los bloques de shell de las guías y los citados entre backticks en `configKeys` no pueden casar con `terminal.deny`. Sin `commandPattern` no corre |
+| `branches.protected[]`, `reason` | ramas a las que `.githooks/pre-push` no deja empujar directo. Vacío = el freno no corre |
+| `observability.budgetMs`, `runs`, `budgets{}`, `probe{command, filePath, content, prompt}`, `reason` | presupuesto de latencia de cada callback del plugin (P19); `probe.filePath` tiene que ser código |
+| `drift.statusDatePattern`, `statusMaxAgeDays`, `historyCommits`, `runner`, `command`, `reason` | el barrido de deriva (P20). `runner` es el pipeline que lo corre y `command` lo que ese pipeline tiene que invocar |
+| `taxonomy.stages`, `events`, `gitHooksDir`, `gitHooks`, `gateStages`, `skills`, `guides`, `pieces`, `pipelines` | el mapa guía/freno/sensor (P20): cada pieza con `direction`, `kind` (opcional) y `stage`. Una sin clasificar es rojo |
 
 ## Quién lee cada clave
 
@@ -66,3 +72,9 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `docs.*` | `scripts/linkcheck.py` |
 | `status.*` | `plugin/harness/turn.py` |
 | `tracker`, `commitMsg` | `scripts/githooks.py`, `scripts/selftest.py` |
+| `profiles` | `plugin/harness/rules.py` (`rule_perfil`), `scripts/lint.py`, `scripts/selftest.py` |
+| `coherence` | `plugin/harness/rules.py` (`rule_coherencia`, `es_guia`), `scripts/lint.py`, `scripts/selftest.py` |
+| `branches` | `scripts/githooks.py` (`pre_push`), `scripts/selftest.py` |
+| `observability` | `scripts/timing.py`, `scripts/install.py` (`probe.filePath` desde el perfil), `scripts/selftest.py` |
+| `drift` | `scripts/drift.py`, `scripts/selftest.py` (que el `runner` invoque el `command`) |
+| `taxonomy` | `scripts/map.py`, `scripts/selftest.py` |

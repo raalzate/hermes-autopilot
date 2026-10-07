@@ -103,6 +103,22 @@
         "why": "un self-test verde sólo vale si el self-test mismo muerde: cada mutación rompe un freno en una copia del repo y exige rojo. Una que sobrevive es un freno que se puede romper sin que nadie se entere"
       },
       {
+        "name": "mapa del arnés (guía · freno · sensor)",
+        "command": [
+          "python3",
+          "scripts/map.py"
+        ],
+        "why": "un hook, un hook de git o una skill que nadie ubicó en `taxonomy` es un control del que nadie sabe qué cubre; el self-test ve que cada pieza funcione, no que alguien sepa dónde actúa"
+      },
+      {
+        "name": "costo del arnés (latencia por callback)",
+        "command": [
+          "python3",
+          "scripts/timing.py"
+        ],
+        "why": "en Hermes un pre_tool_call que se pasa de tiempo BLOQUEA la herramienta: un subprocess metido en un freno pasa el self-test (el freno muerde igual) y frena cada tool call. Sólo un número contra un presupuesto lo ve"
+      },
+      {
         "name": "plugin en el Hermes real",
         "command": [
           "hermes",
@@ -589,5 +605,177 @@
   },
   "lint": {
     "ignore": []
+  },
+  "profiles": {
+    "$comment": "Perfiles de stack del instalador (regla PERFIL del lint). Llevan la FORMA de un lenguaje —qué es código, qué es derivado, cómo se testea— y nada más. Las reglas concretas son las cicatrices de un repo; en otro son ruido que gasta contexto (P17).",
+    "dir": "plantillas/perfiles",
+    "requiredKeys": [
+      "name",
+      "codeExtensions"
+    ],
+    "forbiddenKeys": [
+      "terminal",
+      "patterns",
+      "invariants",
+      "memory",
+      "skills",
+      "cron",
+      "routes",
+      "context",
+      "gate.signals"
+    ],
+    "reason": "una regla instalada sin cicatriz detrás se desactiva en una semana y se lleva puestas a las que servían."
+  },
+  "coherence": {
+    "$comment": "GUÍA Y FRENO NO SE CONTRADICEN (regla COHERENCIA del lint, P18). Lo que `guides` recomienda en un bloque de shell, y lo que un `reason`/`message` del config cita entre backticks, no puede estar vedado por `terminal.deny`: el agente haría lo que le dijeron, el freno lo bloquearía y reintentaría en bucle. `commandPattern` es la forma de un comando en ESTE repo; sin él la regla no corre. Un comando que la PROPIA regla caza es la ofensa que su motivo describe, no una recomendación.",
+    "guides": [
+      "AGENTS.md",
+      "docs",
+      ".hermes/skills",
+      "plantillas/AGENTS.md"
+    ],
+    "commandPattern": "^(git|python3?|py|hermes|sed|perl|rm|curl|wget|bash|sh)\\s",
+    "configKeys": [
+      "reason",
+      "message",
+      "hint"
+    ],
+    "reason": "una guía que recomienda lo que un freno prohíbe deja al agente en un bucle de reintentos."
+  },
+  "branches": {
+    "$comment": "Lo lee `.githooks/pre-push` → `scripts/githooks.py pre-push`. Empujar directo a una de estas ramas se frena ANTES de la red. La protección de la forja es el freno fuerte y hay que activarla igual; éste es el complemento local, con el motivo y la salida.",
+    "protected": [
+      "main"
+    ],
+    "reason": "el trabajo entra por pull request, con su revisión y su gate verde en CI."
+  },
+  "observability": {
+    "$comment": "EL COSTO DEL ARNÉS, MEDIDO (P19). Lo lee `scripts/timing.py`, señal del gate. `budgetMs` es el presupuesto de la mediana por callback; `budgets` lo ajusta por callback. Holgado a propósito: los callbacks puros miden fracciones de ms y un runner de CI cargado mide más; lo que caza es el orden de magnitud (un subprocess dentro de un freno). `probe` es el caso sintético: `filePath` tiene que ser CÓDIGO para este repo, o `transform_tool_result` toma el atajo y se mide el camino barato.",
+    "budgetMs": 50,
+    "runs": 20,
+    "budgets": {},
+    "probe": {
+      "command": "git status",
+      "filePath": "scripts/x.py",
+      "content": "x = 1\n",
+      "prompt": "¿cómo está el arnés?"
+    },
+    "reason": "en Hermes un pre_tool_call que se pasa de tiempo BLOQUEA la herramienta: un freno lento frena todo."
+  },
+  "drift": {
+    "$comment": "EL BARRIDO DE DERIVA (P20): lo que se degrada sin que ningún cambio lo rompa. Lo lee `scripts/drift.py`. NO es señal del gate: depende del reloj. Lo corre `runner`, programado, y el self-test verifica que el runner lo invoque (encendido y sin nadie que lo corra es «instalado y muerto»). `statusDatePattern` extrae (grupo 1) la fecha del veredicto de `status.file`; más vieja que `statusMaxAgeDays` es ROJO. Una regla de `patterns` que no casó con nada en `historyCommits` commits es AVISO.",
+    "statusDatePattern": "Fecha del último gate completo:\\W*(\\d{4}-\\d{2}-\\d{2})",
+    "statusMaxAgeDays": 14,
+    "historyCommits": 400,
+    "runner": ".github/workflows/drift.yml",
+    "command": "scripts/drift.py",
+    "reason": "un veredicto viejo que se lee como actual es peor que no tener veredicto."
+  },
+  "taxonomy": {
+    "$comment": "EL ARNÉS COMO SISTEMA DE CONTROL (docs/guias-y-sensores.md). Lo lee `scripts/map.py`, señal del gate. Cada pieza tiene dirección (guía: antes de decidir · freno: decidido y no ejecutado · sensor: después), tipo (computacional · inferencial) y etapa. La dirección de un hook del plugin la pone el HOOK de Hermes. Una pieza sin clasificar es rojo; una etapa vacía es un hueco que se informa.",
+    "stages": [
+      "sesión",
+      "pedido",
+      "acción decidida",
+      "herramienta ejecutada",
+      "fin del turno",
+      "commit",
+      "push",
+      "integración",
+      "continuo"
+    ],
+    "events": {
+      "pre_llm_call": {
+        "direction": "guía",
+        "stage": "pedido"
+      },
+      "pre_tool_call": {
+        "direction": "freno",
+        "stage": "acción decidida"
+      },
+      "transform_tool_result": {
+        "direction": "sensor",
+        "stage": "herramienta ejecutada"
+      },
+      "pre_verify": {
+        "direction": "sensor",
+        "stage": "fin del turno"
+      }
+    },
+    "gitHooksDir": ".githooks",
+    "gitHooks": {
+      "pre-commit": {
+        "direction": "sensor",
+        "stage": "commit"
+      },
+      "commit-msg": {
+        "direction": "sensor",
+        "stage": "commit"
+      },
+      "pre-push": {
+        "direction": "freno",
+        "stage": "push"
+      }
+    },
+    "$gateStages": "Dónde corre el gate COMPLETO: CI. `pre_verify` no lo corre (pide que lo corra el agente) y `pre-commit` es barato a propósito: ponerlos acá haría que el mapa mienta.",
+    "gateStages": [
+      "integración",
+      "continuo"
+    ],
+    "skills": {
+      "gate": {
+        "direction": "sensor",
+        "kind": "computacional",
+        "stage": "fin del turno"
+      },
+      "lesson": {
+        "direction": "guía",
+        "stage": "continuo"
+      },
+      "new-guardrail": {
+        "direction": "guía",
+        "stage": "pedido"
+      },
+      "harness-audit": {
+        "direction": "sensor",
+        "stage": "continuo"
+      },
+      "harness-review": {
+        "direction": "sensor",
+        "stage": "fin del turno"
+      },
+      "harness-port": {
+        "direction": "guía",
+        "stage": "pedido"
+      }
+    },
+    "guides": {
+      "AGENTS.md": {
+        "stage": "sesión"
+      },
+      "CONSTITUTION.md": {
+        "stage": "sesión"
+      }
+    },
+    "pieces": {
+      "plugin · sección de estado": {
+        "file": "plugin/__init__.py",
+        "direction": "guía",
+        "stage": "sesión"
+      },
+      "shell hook (scripts/hook.py)": {
+        "file": "scripts/hook.py",
+        "direction": "freno",
+        "stage": "acción decidida"
+      }
+    },
+    "pipelines": {
+      ".github/workflows/ci.yml": {
+        "stage": "integración"
+      },
+      ".github/workflows/drift.yml": {
+        "stage": "continuo"
+      }
+    }
   }
 }

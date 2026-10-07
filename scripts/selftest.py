@@ -656,6 +656,144 @@ def main() -> int:
                 p = g("commit", "-q", "-m", f"docs: x {issue}")
                 check(p.returncode != 0, "pre-commit real leyó el disco y no el índice: el patrón staged entró al commit")
 
+    # ── 12. Las piezas traídas de agent-harness: cada una muerde y no de más ──
+    section("12. coherencia, perfiles, pre-push, deriva, mapa, costo y controles fuera del gate")
+    import drift as drift_mod  # noqa: E402
+    import map as mapa_mod  # noqa: E402
+    import timing as timing_mod  # noqa: E402
+
+    # COHERENCIA (P18): cada `example` de `terminal.deny` recomendado en una guía es rojo.
+    co = config.get("coherence") or {}
+    if co.get("commandPattern"):
+        guia = next((g for g in co.get("guides") or [] if g.endswith(".md")), None) or \
+            f"{(co.get('guides') or ['docs'])[0].rstrip('/')}/x.md"
+        check(rules.es_guia(config, guia), f"coherence.guides: `{guia}` no cuenta como guía")
+        rx = re.compile(co["commandPattern"])
+        con_forma = [r for r in (config.get("terminal") or {}).get("deny") or [] if r.get("example") and rx.search(r["example"])]
+        check(bool(con_forma), "COHERENCIA: ningún `terminal.deny[].example` tiene la forma de `commandPattern`: la regla no prueba nada")
+        for r in con_forma:
+            hall = rules.rule_coherencia(config, guia, f"# guía\n```bash\n$ {r['example']}  # así\n```\n")
+            check(any("COHERENCIA" in h for h in hall), f"COHERENCIA: no caza `{r['example']}` recomendado en {guia}")
+            check(not rules.rule_coherencia(config, guia, f"No hagas `{r['example']}`.\n"),
+                  f"COHERENCIA: muerde `{r['example']}` citado en prosa (fuera de un bloque de shell)")
+        check(not rules.rule_coherencia(config, guia, "```bash\ngit status\n```\n"), "COHERENCIA: muerde un `git status` recomendado")
+        check(not rules.rule_coherencia(config, guia, "```python\n" + (con_forma[0]["example"] if con_forma else "") + "\n```\n"),
+              "COHERENCIA: mira un bloque que no es de shell")
+        check(not rules.rule_coherencia(config, "fuera/de/las/guias.md", "```bash\n" + (con_forma[0]["example"] if con_forma else "") + "\n```\n"),
+              "COHERENCIA: mira un archivo que no es guía")
+        if len(con_forma) >= 2:
+            cfg_rel = co.get("configFile", ".hermes/harness.config.json")
+            a, b = con_forma[0], con_forma[1]
+            ofrece = json.dumps({"terminal": {"deny": [{**a, "reason": f"usá `{b['example']}` en su lugar"}, b]}})
+            check(any("COHERENCIA" in h for h in rules.rule_coherencia({**config, "terminal": json.loads(ofrece)["terminal"]}, cfg_rel, ofrece)),
+                  "COHERENCIA: no caza un `reason` que ofrece como salida un comando vedado")
+            propia = json.dumps({"terminal": {"deny": [{**a, "reason": f"`{a['example']}` es la ofensa"}]}})
+            check(not rules.rule_coherencia(config, cfg_rel, propia), "COHERENCIA: muerde la ofensa citada por su propia regla")
+
+    # PERFIL (P17): un perfil con una clave prohibida es rojo; uno sin lo obligatorio, también.
+    pf_spec = config.get("profiles") or {}
+    if pf_spec.get("dir"):
+        rel_pf = f"{pf_spec['dir'].rstrip('/')}/x.json"
+        base_pf = {k: ["x"] for k in pf_spec.get("requiredKeys") or []}
+        check(not rules.rule_perfil(config, rel_pf, json.dumps(base_pf)), "PERFIL: muerde un perfil con sólo lo obligatorio")
+        for k in pf_spec.get("forbiddenKeys") or []:
+            malo = copy.deepcopy(base_pf)
+            nodo = malo
+            *padres, hoja = k.split(".")
+            for p_ in padres:
+                nodo = nodo.setdefault(p_, {})
+            nodo[hoja] = [{"pattern": "x"}]
+            check(bool(rules.rule_perfil(config, rel_pf, json.dumps(malo))), f"PERFIL: no caza `{k}` en un perfil")
+        for k in pf_spec.get("requiredKeys") or []:
+            check(bool(rules.rule_perfil(config, rel_pf, json.dumps({x: v for x, v in base_pf.items() if x != k}))),
+                  f"PERFIL: no caza un perfil sin `{k}`")
+        check(bool(rules.rule_perfil(config, rel_pf, "{no es json")), "PERFIL: no caza un perfil que no es JSON")
+
+    # pre-push: empujar directo a una rama protegida frena; a otra rama, no.
+    for rama in (config.get("branches") or {}).get("protected") or []:
+        check(githooks.pre_push(config, [f"refs/heads/x abc refs/heads/{rama} def"]) is not None, f"pre-push deja empujar directo a `{rama}`")
+    check(githooks.pre_push({**config, "branches": {"protected": ["main"]}}, ["refs/heads/f abc refs/heads/feat/x def"]) is None,
+          "pre-push frena una rama de trabajo")
+    check(githooks.pre_push({**config, "branches": {"protected": ["main"]}}, ["refs/heads/f abc refs/heads/main def"]) is not None,
+          "pre-push no mira `branches.protected`")
+    # De punta a punta: el envoltorio de .githooks/pre-push recibe las refs por stdin de git real.
+    ghooks = next((b / ".githooks" for b in (HARNESS_HOME, REPO_ROOT) if (b / ".githooks" / "pre-push").is_file()), None)
+    if ghooks and shutil.which("git") and shutil.which("sh"):
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, remoto = Path(tmp) / "repo", Path(tmp) / "remoto.git"
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(ghooks, troot / ".githooks")
+            (troot / ".hermes").mkdir()
+            (troot / ".hermes" / "harness.config.json").write_text(
+                json.dumps({"branches": {"protected": ["main"], "reason": "por PR"}}), encoding="utf-8")
+            g = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True, encoding="utf-8", errors="replace")  # noqa: E731
+            subprocess.run(["git", "init", "-q", "--bare", str(remoto)], capture_output=True)
+            for a in (("init", "-q", "-b", "main"), ("config", "user.email", "t@t"), ("config", "user.name", "t"),
+                      ("config", "core.hooksPath", ".githooks"), ("remote", "add", "origin", str(remoto))):
+                g(*a)
+            (troot / "a.txt").write_text("a\n", encoding="utf-8")
+            g("add", "a.txt")
+            g("commit", "-q", "-m", "docs: a")
+            p = g("push", "-q", "origin", "main")
+            check(p.returncode != 0 and "rama protegida" in p.stdout + p.stderr, f"pre-push real dejó empujar a main: {p.stdout}{p.stderr}")
+            p = g("push", "-q", "origin", "main:feat/x")
+            check(p.returncode == 0, f"pre-push real frenó una rama de trabajo: {p.stdout}{p.stderr}")
+
+    # Deriva (P20): un veredicto viejo o sin fecha es rojo; uno fresco, verde.
+    dr = config.get("drift") or {}
+    if dr.get("statusDatePattern") and dr.get("statusMaxAgeDays"):
+        import datetime as dt
+        hoy = dt.date(2026, 9, 30)
+        texto = lambda d: f"- **Fecha del último gate completo:** {d}\n"  # noqa: E731
+        fresca, vieja = hoy - dt.timedelta(days=int(dr["statusMaxAgeDays"])), hoy - dt.timedelta(days=int(dr["statusMaxAgeDays"]) + 1)
+        check(bool(re.search(dr["statusDatePattern"], texto(hoy))), "drift.statusDatePattern no casa con la línea de fecha del STATUS")
+        check(not drift_mod.edad_del_veredicto(config, texto(fresca), hoy)[0], "drift: rojo con un veredicto dentro del plazo")
+        check(bool(drift_mod.edad_del_veredicto(config, texto(vieja), hoy)[0]), "drift: no caza un veredicto vencido")
+        check(bool(drift_mod.edad_del_veredicto(config, "sin fecha\n", hoy)[0]), "drift: no caza un STATUS sin fecha")
+        check(bool(drift_mod.edad_del_veredicto(config, None, hoy)[0]), "drift: no caza un STATUS que no existe")
+    pats = [r for r in config.get("patterns") or [] if r.get("example")]
+    if pats:
+        r0 = pats[0]
+        ruta = r0.get("examplePath", "x.py")
+        log = f"diff --git a/{ruta} b/{ruta}\n--- a/{ruta}\n+++ b/{ruta}\n@@ -1 +1 @@\n+{r0['example']}\n"
+        check(r0 not in drift_mod.reglas_sin_cicatriz(config, log), f"drift: no ve que `{r0.get('id')}` cazó algo en el historial")
+        check(r0 in drift_mod.reglas_sin_cicatriz(config, ""), f"drift: da por cazada a `{r0.get('id')}` sin historial")
+
+    # Controles fuera del gate: encendido y sin nadie que lo corra es «instalado y muerto».
+    for clave, spec_ in config.items():
+        if isinstance(spec_, dict) and spec_.get("runner"):
+            runner = REPO_ROOT / spec_["runner"]
+            check(runner.is_file(), f"`{clave}.runner` apunta a {spec_['runner']}, que no existe")
+            cmd_ = spec_.get("command") or ""
+            check(bool(cmd_) and runner.is_file() and Path(cmd_).name in runner.read_text(encoding="utf-8"),
+                  f"`{clave}.runner` ({spec_['runner']}) no invoca `{cmd_}`: el control está encendido y nadie lo corre")
+
+    # Mapa: el real está completo; una pieza nueva sin clasificar es rojo.
+    if config.get("taxonomy"):
+        m = mapa_mod.construir(config, REPO_ROOT, HARNESS_HOME)
+        check(m is not None and not m["sinClasificar"], f"map: hay piezas sin clasificar: {(m or {}).get('sinClasificar')}")
+        sin_git = copy.deepcopy(config)
+        sin_git["taxonomy"]["gitHooks"] = {}
+        m2 = mapa_mod.construir(sin_git, REPO_ROOT, HARNESS_HOME)
+        check(any("hook de git" in s for s in m2["sinClasificar"]), "map: no caza un hook de git sin clasificar")
+        sin_ev = copy.deepcopy(config)
+        sin_ev["taxonomy"]["events"] = {}
+        check(any("del plugin" in s for s in mapa_mod.construir(sin_ev, REPO_ROOT, HARNESS_HOME)["sinClasificar"]),
+              "map: no caza un hook del plugin sin clasificar")
+    check(mapa_mod.construir({}, REPO_ROOT, HARNESS_HOME) is None, "map: sin `taxonomy` inventa un mapa")
+
+    # Costo: con presupuesto cero todo callback está pasado; si no, la medición no mide.
+    if config.get("observability"):
+        marcador = core.marker_path(config, REPO_ROOT)
+        habia = bool(marcador and marcador.exists())
+        cero = {**config, "observability": {**config["observability"], "budgetMs": 0, "budgets": {}, "runs": 1}}
+        med = timing_mod.medir(cero, timing_mod.repo_de_prueba(config))
+        check(len(med) >= 5 and all(ms > b for _, ms, b in med), "timing: con presupuesto 0 hay callbacks que no se pasan (¿mide algo?)")
+        check(os.environ.get("HARNESS_REPO") == str(REPO_ROOT), "timing: no restauró HARNESS_REPO")
+        check(bool(marcador and marcador.exists()) == habia, "timing: la medición tocó el marcador del gate del repo real (P7)")
+        check(timing_mod.presupuesto({"budgetMs": 7, "budgets": {"pre_verify": 9}}, "pre_verify") == 9, "timing: ignora `budgets`")
+
     # ── 11. Portado: el instalador y cada perfil, en un repo temporal ────────
     # (Primero, porque la sección 10 mira que nada quede en la raíz.)
     section("11. portado: instalador y perfiles de stack")
@@ -681,8 +819,10 @@ def main() -> int:
                 check(ok, f"perfil {pf.stem}: protectedPaths[{r.get('id')}] sin example que case")
             for s in perfil.get("signals") or []:
                 check(bool(s.get("why")), f"perfil {pf.stem}: señal `{s.get('name')}` sin why")
-            check(not any(k in perfil for k in ("terminal", "memory", "patterns", "invariants")),
-                  f"perfil {pf.stem} trae REGLAS: un perfil son hechos del stack, las reglas se escriben con cicatrices")
+            if (config.get("profiles") or {}).get("dir"):
+                rel_pf = f"{config['profiles']['dir'].rstrip('/')}/{pf.name}"
+                check(not rules.rule_perfil(config, rel_pf, pf.read_text(encoding="utf-8")),
+                      f"perfil {pf.stem} trae REGLAS: un perfil son hechos del stack, las reglas se escriben con cicatrices")
 
         env_hijo = {k: v for k, v in os.environ.items() if k != "HARNESS_REPO"}
         env_hijo["HARNESS_NESTED"] = "1"
@@ -701,9 +841,10 @@ def main() -> int:
                 p = correr([str(install), tmp, "--profile", pf.stem, "--apply"], REPO_ROOT)
                 check(p.returncode == 0, f"[{pf.stem}] install --apply falló: {p.stdout[-400:]}{p.stderr[-400:]}")
                 for f in (".hermes/harness.config.json", "AGENTS.md", ".hermes/harness/plugin/__init__.py",
-                          ".hermes/harness/plugin/harness/core.py", ".githooks/commit-msg", ".hermes/skills/gate/SKILL.md"):
+                          ".hermes/harness/plugin/harness/core.py", ".githooks/commit-msg", ".githooks/pre-push",
+                          ".github/workflows/harness-drift.yml", ".hermes/skills/gate/SKILL.md"):
                     check((t / f).is_file(), f"[{pf.stem}] el instalador no dejó {f}")
-                for script in ("selftest.py", "lint.py", "linkcheck.py"):
+                for script in ("selftest.py", "lint.py", "linkcheck.py", "map.py", "timing.py"):
                     p = correr([str(t / ".hermes" / "harness" / "scripts" / script)], t)
                     check(p.returncode == 0, f"[{pf.stem}] {script} del repo instalado sale rojo:\n{(p.stdout + p.stderr)[-800:]}")
                 if pf == perfiles[0]:

@@ -1,6 +1,6 @@
 # Constitución — Hermes Harness
 
-**Versión 1.0.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
+**Versión 1.1.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
 viven en `AGENTS.md`; el arnés que los hace cumplir, en `docs/arnes.md`.
 
 Cada principio dice su **fuerza**:
@@ -12,6 +12,7 @@ Un principio BLOCKING **nombra su comando**. Si no se puede nombrar, es REVIEW: 
 BLOCKING lo que nadie verifica es la forma más rápida de que nadie crea en este documento.
 
 Enmendar esta constitución es un commit propio, con la versión subida y el motivo en el cuerpo.
+Un principio que nadie hace cumplir se borra o se convierte en mecanismo.
 
 ---
 
@@ -95,7 +96,9 @@ confirmación. El instalador es dry-run por defecto y nunca sobreescribe.
 
 Un commit que toca código referencia su ítem de trabajo, o declara en su propia línea por qué no.
 
-*Mecanismo:* `.githooks/commit-msg` → `scripts/githooks.py`, con casos en el self-test.
+*Mecanismo:* `.githooks/commit-msg` → `scripts/githooks.py`, con casos en el self-test. Lo que
+entra a una rama de `branches.protected` entra por PR: `.githooks/pre-push` lo frena antes de la
+red (el freno fuerte es la protección de la forja, y hay que activarla igual).
 
 ## P12 — Lo que el agente aprende solo pasa por los mismos frenos · BLOCKING
 
@@ -134,6 +137,48 @@ skill > markdown). La skill `lesson` es el ciclo.
 Leer la salida real antes de reintentar; reintentar sólo con hipótesis nueva; **2 intentos** sobre
 el mismo error y al tercero se para y se escala con el diagnóstico.
 
+## P17 — Lo que viaja son los principios, no las reglas ajenas · REVIEW
+
+Las reglas concretas describen los incidentes de **un** repo; en otro son ruido bien intencionado
+que gasta contexto del agente y paciencia del equipo. Lo que se comparte entre repos es esta
+constitución, el método de portado y las clases de regla. Una regla instalada sin cicatriz detrás
+es un hallazgo de review.
+
+*Mecanismo parcial:* regla `PERFIL` del lint (un perfil de stack no lleva `profiles.forbiddenKeys`)
+y el aviso de `scripts/drift.py` para la regla que nunca cazó nada en el historial. Que una regla
+del repo tenga su cicatriz sigue siendo juicio (`harness-review`).
+
+## P18 — Guía y freno no se contradicen · BLOCKING
+
+Una guía (`AGENTS.md`, una skill, un `reason`) y un freno (`terminal.deny`) se escriben en momentos
+distintos y nadie los mira juntos. Cuando chocan, el agente hace lo que le dijeron, el freno lo
+bloquea y reintenta en bucle.
+
+*Mecanismo:* regla `COHERENCIA` del lint — un comando de un bloque de shell de `coherence.guides`, o
+citado entre backticks en un `reason` del config, no puede casar con `terminal.deny`. Evalúa con
+la misma función que el freno.
+
+## P19 — El arnés tiene presupuesto de latencia · BLOCKING
+
+Todo freno se paga en cada tool call. En Hermes, además, un `pre_tool_call` que se pasa de tiempo
+**bloquea** la herramienta: un freno lento no es caro, frena todo. Un subprocess dentro de un
+freno pasa el self-test (el freno muerde igual) y sólo un número lo ve.
+
+*Mecanismo:* `python3 scripts/timing.py` en el gate — la mediana de cada callback del plugin contra
+`observability.budgetMs`.
+
+## P20 — Lo que no cabe en el gate igual está vivo · BLOCKING
+
+Lo que depende del reloj (un `STATUS.md` vencido que el plugin le inyecta al agente como verdad de
+hoy) no va en el gate de cada commit: un gate que se pone rojo porque pasó un martes enseña a
+ignorarlo. Va en un pipeline declarado, y un control encendido sin nadie que lo corra es
+«instalado y muerto». Tampoco entra una pieza al arnés sin que se sepa dónde actúa.
+
+*Mecanismo:* `scripts/drift.py` corrido por `drift.runner` (`.github/workflows/drift.yml`); el
+self-test verifica que cada `runner` exista e invoque su comando. `python3 scripts/map.py` en el
+gate: una pieza (hook, hook de git, skill, guía, pipeline) sin dirección, tipo y etapa en
+`taxonomy` es rojo.
+
 ## Precedencia — cuando dos BLOCKING chocan · REVIEW
 
 Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el resto en orden.
@@ -145,3 +190,4 @@ Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el 
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0.0 | 2026-09-30 | Primera versión, derivada de la constitución de `agent-harness` (Claude Code) y adaptada a Hermes: P12–P14 son nuevos (aprendizaje, desatendido, presupuesto de contexto). |
+| 1.1.0 | 2026-09-30 | Prácticas de `agent-harness` (1.2.0) que faltaban: P17 (viajan los principios; `PERFIL`), P18 (guía y freno coherentes; `COHERENCIA`), P19 (presupuesto de latencia; `timing.py`), P20 (deriva programada y mapa guía/freno/sensor). P11 suma `pre-push`. Numeración nueva al final para no romper las referencias a P1–P16. |

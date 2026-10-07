@@ -1,0 +1,30 @@
+# El barrido programado: la etapa «continua» del ciclo (docs/guias-y-sensores.md).
+# Acá va lo que NO puede ir en el gate de cada commit porque depende del reloj. Si esto se pone
+# rojo, no se rompió un cambio: se degradó algo que nadie tocó, y por eso nadie lo iba a mirar.
+name: deriva
+on:
+  schedule:
+    - cron: "0 12 * * 1" # lunes, 12:00 UTC
+  workflow_dispatch:
+jobs:
+  # El mismo gate de siempre, sobre main sin cambios: una versión nueva de Python o del runner
+  # aparece acá antes que en un PR ajeno.
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python scripts/gate.py
+  deriva:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # el barrido de reglas lee el historial
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: lo que se degradó sin que ningún cambio lo rompiera
+        run: python scripts/drift.py

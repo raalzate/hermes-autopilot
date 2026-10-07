@@ -1,0 +1,18 @@
+# El barrido programado del arnés: lo que se degrada sin que ningún cambio lo rompa (un STATUS
+# vencido, una regla que nunca cazó nada). Depende del reloj, por eso no va en el gate.
+name: harness-drift
+on:
+  schedule:
+    - cron: "0 12 * * 1" # lunes, 12:00 UTC
+  workflow_dispatch:
+jobs:
+  deriva:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # el barrido de reglas lee el historial
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python .hermes/harness/scripts/drift.py

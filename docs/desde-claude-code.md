@@ -22,11 +22,21 @@ Este repo nace de `agent-harness`, el arnés para Claude Code. Los **principios*
 | `sampleFromPattern` en el self-test | `example` obligatorio en cada regla | generar una muestra desde un regex es frágil; un ejemplo real además documenta |
 | `npm run gate` | `python3 scripts/gate.py` | sin Node en el camino: Hermes ya trae Python |
 | `harness-bench` (repos de juguete por stack) | self-test §11: instala cada perfil en un repo temporal y corre su self-test | — |
+| `repo-lint` `COHERENCIA` | `rules.rule_coherencia` (en proceso, también sobre lo que escribe el agente) | contra `terminal.deny`, con la misma función que el freno |
+| `repo-lint` `PERFIL` | `rules.rule_perfil` | — |
+| `hooks-timing.mjs` (fuera del gate) | `scripts/timing.py` (**en** el gate) | los callbacks corren en proceso y miden < 1 ms; en Hermes pasarse de tiempo bloquea |
+| `harness-map.mjs` | `scripts/map.py` (en el gate) | la dirección la pone el hook de Hermes, no el evento de Claude Code |
+| `drift-check.mjs` + `drift.yml` | `scripts/drift.py` + `.github/workflows/drift.yml` | — |
+| `.githooks/pre-push` (bash + node) | `.githooks/pre-push` → `githooks.py pre-push` | la decisión en Python: en Windows un freno sólo de shell desaparece |
 
 ## Lo que no se portó (todavía)
 
-- El panel HTML, la medición de latencia de hooks y el eval del revisor: dependían de las
-  transcripciones de Claude Code. En Hermes la fuente equivalente es `~/.hermes/state.db`
-  (SQLite + FTS5); queda como trabajo futuro.
+- El panel HTML y el eval del revisor: dependían de las transcripciones de Claude Code y de una
+  CLI con modelo en CI. En Hermes la fuente equivalente es `~/.hermes/state.db` (SQLite + FTS5);
+  queda como trabajo futuro, y el hueco está declarado en `docs/guias-y-sensores.md`.
+- `cycle-check` (ramas y prácticas XP, `--verify-red`) y `artifacts-check`: se pueden sumar como
+  señales del gate sin tocar el código del arnés.
 - El índice de código obligatorio (codegraph): es independiente del agente; se puede sumar como
   señal del gate con `skipIfNoExecutable`.
+
+El porqué de lo que sí se portó y en qué cambió: `docs/decisions/0005-practicas-de-agent-harness.md`.

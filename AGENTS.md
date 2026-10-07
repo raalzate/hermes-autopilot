@@ -24,9 +24,12 @@ plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (fr
 scripts/hook.py              el mismo núcleo como shell hook de Hermes (para quien no habilita plugins)
 scripts/gate.py              ejecuta gate.signals; no sabe de stacks
 scripts/selftest.py          prueba de vida: los casos salen del `example` de cada regla
-scripts/lint.py              5 clases de regla; incluye la que evita que Hermes descarte AGENTS.md
+scripts/lint.py              7 clases de regla; CONTEXTO evita que Hermes descarte AGENTS.md, COHERENCIA que una guía recomiende lo que un freno veda
 scripts/install.py           instalador en otro repo (dry-run por defecto, perfil de stack)
-scripts/mutations.py         la prueba de vida del self-test: 27 mutaciones, todas tienen que ponerlo rojo
+scripts/mutations.py         la prueba de vida del self-test: 38 mutaciones, todas tienen que ponerlo rojo
+scripts/map.py               el arnés como sistema de control: guía · freno · sensor por etapa (`taxonomy`)
+scripts/timing.py            el costo: latencia de cada callback contra su presupuesto (en Hermes, pasarse bloquea)
+scripts/drift.py             lo que se degrada sin que ningún cambio lo rompa (semanal, fuera del gate)
 scripts/hermes_e2e.py        cada `example` por el despacho del Hermes REAL (señal del gate; OMITIDA sin Hermes)
 scripts/doctor.py            lo que el gate no ve: el Hermes de esta máquina
 .hermes/skills/              gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
@@ -40,7 +43,8 @@ docs/                        lo que se lee
   literal de dominio, una extensión o un nombre de herramienta va al config. El lint lo verifica
   sobre `plugin/harness/guards.py`.
 - **Toda regla del config trae `example`**, y el self-test lo pasa por el plugin real. Una clase de
-  regla nueva o un freno nuevo llega con su caso escrito a mano en `scripts/selftest.py`.
+  regla nueva o un freno nuevo llega con su caso escrito a mano en `scripts/selftest.py` y una
+  mutación en `scripts/mutations.py`. Una pieza nueva (hook, skill, pipeline) se ubica en `taxonomy`.
 - **Validación doble, siempre:** `python3 scripts/selftest.py` (¿muerde?) y `python3 scripts/lint.py`
   (¿no muerde de más?). La segunda es la que se olvida.
 - **El plugin nunca lanza.** En Hermes, un `pre_tool_call` que lanza o se pasa de tiempo **bloquea**
@@ -63,10 +67,16 @@ python3 scripts/selftest.py      # ¿los frenos muerden?
 python3 scripts/lint.py          # ¿el repo pasa con las reglas activas?
 python3 scripts/lint.py --rules  # ¿qué reglas están activas?
 python3 scripts/doctor.py        # ¿el arnés está vivo en ESTA máquina?
+python3 scripts/map.py           # ¿qué guía, freno o sensor actúa en cada etapa?
+python3 scripts/timing.py        # ¿cuánto cuesta el arnés en cada tool call?
+python3 scripts/drift.py         # ¿algo se degradó sin que nadie lo tocara? (lo corre drift.yml)
 ```
 
 - CI (`.github/workflows/ci.yml`) corre el mismo gate en Linux, macOS y Windows.
 - Hooks de git: `python3 scripts/githooks.py install`. Saltarse la verificación está prohibido.
+- `main` entra por PR: `pre-push` frena el empujón directo (`branches.protected`).
+- Lo que no cabe en el gate (depende del reloj) vive en un pipeline declarado (`runner`), y el
+  self-test verifica que ese pipeline lo invoque: encendido y sin nadie que lo corra es «instalado y muerto».
 - Al cambiar el arnés, probá también el portado: `python3 scripts/install.py <repo>` en dry-run.
 
 ## Documentación: qué va dónde
@@ -76,6 +86,7 @@ python3 scripts/doctor.py        # ¿el arnés está vivo en ESTA máquina?
 | setup de cero, paso a paso, y tablero de problemas | `docs/onboarding.md` |
 | cómo se engancha a Hermes (hooks, plugin, contexto, skills, memoria) | `docs/hermes.md` |
 | el arnés de ESTE repo | `docs/arnes.md` |
+| guías y sensores: el marco de *harness engineering* aplicado | `docs/guias-y-sensores.md` |
 | qué hace cada clave del config y quién la lee | `docs/config-reference.md` |
 | cómo se instala en otro repo | `docs/portar.md` |
 | de agent-harness (Claude Code) a este | `docs/desde-claude-code.md` |

@@ -146,6 +146,10 @@ Reglas de la casa (completas en `AGENTS.md` y `CONSTITUTION.md`):
 - con Hermes instalado, el gate además corre el plugin **dentro** de Hermes
   (`scripts/hermes_e2e.py`): si cambiás el contrato con Hermes, es la señal que importa;
 - los commits que tocan código referencian su ítem (`#12`) o llevan una línea `no-issue: motivo`.
+- `main` entra por PR: `pre-push` frena el empujón directo (`branches.protected`). Trabajá en
+  una rama y abrí el PR;
+- una skill, un hook o un pipeline nuevo se ubica en `taxonomy` (`python3 scripts/map.py`), o el
+  gate sale rojo.
 
 ---
 

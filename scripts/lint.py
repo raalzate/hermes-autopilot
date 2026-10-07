@@ -51,6 +51,10 @@ def main(argv: list[str]) -> int:
         print(f"  CONTEXTO    {', '.join(ctx.get('files') or []) or '—'} ≤ {ctx.get('maxChars', '—')} caracteres, "
               f"{len(ctx.get('blockedPatterns') or [])} patrón(es) del escáner de Hermes")
         print(f"  SKILL       {', '.join(sk.get('roots') or []) or '—'}")
+        pf, co = config.get("profiles") or {}, config.get("coherence") or {}
+        print(f"  PERFIL      {pf.get('dir', '—')}: {len(pf.get('forbiddenKeys') or [])} clave(s) prohibida(s)")
+        print(f"  COHERENCIA  {', '.join(co.get('guides') or []) + ' + reason del config' if co.get('commandPattern') else 'inactiva'}"
+              f" contra {len((config.get('terminal') or {}).get('deny') or [])} regla(s) de terminal.deny")
         return 0
 
     if "--stdin" in argv:
@@ -69,6 +73,12 @@ def main(argv: list[str]) -> int:
         for f in (config.get("context") or {}).get("files") or []:
             if not (REPO_ROOT / f).is_file():
                 errores.append(f"CONTEXTO {f} — no existe: Hermes arranca sin las reglas del repo")
+        for g in (config.get("coherence") or {}).get("guides") or []:
+            if not (REPO_ROOT / g).exists():
+                errores.append(f"COHERENCIA {g} — `coherence.guides` apunta a algo que no existe: esa guía nunca se compara con los frenos")
+        pdir = (config.get("profiles") or {}).get("dir")
+        if pdir and not any((REPO_ROOT / pdir).glob("*.json")):
+            errores.append(f"PERFIL {pdir} — no hay ningún perfil: `profiles.dir` apunta a la nada")
         ignorar = [r for r in ((config.get("lint") or {}).get("ignore") or []) if _re(r)]
         for rel in tracked_files():
             if Path(rel).suffix not in TEXT_EXT or any(re.search(r, rel) for r in ignorar):

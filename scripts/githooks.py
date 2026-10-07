@@ -4,6 +4,7 @@ Los hooks de git, en Python y no en bash.
 
     python3 scripts/githooks.py pre-commit
     python3 scripts/githooks.py commit-msg <archivo-del-mensaje>
+    python3 scripts/githooks.py pre-push          las refs llegan por stdin, como las pasa git
     python3 scripts/githooks.py install          core.hooksPath=.githooks
 
 Los archivos de `.githooks/` son envoltorios de una línea: la decisión vive acá porque el
@@ -97,6 +98,36 @@ def commit_msg(config: dict, msg: str, staged: list[str]) -> str | None:
     )
 
 
+def pre_push(config: dict, refs: list[str]) -> str | None:
+    """None = pasa. El trabajo entra a una rama protegida por PR, no de un empujón.
+
+    El flujo de PR suele ser una convención que nada hace cumplir del lado de quien empuja: un
+    push directo a main entra sin revisión y nadie se entera hasta verlo en el historial. La
+    protección del lado de la forja es el freno fuerte; éste falla ANTES de la red, con el motivo
+    y la salida, con cualquier forja o sin ninguna. `refs` son las líneas que git pasa por stdin:
+    `<ref local> <sha local> <ref remoto> <sha remoto>`."""
+    br = config.get("branches") or {}
+    protegidas = br.get("protected") or []
+    chocan = []
+    for linea in refs:
+        partes = linea.split()
+        if len(partes) >= 3:
+            rama = re.sub(r"^refs/heads/", "", partes[2])
+            if rama in protegidas and rama not in chocan:
+                chocan.append(rama)
+    if not chocan:
+        return None
+    return (
+        f"pre-push: `{', '.join(chocan)}` es una rama protegida y estás empujando directo.\n\n"
+        f"Motivo: {br.get('reason', 'el trabajo entra por pull request, con su revisión y su gate en verde.')}\n\n"
+        "Salida, sin perder lo que ya commiteaste:\n"
+        "  git switch -c <rama-con-nombre>      # la rama se crea DONDE ESTÁS, con tus commits\n"
+        "  git push -u origin <rama-con-nombre>\n"
+        "  # y abrí el PR con el CLI de tu forja\n\n"
+        "Saltarse el hook está prohibido: si el freno estorba, se arregla el freno."
+    )
+
+
 def main(argv: list[str]) -> int:
     if not argv:
         print(__doc__)
@@ -115,6 +146,12 @@ def main(argv: list[str]) -> int:
         if fallas:
             print("pre-commit:\n  " + "\n  ".join(fallas))
             print("\nCommit abortado. Saltarse la verificación está prohibido: si el gate estorba, se arregla el gate.")
+            return 1
+        return 0
+    if argv[0] == "pre-push":
+        error = pre_push(config, sys.stdin.read().splitlines())
+        if error:
+            print(error)
             return 1
         return 0
     if argv[0] == "commit-msg" and len(argv) > 1:
