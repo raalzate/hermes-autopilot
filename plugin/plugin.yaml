@@ -1,7 +1,7 @@
 name: repo-harness
 version: "1.0.0"
 description: "Arnés de repo para Hermes: frenos declarados en .hermes/harness.config.json (terminal, rutas protegidas, patrones, memoria, skills, cron), lint del archivo tocado, gate pendiente al cerrar el turno y estado verificado al abrir la sesión. Genérico: sin config en el repo, no hace nada."
-author: "hermes-harness"
+author: "hermes-autopilot"
 provides_hooks:
   - pre_tool_call
   - transform_tool_result

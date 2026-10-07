@@ -20,10 +20,13 @@ prueba. Si una fila no tiene comando, no es un freno: es una esperanza.
 | escribir una guía | lint `COHERENCIA`: lo que `AGENTS.md`, `docs/` o una skill recomiendan en un bloque de shell no puede estar en `terminal.deny` | sensor | self-test §12 (cada `example` de `terminal.deny` recomendado en una guía) |
 | escribir un perfil | lint `PERFIL`: un perfil de stack no trae reglas (`profiles.forbiddenKeys`) | sensor | self-test §12 y §11 (los perfiles reales) |
 | entregar | `scripts/gate.py` | freno | es el gate; CI lo corre igual |
-| el self-test mismo | `scripts/mutations.py` — 38 mutaciones (frenos, config, cada hallazgo de la revisión y cada pieza traída de agent-harness) | sensor | señal del gate: cada una tiene que poner rojo el self-test |
+| el self-test mismo | `scripts/mutations.py` — 49 mutaciones (frenos, config, cada hallazgo de la revisión, cada pieza traída de agent-harness y la autonomía) | sensor | señal del gate: cada una tiene que poner rojo el self-test |
 | el arnés entero | `scripts/map.py` — cada pieza con dirección (guía · freno · sensor), tipo y etapa desde `taxonomy` | sensor | señal del gate: una pieza sin clasificar es rojo |
 | el costo | `scripts/timing.py` — la mediana de cada callback del plugin contra `observability.budgetMs` | sensor | señal del gate; self-test §12 (con presupuesto 0 tiene que salir rojo) |
 | continuo (semanal) | `scripts/drift.py` por `.github/workflows/drift.yml`: `STATUS.md` vencido = rojo, regla que nunca cazó nada = aviso | sensor | self-test §12 (que el `runner` invoque el comando, y los casos de fecha e historial) |
+| cada tarea (loop autónomo) | `scripts/loop.py`: tarea → agente → gate; salida = gate verde; el mismo rojo `sameFailureLimit` veces, `maxIterations` o `maxMinutes` escalan; `stopFile` lo para; nunca publica (P21) | sensor | self-test §13 (decisiones puras + tres corridas reales con un agente de mentira) y 6 mutaciones |
+| cambiar una regla | `scripts/cli.py rule add`: la regla pasa por `guards.evaluate` con su `example`, los inocentes y el gate del repo, y el config resultante por el lint, antes de escribirse | freno | self-test §13 (cada rechazo) y 2 mutaciones |
+| siempre (observabilidad) | registro de eventos (`plugin/harness/events.py`) y `scripts/panel.py` en vivo por SSE, sólo en 127.0.0.1 (P22) | sensor | self-test §13 (registra lo que frena y no lo que deja pasar, rota, el panel responde y empuja) y 3 mutaciones |
 | esta máquina | `scripts/doctor.py` | sensor | a mano / skill `harness-audit` |
 | el Hermes real: carga | `hermes plugins doctor plugin --ci` | sensor | señal del gate (OMITIDA sin Hermes) |
 | el Hermes real: contrato | `scripts/hermes_e2e.py` — cada `example` por `get_pre_tool_call_directive`, `pre_verify`, `pre_llm_call`, `transform_tool_result` y la sección del prompt, dentro de Hermes | sensor | señal del gate (OMITIDA sin Hermes) |

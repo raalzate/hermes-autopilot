@@ -49,6 +49,8 @@ sin `example` es roja.
 | `coherence.guides`, `commandPattern`, `configKeys`, `shellFences`, `configFile`, `reason` | regla `COHERENCIA` (P18): los comandos de los bloques de shell de las guías y los citados entre backticks en `configKeys` no pueden casar con `terminal.deny`. Sin `commandPattern` no corre |
 | `branches.protected[]`, `reason` | ramas a las que `.githooks/pre-push` no deja empujar directo. Vacío = el freno no corre |
 | `observability.budgetMs`, `runs`, `budgets{}`, `probe{command, filePath, content, prompt}`, `reason` | presupuesto de latencia de cada callback del plugin (P19); `probe.filePath` tiene que ser código |
+| `observability.events{file, maxBytes}` | el registro de eventos (P22): una línea JSON por bloqueo, escalada, hallazgo, gate y vuelta del loop, bajo `.git/`. Rota pasado `maxBytes`. Sin `events` no se escribe nada |
+| `loop.tasksFile`, `agentCommand`, `gateCommand`, `maxIterations`, `sameFailureLimit`, `maxMinutes`, `agentTimeoutMinutes`, `gateTimeoutMinutes`, `branchPrefix`, `stopFile`, `stateFile`, `prompt`, `retryPrompt`, `reason` | el loop autónomo (P21). Ver [`loop-autonomo.md`](loop-autonomo.md) |
 | `drift.statusDatePattern`, `statusMaxAgeDays`, `historyCommits`, `runner`, `command`, `reason` | el barrido de deriva (P20). `runner` es el pipeline que lo corre y `command` lo que ese pipeline tiene que invocar |
 | `taxonomy.stages`, `events`, `gitHooksDir`, `gitHooks`, `gateStages`, `skills`, `guides`, `pieces`, `pipelines` | el mapa guía/freno/sensor (P20): cada pieza con `direction`, `kind` (opcional) y `stage`. Una sin clasificar es rojo |
 
@@ -75,6 +77,10 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `profiles` | `plugin/harness/rules.py` (`rule_perfil`), `scripts/lint.py`, `scripts/selftest.py` |
 | `coherence` | `plugin/harness/rules.py` (`rule_coherencia`, `es_guia`), `scripts/lint.py`, `scripts/selftest.py` |
 | `branches` | `scripts/githooks.py` (`pre_push`), `scripts/selftest.py` |
-| `observability` | `scripts/timing.py`, `scripts/install.py` (`probe.filePath` desde el perfil), `scripts/selftest.py` |
+| `observability` | `scripts/timing.py`, `scripts/install.py` (`probe.filePath` desde el perfil), `scripts/selftest.py`; `events`: `plugin/harness/events.py`, `scripts/gate.py`, `scripts/loop.py`, `scripts/panel.py` |
+| `loop` | `scripts/loop.py`, `scripts/panel.py`, `scripts/cli.py` (`task`, y `gateCommand` como inocente de `rule add`), `scripts/selftest.py` |
 | `drift` | `scripts/drift.py`, `scripts/selftest.py` (que el `runner` invoque el `command`) |
-| `taxonomy` | `scripts/map.py`, `scripts/selftest.py` |
+| `taxonomy` | `scripts/map.py`, `scripts/panel.py` (salud), `scripts/selftest.py` |
+
+Todas las claves también las lee y escribe `scripts/cli.py` (`config get|set`, `rule`, `signal`).
+La CLI prueba cada regla antes de escribirla: ver [`cli-y-panel.md`](cli-y-panel.md).

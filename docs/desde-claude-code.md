@@ -1,9 +1,9 @@
-# De agent-harness (Claude Code) a hermes-harness
+# De agent-harness (Claude Code) a hermes-autopilot
 
 Este repo nace de `agent-harness`, el arnés para Claude Code. Los **principios** viajan; los
 **mecanismos** se rehicieron para el modelo de extensión de Hermes. Esta tabla es el mapa.
 
-| agent-harness (Claude Code) | hermes-harness (Hermes Agent) | Por qué cambió |
+| agent-harness (Claude Code) | hermes-autopilot (Hermes Agent) | Por qué cambió |
 |---|---|---|
 | `.claude/settings.json` → hooks `node …` | plugin `repo-harness` (`plugin/`) + shell hook opcional | Hermes es Python y sus plugins corren en proceso: sin un proceso por tool call |
 | `.claude/harness.config.json` | `.hermes/harness.config.json` | mismo papel; suma `tools` (nombres de herramientas) |

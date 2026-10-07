@@ -6,7 +6,8 @@ problemas del final tiene la causa de cada tropiezo que ya nos pasó.
 
 Hay dos caminos. Elegí uno:
 
-- **A — Adoptar el arnés en TU repo** (lo más común): pasos 0 → 7.
+- **A — Adoptar el arnés en TU repo** (lo más común): pasos 0 → 8.
+- **Taller práctico, en un sandbox**: [`workshop/README.md`](workshop/README.md) (3 h 30 min, sin API key).
 - **B — Contribuir a este repo** (cambiar el arnés mismo): pasos 0, 1 y la sección B.
 
 Tiempo estimado: 20 minutos el camino A, sin contar la instalación de Hermes.
@@ -42,15 +43,15 @@ hermes doctor           # → sin errores rojos
 ## Paso 2 — Traer el arnés
 
 ```bash
-git clone https://github.com/raalzate/hermes-harness.git
-cd hermes-harness
+git clone https://github.com/raalzate/hermes-autopilot.git
+cd hermes-autopilot
 python3 scripts/gate.py
 ```
 
 Tiene que terminar en una de estas dos líneas:
 
 ```
-GATE VERDE — 6 señales.                                        # con Hermes en el PATH
+GATE VERDE — 8 señales.                                        # con Hermes en el PATH
 GATE VERDE con 2 OMITIDA(S): plugin en el Hermes real, …       # sin Hermes
 ```
 
@@ -124,8 +125,30 @@ El config instalado es un **piso mínimo**. Las reglas de tu repo se escriben co
 - cada regla nueva trae su `example` (lo que DEBE frenar) y, si puede morder de más, un caso en
   `innocent`. El self-test prueba las dos cosas solo.
 
-Editá `.hermes/harness.config.json` con el editor, no con un heredoc en la terminal: contiene los
+Para agregar una regla, usá la CLI: la prueba por el plugin **antes** de escribirla (que el
+ejemplo frene, que ningún inocente ni el gate queden frenados y que el config pase el lint):
+
+```bash
+python3 .hermes/harness/scripts/cli.py rule add terminal.deny --id … --pattern … --example … --reason …
+python3 .hermes/harness/scripts/cli.py rule add terminal.deny … --apply
+```
+
+Si lo editás a mano, que sea con el editor y no con un heredoc en la terminal: contiene los
 patrones que prohíbe y el freno de terminal los ve.
+
+## Paso 8 — Autonomía: la cola, el loop y el panel
+
+```bash
+python3 .hermes/harness/scripts/cli.py panel                     # otra terminal: http://127.0.0.1:8765
+python3 .hermes/harness/scripts/cli.py task add "una tarea chica que el gate pueda verificar"
+python3 .hermes/harness/scripts/cli.py loop                      # DRY-RUN: tarea, rama, prompt, topes
+python3 .hermes/harness/scripts/cli.py loop --apply
+```
+
+Tiene que salir `✓ VERDE — gate verde en el intento N`, o `✗ ESCALAR — …` con el motivo. En el
+panel ves cada intento y cada freno que mordió adentro. Si arranca en `main`, abre una rama
+`loop/…` (completá `branches.protected` antes). El loop nunca empuja: lo verde lo publicás vos.
+Cómo operarlo: [`loop-autonomo.md`](loop-autonomo.md).
 
 ---
 
@@ -171,6 +194,10 @@ Cada fila salió de un tropiezo real (los detalles, en `docs/gotchas.md`).
 | en Windows, el gate revienta con `UnicodeEncodeError` | consola cp1252 | versión vieja: actualizá; los scripts fuerzan UTF-8 |
 | `pip install` de Hermes sin dependencias | sus dependencias están fijadas para Python ≥ 3.14 | usá el instalador oficial o un venv con 3.14 |
 | `MEMORY.md` casi lleno, el agente "olvida" guardar | Hermes rechaza escrituras sobre el tope, no compacta | `/memory` para limpiar; `doctor.py` muestra el uso |
+| el gate de un repo recién instalado sale rojo en `harness self-test` | versión vieja: el self-test intentaba re-portar el arnés desde `.hermes/harness/` | `install.py --upgrade --apply` |
+| el pre-commit frena el commit del arnés recién instalado (`clave-privada` en la plantilla del config) | versión vieja de la plantilla | agregá `^\.hermes/harness/plantillas/harness\.config\.json$` a `exceptPaths` de esa regla |
+| el loop escala enseguida con el mismo rojo | el agente repite el error: es lo que tiene que pasar (P16) | leé el motivo en el panel; achicá o aclará la tarea |
+| `cli.py rule add` dice «muerde de más» | la regla frena un inocente o el gate | hacé el patrón más preciso; si el inocente está mal, sacalo a conciencia |
 
 ## Qué leer después
 
@@ -178,3 +205,5 @@ Cada fila salió de un tropiezo real (los detalles, en `docs/gotchas.md`).
 - `docs/arnes.md` — qué guía, freno o sensor actúa en cada momento, y su prueba.
 - `docs/config-reference.md` — cada clave del config y quién la lee.
 - `docs/portar.md` — el plugin o el shell hook, en detalle.
+- `docs/ingenieria-de-loops.md` — los lazos de control del agente autónomo.
+- `docs/cli-y-panel.md` — la CLI y el panel.

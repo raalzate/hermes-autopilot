@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hermes Harness</title>
+<title>Hermes Autopilot</title>
 <meta name="description" content="Un arnés de repo para Hermes Agent: frenos, gate, self-test y skills que se hacen cumplir solos — también donde Hermes aprende y donde corre sin nadie mirando.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -175,9 +175,9 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 
 <div class="bar">
   <div class="wrap">
-    <a class="brand" href="#top">Hermes <span>Harness</span></a>
+    <a class="brand" href="#top">Hermes <span>Autopilot</span></a>
     <nav class="nav" aria-label="Secciones">
-      <a href="#tesis">Tesis</a><a href="#prueba">Prueba</a><a href="#onboarding">Onboarding</a>
+      <a href="#tesis">Tesis</a><a href="#autonomia">Autonomía</a><a href="#prueba">Prueba</a><a href="#onboarding">Onboarding</a>
       <a href="#piezas">Piezas</a><a href="#contrato">Contrato</a><a href="#aprende">Aprende</a>
       <a href="#cicatrices">Cicatrices</a><a href="#portar">Portar</a><a href="#principios">Principios</a>
       <a href="#docs">Docs</a>
@@ -189,10 +189,11 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 <header id="top">
   <div class="wrap hero">
     <div>
-      <h1><span class="sub">arnés de repo · Hermes Agent</span>Hermes aprende. El arnés decide qué no se aprende.</h1>
+      <h1><span class="sub">agente autónomo · Hermes Agent</span>Hermes trabaja solo. El arnés decide cuándo terminó.</h1>
       <p class="thesis">Reglas de tu repo que se hacen cumplir solas mientras <a href="https://hermes-ai.net/">Hermes</a> trabaja en él —
         en la CLI, en el gateway y en los cron—, incluidas las dos superficies que Claude Code no tenía:
-        <em>lo que el agente guarda para siempre</em> y <em>lo que corre sin nadie mirando</em>.</p>
+        <em>lo que el agente guarda para siempre</em> y <em>lo que corre sin nadie mirando</em>.
+        Encima, un loop que le da tareas, lo deja verde o lo para cuando se traba, y un panel donde lo ves trabajar.</p>
       <div class="meta">
         <span class="chip">Python stdlib · 0 dependencias</span>
         <span class="chip">plugin en proceso</span>
@@ -201,8 +202,9 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       </div>
       <div class="cta">
         <a class="btn btn-1" href="#onboarding">Empezar: onboarding</a>
-        <a class="btn" href="https://github.com/raalzate/hermes-harness">GitHub</a>
-        <a class="btn" href="https://github.com/raalzate/hermes-harness/blob/main/docs/hermes.md">Cómo se engancha</a>
+        <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workshop/README.md">Workshop</a>
+        <a class="btn" href="https://github.com/raalzate/hermes-autopilot">GitHub</a>
+        <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/hermes.md">Cómo se engancha</a>
       </div>
     </div>
 
@@ -236,17 +238,39 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
   </div>
 </div></section>
 
+<section id="autonomia"><div class="wrap sec-inner">
+  <div class="rail"><b>02</b>autonomía</div>
+  <div>
+    <div class="col stack">
+      <h2>Autonomía es un loop con salida, tope y freno de mano</h2>
+      <p class="lede">Un agente autónomo no es un modelo bueno: es un modelo metido en lazos de control bien hechos. El arnés gobierna el turno; el loop gobierna la tarea; el panel deja ver los dos.</p>
+    </div>
+    <figure class="panel"><figcaption>scripts/loop.py</figcaption><pre>tarea ──▶ agente (Hermes) ──▶ gate ──▶ <span class="k">verde</span> ──▶ [x] y la próxima
+              ▲                     │
+              └── reintento con ◀───┤ rojo distinto
+                  el rojo en mano   │
+                                    └ mismo rojo 2× · tope · stopFile ──▶ [!] escala a un humano</pre></figure>
+    <div class="grid two" style="margin-top:1.2rem">
+      <div class="cell"><span class="mark">scripts/loop.py</span><h3>El loop autónomo</h3><p>Toma la próxima tarea de <code>.hermes/loop/tasks.md</code>, se la da a Hermes y corre el gate. La salida es el gate, no lo que el agente dice. El mismo rojo dos veces seguidas escala (P16 hecho mecanismo). Nunca empuja: lo verde queda en una rama.</p><span class="foot">falla: un agente que reintenta a ciegas, o que se declara terminado solo</span></div>
+      <div class="cell"><span class="mark">scripts/cli.py</span><h3>La CLI que prueba antes de escribir</h3><p><code>rule add</code> pasa la regla nueva por el mismo camino que el plugin: el ejemplo frena, ningún inocente ni el gate quedan frenados, el config pasa el lint. Recién entonces, con <code>--apply</code>, la escribe.</p><span class="foot">falla: una regla editada a mano que frena el gate y deja al loop sin salida</span></div>
+      <div class="cell"><span class="mark">scripts/panel.py</span><h3>El panel en vivo</h3><p>Gate, loop, tareas, frenos y cada evento —bloqueo, escalada, lint, gate— en el momento en que pasa. <code>http.server</code> y Server-Sent Events, sólo en 127.0.0.1, sin dependencias.</p><span class="foot">falla: lo que el arnés frena sólo se ve dentro del chat que lo provocó</span></div>
+      <div class="cell"><span class="mark">docs/workshop/</span><h3>El workshop</h3><p>Tres horas y media en un sandbox propio, con un agente de juguete determinista (sin API key): guías, frenos, gate, el loop que llega a verde, el que escala, el panel y de un incidente a una regla.</p><span class="foot">falla: un arnés que sólo entiende quien lo escribió</span></div>
+    </div>
+    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/ingenieria-de-loops.md">Ingeniería de loops</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/loop-autonomo.md">Operar el loop</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/cli-y-panel.md">CLI y panel</a></p>
+  </div>
+</div></section>
+
 <section id="prueba"><div class="wrap sec-inner">
-  <div class="rail"><b>02</b>prueba</div>
+  <div class="rail"><b>03</b>prueba</div>
   <div>
     <div class="col stack">
       <h2>Cada número de esta página lo imprime un comando</h2>
       <p class="lede">Y cada freno tiene una prueba de que muerde, otra de que no muerde de más, y una tercera de que la prueba misma muerde.</p>
     </div>
     <div class="grid three">
-      <div class="cell stat"><span class="lbl">señales del gate</span><b>6/6</b><span class="why">verdes con Hermes instalado; sin Hermes, 4 verdes y 2 <em>omitidas</em> — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
-      <div class="cell stat"><span class="lbl">verificaciones</span><b>533</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
-      <div class="cell stat"><span class="lbl">mutaciones</span><b>28/28</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
+      <div class="cell stat"><span class="lbl">señales del gate</span><b>8/8</b><span class="why">verdes con Hermes instalado; sin Hermes, 6 verdes y 2 <em>omitidas</em> — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
+      <div class="cell stat"><span class="lbl">verificaciones</span><b>692</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
+      <div class="cell stat"><span class="lbl">mutaciones</span><b>49/49</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
       <div class="cell stat"><span class="lbl">dentro de Hermes</span><b>70</b><span class="why">verificaciones con el despacho real de Hermes: directivas, <code>pre_verify</code>, ruteo, lint tras escribir, sección del prompt.</span><span class="cmd">python3 scripts/hermes_e2e.py</span></div>
       <div class="cell stat"><span class="lbl">perfiles de stack</span><b>8</b><span class="why">python, node, front, go, rust, .NET, Maven, Gradle — cada uno instalado en un repo temporal con su gate.</span><span class="cmd">self-test §11</span></div>
       <div class="cell stat"><span class="lbl">dependencias</span><b>0</b><span class="why">Python de la biblioteca estándar. Donde hay Hermes, hay todo lo que el arnés necesita.</span><span class="cmd">regla patterns[dependencia]</span></div>
@@ -255,20 +279,20 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 </div></section>
 
 <section id="onboarding"><div class="wrap sec-inner">
-  <div class="rail"><b>03</b>onboarding</div>
+  <div class="rail"><b>04</b>onboarding</div>
   <div>
     <div class="col stack">
-      <h2>De cero a un arnés vivo, en siete pasos</h2>
-      <p class="lede">Cada paso dice qué tiene que salir. Si no sale, el <a href="https://github.com/raalzate/hermes-harness/blob/main/docs/onboarding.md#tablero-de-problemas">tablero de problemas</a> tiene la causa: cada fila es un tropiezo real.</p>
+      <h2>De cero a un agente autónomo, en ocho pasos</h2>
+      <p class="lede">Cada paso dice qué tiene que salir. Si no sale, el <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/onboarding.md#tablero-de-problemas">tablero de problemas</a> tiene la causa: cada fila es un tropiezo real.</p>
     </div>
     <ol class="steps">
       <li><h3>Requisitos</h3><p>Python ≥ 3.11, git y Hermes Agent. En Windows, la terminal de Git for Windows o WSL2 (y sin el alias de <code>python3</code> de la Microsoft Store).</p>
         <span class="cmdline">python3 --version &amp;&amp; git --version &amp;&amp; hermes --version</span></li>
       <li><h3>Instalar Hermes</h3><p>Con el instalador oficial. Bajá el script y leelo antes de correrlo: es la misma regla que el arnés le aplica al agente.</p>
         <span class="cmdline">hermes doctor   <span class="dim"># → sin errores rojos</span></span></li>
-      <li><h3>Traer el arnés y ver el gate verde</h3><p>Tiene que terminar en <code>GATE VERDE — 6 señales</code> (o con 2 omitidas si Hermes no está en el PATH).</p>
-        <span class="cmdline">git clone https://github.com/raalzate/hermes-harness.git
-cd hermes-harness &amp;&amp; python3 scripts/gate.py</span></li>
+      <li><h3>Traer el arnés y ver el gate verde</h3><p>Tiene que terminar en <code>GATE VERDE — 8 señales</code> (o con 2 omitidas si Hermes no está en el PATH).</p>
+        <span class="cmdline">git clone https://github.com/raalzate/hermes-autopilot.git
+cd hermes-autopilot &amp;&amp; python3 scripts/gate.py</span></li>
       <li><h3>Instalar en tu repo, primero en seco</h3><p>Sin <code>--apply</code> sólo muestra la lista. <code>+</code> es nuevo, <code>=</code> ya existía y no se toca: nunca sobreescribe.</p>
         <span class="cmdline">python3 scripts/install.py ~/code/mi-repo --profile python
 python3 scripts/install.py ~/code/mi-repo --profile python --apply</span></li>
@@ -281,14 +305,18 @@ hermes plugins enable repo-harness</span></li>
       <li><h3>Verificar que quedó vivo</h3><p><code>doctor.py</code> encuentra el "instalado y muerto": plugin sin habilitar, skills sin confiar, un <code>.hermes.md</code> que tapa a <code>AGENTS.md</code>, secretos ya guardados en la memoria.</p>
         <span class="cmdline">python3 .hermes/harness/scripts/gate.py
 python3 .hermes/harness/scripts/doctor.py      <span class="dim"># → 0 rojo(s)</span></span></li>
-      <li><h3>La prueba de humo con el agente</h3><p>Pedile a Hermes un <code>git reset --hard</code>, escribir en <code>.env</code> y guardar una key en su memoria: las tres tienen que frenar con el motivo. Después <code>/harness</code> para ver los frenos activos. Y desde ahí, las reglas de tu repo se escriben con tus incidentes (<code>/lesson</code>, <code>/new-guardrail</code>).</p></li>
+      <li><h3>La prueba de humo con el agente</h3><p>Pedile a Hermes un <code>git reset --hard</code>, escribir en <code>.env</code> y guardar una key en su memoria: las tres tienen que frenar con el motivo. Después <code>/harness</code> para ver los frenos activos. Y desde ahí, las reglas de tu repo se escriben con tus incidentes (<code>/lesson</code>, <code>/new-guardrail</code>) o con <code>cli.py rule add</code>, que las prueba antes de escribirlas.</p></li>
+      <li><h3>Dejarlo trabajar solo</h3><p>Una tarea chica que el gate pueda verificar, el loop y el panel en otra pestaña. Tiene que salir <code>✓ VERDE — gate verde en el intento N</code> o <code>✗ ESCALAR</code> con el motivo.</p>
+        <span class="cmdline">python3 .hermes/harness/scripts/cli.py panel     <span class="dim"># http://127.0.0.1:8765</span>
+python3 .hermes/harness/scripts/cli.py task add "…"
+python3 .hermes/harness/scripts/cli.py loop --apply</span></li>
     </ol>
-    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-harness/blob/main/docs/onboarding.md">Onboarding completo</a></p>
+    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/onboarding.md">Onboarding completo</a></p>
   </div>
 </div></section>
 
 <section id="piezas"><div class="wrap sec-inner">
-  <div class="rail"><b>04</b>piezas</div>
+  <div class="rail"><b>05</b>piezas</div>
   <div>
     <div class="col stack">
       <h2>Seis piezas, cada una contra una falla concreta</h2>
@@ -305,7 +333,7 @@ python3 .hermes/harness/scripts/doctor.py      <span class="dim"># → 0 rojo(s)
 </div></section>
 
 <section id="freno"><div class="wrap sec-inner">
-  <div class="rail"><b>05</b>freno</div>
+  <div class="rail"><b>06</b>freno</div>
   <div>
     <div class="col stack">
       <h2>Editás JSON. El agente lee el motivo.</h2>
@@ -335,7 +363,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="contrato"><div class="wrap sec-inner">
-  <div class="rail"><b>06</b>contrato</div>
+  <div class="rail"><b>07</b>contrato</div>
   <div>
     <div class="col stack">
       <h2>Lo que Hermes promete, leído en su código</h2>
@@ -357,7 +385,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="aprende"><div class="wrap sec-inner">
-  <div class="rail"><b>07</b>aprende</div>
+  <div class="rail"><b>08</b>aprende</div>
   <div>
     <div class="col stack">
       <h2>Lo aprendido pasa por los mismos frenos que lo ejecutado</h2>
@@ -372,10 +400,10 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="cicatrices"><div class="wrap sec-inner">
-  <div class="rail"><b>08</b>cicatrices</div>
+  <div class="rail"><b>09</b>cicatrices</div>
   <div class="stack col">
     <h2>Lo que costó aprenderlo</h2>
-    <p class="lede">Cada una terminó en un mecanismo (y en <a href="https://github.com/raalzate/hermes-harness/blob/main/docs/gotchas.md">docs/gotchas.md</a>), no en una advertencia.</p>
+    <p class="lede">Cada una terminó en un mecanismo (y en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/gotchas.md">docs/gotchas.md</a>), no en una advertencia.</p>
     <div class="scar"><h3>El plugin pasaba el self-test y en Hermes no importaba</h3><p><b>Causa:</b> Hermes copia el directorio del plugin para validarlo e instalarlo; el núcleo vivía afuera. <b>Mecanismo:</b> núcleo dentro del plugin, self-test que carga desde una copia, y <code>hermes plugins doctor</code> en el gate.</p></div>
     <div class="scar"><h3>Un <code>patch</code> en modo V4A se salteaba los frenos de escritura</h3><p><b>Causa:</b> ese modo no trae <code>path</code>; las rutas van en encabezados dentro del texto. <b>Mecanismo:</b> la gramática V4A va al config; el freno evalúa cada ruta y cada línea agregada.</p></div>
     <div class="scar"><h3>El arnés se apagaba en el gateway y en cron</h3><p><b>Causa:</b> buscaba el repo desde el cwd del proceso, no desde el de la sesión. <b>Mecanismo:</b> el plugin le pregunta a Hermes el cwd de la sesión; caso en el e2e con el proceso afuera y la sesión adentro.</p></div>
@@ -384,7 +412,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="portar"><div class="wrap sec-inner">
-  <div class="rail"><b>09</b>portar</div>
+  <div class="rail"><b>10</b>portar</div>
   <div>
     <div class="col stack">
       <h2>Plugin o shell hook: el mismo núcleo, dos adaptadores</h2>
@@ -416,10 +444,10 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="principios"><div class="wrap sec-inner">
-  <div class="rail"><b>10</b>principios</div>
+  <div class="rail"><b>11</b>principios</div>
   <div>
     <div class="col stack">
-      <h2>Dieciséis principios, cada uno con su comando</h2>
+      <h2>Veintidós principios, cada uno con su comando</h2>
       <p class="lede">Un principio que dice BLOCKING nombra el comando que falla. Los nuevos respecto de agent-harness están marcados.</p>
     </div>
     <ol class="laws">
@@ -438,39 +466,51 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
       <li><b>Lo desatendido se decide al crearlo.</b><span class="tag new">nuevo</span></li>
       <li><b>El contexto tiene presupuesto.</b><span class="tag new">nuevo</span></li>
       <li><b>Cada incidente deja infraestructura.</b></li>
-      <li><b>Conducta ante el error:</b> dos intentos, al tercero se escala.<span class="tag">review</span></li>
+      <li><b>Conducta ante el error:</b> dos intentos, al tercero se escala — y dentro del loop, es mecanismo.<span class="tag">review</span></li>
+      <li><b>Lo que viaja son los principios</b>, no las reglas ajenas.<span class="tag">review</span></li>
+      <li><b>Guía y freno no se contradicen</b> — regla <code>COHERENCIA</code>.</li>
+      <li><b>El arnés tiene presupuesto de latencia</b> — <code>timing.py</code> en el gate.</li>
+      <li><b>Lo que no cabe en el gate igual está vivo</b> — deriva programada y mapa.</li>
+      <li><b>El loop autónomo tiene salida, tope y freno de mano</b>, y nunca publica.<span class="tag new">nuevo</span></li>
+      <li><b>Lo que el arnés hace se ve fuera de la conversación</b> — eventos y panel.<span class="tag new">nuevo</span></li>
     </ol>
   </div>
 </div></section>
 
 <section id="docs"><div class="wrap sec-inner">
-  <div class="rail"><b>11</b>docs</div>
+  <div class="rail"><b>12</b>docs</div>
   <div>
     <div class="col stack"><h2>Todo lo que esta página resume, en largo</h2></div>
     <div class="grid three">
-      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/onboarding.md" style="text-decoration:none;color:inherit"><span class="mark">empezá acá</span><h3>Onboarding</h3><p>El setup paso a paso y el tablero de problemas.</p></a>
-      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/hermes.md" style="text-decoration:none;color:inherit"><span class="mark">contrato</span><h3>Cómo se engancha a Hermes</h3><p>Hooks, contexto, skills y memoria, verificado en su código.</p></a>
-      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/config-reference.md" style="text-decoration:none;color:inherit"><span class="mark">config</span><h3>Referencia del config</h3><p>Cada clave, y quién la lee.</p></a>
-      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/arnes.md" style="text-decoration:none;color:inherit"><span class="mark">mapa</span><h3>El arnés de este repo</h3><p>Qué guía, freno o sensor actúa en cada momento, y su prueba.</p></a>
-      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/portar.md" style="text-decoration:none;color:inherit"><span class="mark">portar</span><h3>Instalar en otro repo</h3><p>Plugin o shell hook, perfiles, <code>--upgrade</code>.</p></a>
-      <a class="cell" href="https://github.com/raalzate/hermes-harness/blob/main/docs/desde-claude-code.md" style="text-decoration:none;color:inherit"><span class="mark">origen</span><h3>Desde agent-harness</h3><p>El mapa pieza por pieza desde Claude Code.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/onboarding.md" style="text-decoration:none;color:inherit"><span class="mark">empezá acá</span><h3>Onboarding</h3><p>El setup paso a paso y el tablero de problemas.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/hermes.md" style="text-decoration:none;color:inherit"><span class="mark">contrato</span><h3>Cómo se engancha a Hermes</h3><p>Hooks, contexto, skills y memoria, verificado en su código.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/config-reference.md" style="text-decoration:none;color:inherit"><span class="mark">config</span><h3>Referencia del config</h3><p>Cada clave, y quién la lee.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/arnes.md" style="text-decoration:none;color:inherit"><span class="mark">mapa</span><h3>El arnés de este repo</h3><p>Qué guía, freno o sensor actúa en cada momento, y su prueba.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/portar.md" style="text-decoration:none;color:inherit"><span class="mark">portar</span><h3>Instalar en otro repo</h3><p>Plugin o shell hook, perfiles, <code>--upgrade</code>.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/desde-claude-code.md" style="text-decoration:none;color:inherit"><span class="mark">origen</span><h3>Desde agent-harness</h3><p>El mapa pieza por pieza desde Claude Code.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/ingenieria-de-loops.md" style="text-decoration:none;color:inherit"><span class="mark">loops</span><h3>Ingeniería de loops</h3><p>Los ocho lazos de control del agente y las siete reglas de un lazo bien hecho.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/loop-autonomo.md" style="text-decoration:none;color:inherit"><span class="mark">operar</span><h3>El loop autónomo</h3><p>La cola, los topes, el freno de mano y qué hacer cuando escala.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/cli-y-panel.md" style="text-decoration:none;color:inherit"><span class="mark">cli · panel</span><h3>La CLI y el panel</h3><p>Parametrizar sin editar JSON, y ver el arnés en vivo.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workshop/README.md" style="text-decoration:none;color:inherit"><span class="mark">workshop</span><h3>Workshop de agentes autónomos</h3><p>Seis módulos prácticos, con un agente de juguete y sin API key.</p></a>
     </div>
   </div>
 </div></section>
 
 <section id="limites"><div class="wrap sec-inner">
-  <div class="rail"><b>12</b>límites</div>
+  <div class="rail"><b>13</b>límites</div>
   <div class="stack col">
     <h2>Lo que este arnés todavía no hace</h2>
     <p>La terminal escribe archivos de muchas formas: el freno ve las redirecciones (<code>&gt;</code>, <code>tee</code>), no un <code>cp</code> ni un <code>python -c</code>. Para eso está el pre-commit, que no deja entrar lo protegido al historial.</p>
     <p>Los patrones del escáner de inyección de Hermes están copiados a mano en el config: si Hermes suma uno, el lint no lo sabe hasta que alguien lo copie.</p>
-    <p>Sin panel ni medición de latencia todavía: la fuente equivalente en Hermes es <code>~/.hermes/state.db</code>, y queda como trabajo futuro.</p>
+    <p>El loop trabaja una tarea por vez, en una rama: todavía no reparte tareas en paralelo (worktrees).</p>
+    <p>El sensor inferencial (<code>harness-review</code>) no tiene prueba de vida con tasa de acierto: lo que el gate no puede verificar sigue siendo juicio sin medir.</p>
+    <p>El loop es tan bueno como el gate que lo cierra: si las pruebas del repo no prueban nada, el verde no significa nada.</p>
   </div>
 </div></section>
 
 </main>
 
-<footer><div class="wrap">Hermes Harness · Apache-2.0 · <a href="https://github.com/raalzate/hermes-harness">github.com/raalzate/hermes-harness</a> · hermano de <a href="https://raalzate.github.io/agent-harness/">agent-harness</a></div></footer>
+<footer><div class="wrap">Hermes Autopilot · Apache-2.0 · <a href="https://github.com/raalzate/hermes-autopilot">github.com/raalzate/hermes-autopilot</a> · hermano de <a href="https://raalzate.github.io/agent-harness/">agent-harness</a></div></footer>
 
 <script>
 // Los mensajes son los que imprime el arnés de verdad (plugin/harness/guards.py con el config de
