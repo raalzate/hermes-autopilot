@@ -1,6 +1,6 @@
-# Constitución — Hermes Harness
+# Constitución — Hermes Autopilot
 
-**Versión 1.1.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
+**Versión 1.2.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
 viven en `AGENTS.md`; el arnés que los hace cumplir, en `docs/arnes.md`.
 
 Cada principio dice su **fuerza**:
@@ -137,6 +137,10 @@ skill > markdown). La skill `lesson` es el ciclo.
 Leer la salida real antes de reintentar; reintentar sólo con hipótesis nueva; **2 intentos** sobre
 el mismo error y al tercero se para y se escala con el diagnóstico.
 
+*Mecanismo parcial:* dentro del loop autónomo es BLOCKING — el mismo rojo del gate
+`loop.sameFailureLimit` veces seguidas para el loop y escala (P21). En una sesión con un humano
+sigue siendo juicio.
+
 ## P17 — Lo que viaja son los principios, no las reglas ajenas · REVIEW
 
 Las reglas concretas describen los incidentes de **un** repo; en otro son ruido bien intencionado
@@ -179,6 +183,29 @@ self-test verifica que cada `runner` exista e invoque su comando. `python3 scrip
 gate: una pieza (hook, hook de git, skill, guía, pipeline) sin dirección, tipo y etapa en
 `taxonomy` es rojo.
 
+## P21 — El loop autónomo tiene salida, tope y freno de mano · BLOCKING
+
+Un agente que trabaja solo, tarea tras tarea, no se declara terminado a sí mismo: **la salida del
+loop es el gate**. Reintenta con el rojo en la mano, no a ciegas; el mismo rojo dos veces es el
+bucle de P16 y escala a un humano; hay tope de intentos y de reloj; un humano lo para entre
+iteraciones sin matarlo a mitad. Y nunca publica: lo verde queda en una rama, y lo publica una
+persona (P13).
+
+*Mecanismo:* `scripts/loop.py` (`decidir`, con la configuración de `loop`), self-test §13 (las
+decisiones y tres corridas reales con un agente de mentira: verde en el intento 2, escalada por el
+mismo rojo, freno de mano) y mutaciones que sacan cada tope.
+
+## P22 — Lo que el arnés hace se ve fuera de la conversación · BLOCKING
+
+Un freno que muerde sólo dentro del chat que lo provocó es invisible para el equipo: nadie sabe
+cuántas veces mordió cada regla ni si el loop está trabado desde hace una hora. Cada bloqueo,
+escalada, hallazgo del lint, gate y vuelta del loop queda registrado fuera del árbol de fuentes, y
+un panel local lo muestra en vivo. Registrar nunca bloquea (P5) ni lanza procesos (P19).
+
+*Mecanismo:* `plugin/harness/events.py` (`observability.events`), `scripts/panel.py` (sólo
+`127.0.0.1` por defecto) y self-test §13 (el plugin registra lo que frena y no lo que deja pasar;
+el registro rota; el panel responde y empuja por SSE).
+
 ## Precedencia — cuando dos BLOCKING chocan · REVIEW
 
 Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el resto en orden.
@@ -191,3 +218,4 @@ Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el 
 |---|---|---|
 | 1.0.0 | 2026-09-30 | Primera versión, derivada de la constitución de `agent-harness` (Claude Code) y adaptada a Hermes: P12–P14 son nuevos (aprendizaje, desatendido, presupuesto de contexto). |
 | 1.1.0 | 2026-09-30 | Prácticas de `agent-harness` (1.2.0) que faltaban: P17 (viajan los principios; `PERFIL`), P18 (guía y freno coherentes; `COHERENCIA`), P19 (presupuesto de latencia; `timing.py`), P20 (deriva programada y mapa guía/freno/sensor). P11 suma `pre-push`. Numeración nueva al final para no romper las referencias a P1–P16. |
+| 1.2.0 | 2026-10-07 | Autonomía: P21 (el loop autónomo tiene salida —el gate—, tope y freno de mano; nunca publica) y P22 (lo que el arnés hace se ve: registro de eventos y panel en vivo). P16 gana mecanismo dentro del loop. El proyecto pasa a llamarse Hermes Autopilot: el propósito es un agente autónomo, y el arnés es lo que lo hace confiable. |
