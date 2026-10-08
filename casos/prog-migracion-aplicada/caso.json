@@ -36,9 +36,11 @@
     },
     {
       "modo": "ofuscado",
-      "resultado": "escalar",
+      "resultado": "verde",
       "intentos": 1,
-      "intocables": true
+      "frenos": [
+        "migracion-aplicada"
+      ]
     }
   ]
 }

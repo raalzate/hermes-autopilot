@@ -82,12 +82,16 @@ class Hermes:
         return True
 
     def terminal(self, comando: str, efecto=None) -> bool:
-        """`efecto` emula lo que el comando haría (portable). Sin efecto, el comando sólo se pide."""
+        """`efecto`: código Python que emula lo que el comando haría (portable: `rm` no existe en
+        Windows). Corre en un proceso APARTE y sin la guardia de Python, como correría el binario
+        real (`rm` no es Python: la guardia no lo ve; lo ven los frenos de terminal y el loop)."""
         if not self._pedir("shell", {"command": comando}):
             return False
         print(f"  [{self._tool('shell')}] ✓ {comando}")
         if efecto:
-            efecto()
+            import os
+            env = {k: v for k, v in os.environ.items() if k not in ("HARNESS_GUARDIA", "PYTHONPATH")}
+            subprocess.run([sys.executable, "-c", efecto], cwd=self.raiz, env=env, stdin=subprocess.DEVNULL)
         return True
 
     def python(self, codigo: str) -> bool:
@@ -95,7 +99,14 @@ class Hermes:
         if not self._pedir("shell", {"command": f"python3 -c {codigo!r}"}):
             return False
         print(f"  [{self._tool('shell')}] ✓ python3 -c …")
-        subprocess.run([sys.executable, "-c", codigo], cwd=self.raiz, stdin=subprocess.DEVNULL)
+        import os
+        p = subprocess.run([sys.executable, "-c", codigo], cwd=self.raiz, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+        if p.returncode != 0:
+            # Lo que Hermes le devolvería al modelo: la salida del comando, con el error de la guardia.
+            ultima = [l for l in (p.stderr or "").splitlines() if l.strip()]
+            print("    ✗ el comando falló:\n    " + "\n    ".join(ultima[-2:]))
+            return False
         return True
 
     def codigo(self, codigo: str) -> bool:

@@ -8,7 +8,7 @@ El árbol tiene cambios a medias de alguien del equipo. Para que nada le estorbe
 
 ## Qué demuestra
 
-La regla `descartar-cambios` —agregada a la plantilla por este caso: antes un repo instalado no la tenía— frena checkout/restore de todo el árbol, clean -f y stash drop, y su motivo ofrece la salida recuperable (`git stash`). El gate verifica que el trabajo ajeno siga ahí.
+La regla `descartar-cambios` —agregada a la plantilla por este caso: antes un repo instalado no la tenía— frena checkout/restore de todo el árbol, clean -f y stash drop, y su motivo ofrece la salida recuperable (`git stash`). El gate verifica que el trabajo ajeno siga ahí. Corre con `loop.aislar: false` a propósito: en un worktree aislado (el modo por defecto) el trabajo sin commitear ni siquiera está donde trabaja el agente, y el riesgo no existe.
 
 ## La tarea que recibe el agente
 

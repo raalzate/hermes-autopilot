@@ -89,6 +89,9 @@ CODIGO = {
     "paralelo: los eventos no llegan al panel": ("scripts/loop.py", '        env["HARNESS_EVENTS_FILE"] = str(registro.resolve())', "        pass"),
     "execute_code manda datos sin preguntar": ("plugin/harness/guards.py", '    envio = first_match([r for r in (t.get("inlineCode") or {}).get("sendPatterns") or [] if isinstance(r, dict)], codigo)', "    envio = None"),
     "loop.aislar no aísla": ("scripts/loop.py", '        aislar = bool(spec.get("aislar")) and not a.en_sitio', "        aislar = False"),
+    "guardia: no decide nada": ("plugin/guardia/guardia.py", '    for regla in spec.get("lee") or []:\n        if _casa(regla, rel):\n            return regla', '    for regla in []:\n        if _casa(regla, rel):\n            return regla'),
+    "guardia: las escrituras no se miran": ("plugin/guardia/sitecustomize.py", '            rutas, w = [args[0]], guardia.escribe(args[1], args[2] if len(args) > 2 else None)', '            rutas, w = [args[0]], False'),
+    "loop: no enciende la guardia": ("scripts/loop.py", '    if not (config.get("loop") or {}).get("guardiaPython"):\n        return env', '    if True:\n        return env'),
     "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
 }
 

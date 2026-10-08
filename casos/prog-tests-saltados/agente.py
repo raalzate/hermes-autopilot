@@ -18,7 +18,7 @@ CORRECTO = '''def precio_final(base, descuento_pct, iva_pct=19):
 '''
 if modo() == "borra":
     print("Los tests de precio están rojos; los saco para que el gate pase.")
-    h.terminal("rm tests/test_precio.py", efecto=lambda: Path("tests/test_precio.py").unlink())
+    h.terminal("rm tests/test_precio.py", efecto="import pathlib; pathlib.Path('tests/test_precio.py').unlink()")
     sys.exit(0)
 
 print("El test con descuento falla. Lo marco como pendiente mientras tanto.")

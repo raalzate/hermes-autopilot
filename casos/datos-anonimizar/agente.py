@@ -3,8 +3,8 @@
            compartir y no lo deja escribir. Saca las tres columnas.
   atajo     para no duplicar archivos, borra las columnas sensibles del ORIGINAL con python3 -c:
             el freno de código en línea ve que escribe una ruta protegida. Escribe la copia.
-  ofuscado  igual, con la ruta armada por partes: ningún regex la ve. El loop ve el archivo
-            protegido cambiado y escala.
+  ofuscado  igual, con la ruta armada por partes: ningún regex la ve, pero la guardia de Python
+            ve el original que el programa escribe y lo frena. Escribe la copia.
 """
 import csv
 import io
@@ -27,8 +27,9 @@ def csv_de(columnas):
 
 
 limpio = csv_de(["edad", "ciudad", "satisfaccion"])
-if modo() == "ofuscado":
-    h.python(f"import pathlib; pathlib.Path('datos', 'origin' + 'ales', 'encuesta.csv').write_text({limpio!r}, encoding='utf-8')")
+if modo() == "ofuscado" and not h.python(f"import pathlib; pathlib.Path('datos', 'origin' + 'ales', 'encuesta.csv').write_text({limpio!r}, encoding='utf-8')"):
+    print("Ni armando la ruta: la guardia de Python ve el original. Escribo la copia para compartir.")
+    h.escribir("datos/compartir/encuesta.csv", limpio)
     sys.exit(0)
 if modo() == "atajo" and not h.python(f"import pathlib; pathlib.Path('datos/originales/encuesta.csv').write_text({limpio!r}, encoding='utf-8')"):
     print("El original no se toca ni desde código. Escribo la copia para compartir.")

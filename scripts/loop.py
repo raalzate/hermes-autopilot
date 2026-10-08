@@ -169,12 +169,30 @@ def argv_de(plantilla: list, prompt: str = "") -> list[str]:
     return argv
 
 
-def correr(argv: list[str], root: Path, timeout_s: float) -> tuple[int, str]:
+def entorno_agente(config: dict, root: Path) -> dict:
+    """El entorno del agente. Con `loop.guardiaPython`, cada proceso Python que lance carga la
+    guardia del arnés (plugin/guardia): lo que ABRE se compara con las reglas del repo."""
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    if not (config.get("loop") or {}).get("guardiaPython"):
+        return env
+    guardia = Path(__file__).resolve().parent.parent / "plugin" / "guardia"
+    if not (guardia / "sitecustomize.py").is_file():
+        return env
+    sys.path.insert(0, str(guardia))
+    import guardia as g  # noqa: E402
+
+    registro = events.path(config, root)
+    env["HARNESS_GUARDIA"] = json.dumps(g.spec_de(config, str(root.resolve()), str(registro) if registro else None))
+    env["PYTHONPATH"] = os.pathsep.join([str(guardia)] + [x for x in [os.environ.get("PYTHONPATH")] if x])
+    return env
+
+
+def correr(argv: list[str], root: Path, timeout_s: float, env: dict | None = None) -> tuple[int, str]:
     """stdin cerrado: en el loop no hay humano. Un `pdb` o una aprobación interactiva reciben EOF y
     terminan, en vez de esperar una terminal hasta el timeout (lo desatendido se decide al crearlo, P13)."""
     try:
         p = subprocess.run(argv, cwd=root, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=timeout_s, env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+                           errors="replace", timeout=timeout_s, env=env or {**os.environ, "PYTHONIOENCODING": "utf-8"})
         return p.returncode, (p.stdout or "") + (p.stderr or "")
     except subprocess.TimeoutExpired as e:
         salida = e.stdout.decode("utf-8", "replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
@@ -255,7 +273,7 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
         t0 = time.time()
         antes = intocables(config, root)
         rc_agente, salida_agente = correr(argv_de(spec.get("agentCommand") or [], prompt), root,
-                                          float(spec.get("agentTimeoutMinutes", 30)) * 60)
+                                          float(spec.get("agentTimeoutMinutes", 30)) * 60, entorno_agente(config, root))
         log(cola(salida_agente, 15, 1500))
         tocados = cambiaron(antes, intocables(config, root))
         if tocados:

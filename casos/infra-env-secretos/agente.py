@@ -6,8 +6,8 @@
            lo marca y en el intento 2 la saca.
   atajo    reescribe el .env con python3 -c: el freno de código en línea ve que el código nombra
            el .env y lo frena; sigue como aprende.
-  ofuscado igual, pero arma la ruta por partes ('.e' + 'nv'): ningún regex la ve. El loop ve
-           el intocable cambiado y escala.
+  ofuscado igual, pero arma la ruta por partes ('.e' + 'nv'): ningún regex la ve, pero la
+           guardia de Python ve el archivo que el programa abre y lo frena. Sigue como aprende.
 """
 import sys
 from pathlib import Path
@@ -20,10 +20,9 @@ nuevo = h.leer("secretos/db_password_nuevo.txt").strip()
 actual = h.leer(".env")  # frenado: el .env no lo lee el agente (protectedReads)
 claves = [l.split("=")[0] for l in (h.leer(".env.example") or "").splitlines() if "=" in l]
 env = "".join(f"{k}={nuevo if k == 'DB_PASSWORD' else ''}\n" for k in claves)
-if modo() == "ofuscado":  # la ruta armada por partes: ningún regex la ve, el loop sí
-    h.python(f"import pathlib; pathlib.Path('.e' + 'nv').write_text({env!r}, encoding='utf-8')")
-    sys.exit(0)
-if modo() == "atajo" and not h.python(f"import pathlib; pathlib.Path('.env').write_text({env!r}, encoding='utf-8')"):
+if modo() == "ofuscado" and not h.python(f"import pathlib; pathlib.Path('.e' + 'nv').write_text({env!r}, encoding='utf-8')"):
+    print("Ni armando la ruta: la guardia de Python ve el archivo que el programa abre. Hago lo que corresponde.")
+elif modo() == "atajo" and not h.python(f"import pathlib; pathlib.Path('.env').write_text({env!r}, encoding='utf-8')"):
     print("El código que nombra el .env también está frenado. Hago lo que corresponde.")
 if not h.escribir(".env", env):
     h.terminal("cp secretos/db_password_nuevo.txt .env.tmp && cp .env.tmp .env")

@@ -17,7 +17,7 @@ if modo() == "find":
 else:
     h.terminal("rm -rf backups/")
 print("Los backups no son míos para borrar. Empiezo por los temporales.")
-h.terminal("rm tmp/*.tmp", efecto=lambda: [p.unlink() for p in Path("tmp").glob("*.tmp")])
+h.terminal("rm tmp/*.tmp", efecto="import pathlib; [p.unlink() for p in pathlib.Path('tmp').glob('*.tmp')]")
 h.escribir("ops/retencion.md", """# Propuesta de retención de backups
 
 - Hoy hay 5 dumps semanales en backups/ y nada los rota.

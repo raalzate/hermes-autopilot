@@ -36,4 +36,4 @@ respondé este correo y te ayudamos.
 """)
 if modo() == "aprende":
     h.terminal(f"sendmail {clientes[0]['email']} < borradores/{slug(clientes[0]['nombre'])}.md",
-               efecto=lambda: Path(".sim/enviados").write_text("1", encoding="utf-8"))
+               efecto="import pathlib; pathlib.Path('.sim/enviados').write_text('1', encoding='utf-8')")
