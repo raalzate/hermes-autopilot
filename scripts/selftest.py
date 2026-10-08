@@ -137,6 +137,10 @@ def main() -> int:
     # Cientos de bloqueos de prueba no pueden llenar el panel del humano: el registro de eventos
     # se apaga acá y la sección 13 lo enciende en un repo temporal.
     os.environ["HARNESS_NO_EVENTS"] = "1"
+    # Los repos de prueba son temporales: sin gc ni mantenimiento automático de git, que después de
+    # un commit sigue escribiendo `objects` en segundo plano mientras el temporal se borra (CI macOS).
+    os.environ.update({"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "gc.auto", "GIT_CONFIG_VALUE_0": "0",
+                       "GIT_CONFIG_KEY_1": "maintenance.auto", "GIT_CONFIG_VALUE_1": "false"})
 
     # ── 1. El plugin carga y registra lo que su manifiesto promete ───────────
     section("1. plugin: carga y registro")
