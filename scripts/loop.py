@@ -259,7 +259,8 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
         if tocados:
             # Ni se corre el gate: lo que decide si terminó puede ser justo lo que se cambió.
             intento = {"n": n, "green": False, "agentExit": rc_agente, "gateExit": None, "tampered": tocados,
-                       "signature": "intocables: " + " · ".join(tocados[:5]), "tail": "", "secs": round(time.time() - t0, 1)}
+                       "signature": "intocables: " + " · ".join(tocados[:5]), "tail": "", "secs": round(time.time() - t0, 1),
+                       "agentTail": cola(salida_agente, 40, 4000)}
         else:
             estado.update(phase="gate")
             guardar_estado(spec, root, estado)
@@ -267,7 +268,7 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
             rc_gate, salida_gate = correr(argv_de(gate_argv), root, float(spec.get("gateTimeoutMinutes", 30)) * 60)
             intento = {"n": n, "green": rc_gate == 0, "agentExit": rc_agente, "gateExit": rc_gate,
                        "signature": "" if rc_gate == 0 else firma(salida_gate), "tail": "" if rc_gate == 0 else cola(salida_gate),
-                       "secs": round(time.time() - t0, 1)}
+                       "secs": round(time.time() - t0, 1), "agentTail": cola(salida_agente, 40, 4000)}
         intentos.append(intento)
         events.record(config, root, "loop-iter", task=tarea, n=n, green=intento["green"], signature=intento["signature"])
         log(f"{'✓' if intento['green'] else '✗'} intento {n}: {'verde' if intento['green'] else intento['signature']}")
@@ -292,10 +293,15 @@ def asegurar_rama(config: dict, root: Path, tarea: str) -> str:
     if rama not in protegidas:
         return rama
     nueva = f"{(config.get('loop') or {}).get('branchPrefix', 'loop/')}{slug(tarea)}"
-    p = git(root, "checkout", "-b", nueva)
-    if p.returncode != 0:
-        p = git(root, "checkout", nueva)
-    return nueva if p.returncode == 0 else rama
+    for _intento in range(2):  # un lock de git transitorio (index.lock) no puede dejar al loop sobre main
+        p = git(root, "checkout", "-b", nueva)
+        if p.returncode != 0:
+            p = git(root, "checkout", nueva)
+        if p.returncode == 0:
+            return nueva
+        time.sleep(0.5)
+    print(f"⚠ loop: no pude abrir la rama `{nueva}` ({(p.stderr or p.stdout).strip()[:200]}); sigo en `{rama}`.")
+    return rama
 
 
 def plan(config: dict, root: Path, tarea: str | None) -> str:
@@ -454,8 +460,10 @@ def en_paralelo(config: dict, root: Path, n: int, tareas: Path) -> int:
         env["HARNESS_EVENTS_FILE"] = str(registro.resolve())
     env.pop("HARNESS_REPO", None)
 
-    def una(item):
-        indice, tarea = item
+    # Los worktrees se crean UNO POR UNO, antes de lanzar los loops: dos `git worktree add -b` a la
+    # vez compiten por los locks de git del repo principal.
+    creados: dict[str, str] = {}
+    for _indice, tarea in lote:
         rama = f"{spec.get('branchPrefix', 'loop/')}{slug(tarea)}"
         wt = base / slug(tarea)
         if not wt.exists():
@@ -463,7 +471,13 @@ def en_paralelo(config: dict, root: Path, n: int, tareas: Path) -> int:
             if p.returncode != 0:
                 p = git(root, "worktree", "add", "-q", str(wt), rama)
             if p.returncode != 0:
-                return indice, tarea, "error", f"no pude crear el worktree: {(p.stderr or p.stdout).strip()[:200]}", wt
+                creados[tarea] = f"no pude crear el worktree: {(p.stderr or p.stdout).strip()[:200]}"
+
+    def una(item):
+        indice, tarea = item
+        wt = base / slug(tarea)
+        if tarea in creados:
+            return indice, tarea, "error", creados[tarea], wt
         if not (wt / rel_script).is_file():
             return indice, tarea, "error", f"el worktree no tiene {rel_script.as_posix()} (¿el arnés sin commitear?)", wt
         events.record(config, root, "loop-start", task=tarea, worktree=str(wt))

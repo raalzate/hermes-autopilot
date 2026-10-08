@@ -987,7 +987,8 @@ def main() -> int:
             check(p_.returncode == 0 and est.get("phase") == "verde" and len(est.get("attempts") or []) == 2,
                   f"loop real: no llegó a verde en el intento 2 (el gate decide, no el agente): rc={p_.returncode} {est}\n{p_.stdout[-600:]}")
             check("- [x] una tarea" in (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8"), "loop real: no marcó la tarea verde")
-            check(g_("branch", "--show-current").stdout.strip().startswith("loop/"), "loop real: trabajó sobre la rama protegida")
+            check(g_("branch", "--show-current").stdout.strip().startswith("loop/"),
+                  f"loop real: trabajó sobre la rama protegida\n{p_.stdout[-400:]}\n{p_.stderr[-600:]}")
             kinds = [e.get("kind") for e in events_mod.tail({"observability": {"events": {"file": ".git/harness-events.jsonl"}}}, troot)]
             check("loop-iter" in kinds and "loop-verde" in kinds, f"loop real: no dejó sus eventos para el panel ({kinds})")
         with tempfile.TemporaryDirectory() as tmp:
@@ -1050,7 +1051,7 @@ def main() -> int:
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
             cola_ = (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8")
             check(p_.returncode == 2 and "- [x] buena" in cola_ and "- [!] MAL hecha" in cola_ and "- [ ] tercera" in cola_,
-                  f"loop --paralelo: la cola no quedó marcada por resultado:\n{cola_}\n{p_.stdout[-500:]}")
+                  f"loop --paralelo: la cola no quedó marcada por resultado:\n{cola_}\n{p_.stdout[-500:]}\n{p_.stderr[-800:]}")
             check(g_("branch", "--show-current").stdout.strip() == "main", "loop --paralelo: movió la rama del repo principal")
             check((troot / ".git" / "harness-worktrees" / "buena" / "ok.txt").is_file(), "loop --paralelo: lo hecho no quedó en su worktree")
             kinds_p = [e.get("kind") for e in events_mod.tail({"observability": {"events": {"file": ".git/harness-events.jsonl"}}}, troot, 100)]

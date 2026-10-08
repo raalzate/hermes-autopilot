@@ -84,7 +84,9 @@ ni el gate pueden quedar frenados. Una regla que muerde de más rompe el caso.
 2. El `verificar.py` imprime cada falla como `✗ <señal>: <detalle>`: la parte antes de `:` es la
    firma que el loop compara entre intentos.
 3. `python3 scripts/casos.py <nuevo-id>` hasta que dé lo esperado, y `python3 scripts/casos.py readme <nuevo-id>`.
-4. Sumalo a la tabla de arriba (el runner exige que el catálogo lo nombre).
+4. `python3 scripts/casos.py pagina`: regenera la consola de la portada (`docs/index.html`) con la
+   corrida real de cada modo. El gate exige que la página muestre cada caso y cada modo.
+5. Sumalo a la tabla de arriba (el runner exige que el catálogo lo nombre).
 
 Un caso nuevo suele destapar un hueco. Los que destapó este catálogo, y cómo se cerraron, están en
 [`../docs/huecos.md`](../docs/huecos.md).

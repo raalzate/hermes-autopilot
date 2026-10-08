@@ -146,6 +146,7 @@ def estado(config: dict | None, root: Path, n_eventos: int = 60) -> dict:
     loop_estado = loop_mod.leer_estado(spec, root) if spec else {}
     for i in loop_estado.get("attempts") or []:
         i.pop("tail", None)  # la cola del gate va al prompt del agente, no hace falta en el panel
+        i.pop("agentTail", None)  # lo que dijo el agente: en `loop.py --status`, no en cada empuje del panel
     stop = loop_mod.ruta_estado(root, spec.get("stopFile", ".git/harness-loop.stop")) if spec else None
     try:
         import map as mapa_mod  # noqa: E402
