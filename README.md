@@ -29,8 +29,13 @@ archivos, y un gate que define qué es "terminado".
 - **17 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
   oficina, datos, soporte y operación: un agente toma un atajo y el arnés lo frena, lo escala o lo
   deja llegar a verde. Se corre cada uno con un comando, y el gate los corre todos.
-- **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): lo que se cerró, con su prueba, y
-  lo que sigue abierto.
+- **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): 22 cerrados con su prueba, y lo
+  que sigue abierto con su porqué.
+- **Defensa en capas para lo desatendido:** cada tarea del loop corre aislada en su worktree (los
+  secretos no están), una guardia de Python ve lo que un programa abre, y una sesión que leyó a un
+  tercero no publica ni se reescribe sola (inyección de prompt).
+- **Hermes real en CI** (`scripts/hermes_fuente.py`, job `hermes-real`) y el **revisor inferencial
+  medido** con una tasa (`scripts/revision.py`).
 - **Plugin `repo-harness`** para Hermes: frena herramientas en `pre_tool_call` (terminal,
   escritura, memoria, skills, cron), corre el lint del archivo recién escrito y se lo muestra al
   modelo, no deja cerrar el turno con el gate pendiente (`pre_verify`) e inyecta el estado

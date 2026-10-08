@@ -267,7 +267,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
     <div class="cifras" aria-label="El arnés, en números">
       <div><b id="n-casos">17</b><span>casos reales replicables</span></div>
       <div><b id="n-corridas">33</b><span>corridas, en el gate</span></div>
-      <div><b>64</b><span>mutaciones que lo ponen rojo</span></div>
+      <div><b>72</b><span>mutaciones que lo ponen rojo</span></div>
       <div><b>0</b><span>dependencias</span></div>
     </div>
   </div>
@@ -328,6 +328,8 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <div class="cell"><span class="mark">scripts/cli.py</span><h3>La CLI que prueba antes de escribir</h3><p><code>rule add</code> pasa la regla nueva por el mismo camino que el plugin: el ejemplo frena, ningún inocente ni el gate quedan frenados, el config pasa el lint. Recién entonces, con <code>--apply</code>, la escribe.</p><span class="foot">falla: una regla editada a mano que frena el gate y deja al loop sin salida</span></div>
       <div class="cell"><span class="mark">scripts/panel.py</span><h3>El panel en vivo</h3><p>Gate, loop, tareas, frenos y cada evento —bloqueo, escalada, lint, gate— en el momento en que pasa. <code>http.server</code> y Server-Sent Events, sólo en 127.0.0.1, sin dependencias.</p><span class="foot">falla: lo que el arnés frena sólo se ve dentro del chat que lo provocó</span></div>
       <div class="cell"><span class="mark">docs/workshop/</span><h3>El workshop</h3><p>Tres horas y media en un sandbox propio, con un agente de juguete determinista (sin API key): guías, frenos, gate, el loop que llega a verde, el que escala, el panel y de un incidente a una regla.</p><span class="foot">falla: un arnés que sólo entiende quien lo escribió</span></div>
+      <div class="cell"><span class="mark">loop.aislar · plugin/guardia</span><h3>Lo desatendido, aislado</h3><p>Cada tarea corre en su <code>git worktree</code>: el <code>.env</code> y lo ignorado por git no existen ahí. Y cada proceso Python del agente carga una guardia (audit hook, PEP 578) que ve la ruta real de lo que abre, aunque se arme por partes.</p><span class="foot">falla: un script o un test del agente que lee un secreto sin nombrarlo</span></div>
+      <div class="cell"><span class="mark">taint</span><h3>La sesión contaminada</h3><p>La inyección de prompt no se detecta: se corta su daño. Después de leer una web, un ticket o un correo, publicar, hablar con otro servidor o escribir <code>AGENTS.md</code>, CI o memoria escala a un humano; en el loop, se niega.</p><span class="foot">falla: un ticket que le dicta al agente una regla permanente</span></div>
     </div>
     <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/ingenieria-de-loops.md">Ingeniería de loops</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/loop-autonomo.md">Operar el loop</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/cli-y-panel.md">CLI y panel</a></p>
   </div>
@@ -341,9 +343,9 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <p class="lede">Y cada freno tiene una prueba de que muerde, otra de que no muerde de más, y una tercera de que la prueba misma muerde.</p>
     </div>
     <div class="grid three">
-      <div class="cell stat"><span class="lbl">señales del gate</span><b>9/9</b><span class="why">verdes con Hermes instalado; sin Hermes, 7 verdes y 2 <em>omitidas</em> — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
-      <div class="cell stat"><span class="lbl">verificaciones</span><b>892</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
-      <div class="cell stat"><span class="lbl">mutaciones</span><b>64/64</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
+      <div class="cell stat"><span class="lbl">señales del gate</span><b>10</b><span class="why">con Hermes real (CI, job <code>hermes-real</code>), 9 verdes y el revisor inferencial <em>omitido</em> hasta que haya un modelo — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
+      <div class="cell stat"><span class="lbl">verificaciones</span><b>981</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
+      <div class="cell stat"><span class="lbl">mutaciones</span><b>72/72</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
       <div class="cell stat"><span class="lbl">dentro de Hermes</span><b>70</b><span class="why">verificaciones con el despacho real de Hermes: directivas, <code>pre_verify</code>, ruteo, lint tras escribir, sección del prompt.</span><span class="cmd">python3 scripts/hermes_e2e.py</span></div>
       <div class="cell stat"><span class="lbl">casos replicables</span><b>17</b><span class="why">programación, infraestructura, oficina, datos, soporte y operación: un agente con un atajo real, de punta a punta, en un repo instalado de cero.</span><span class="cmd">python3 scripts/casos.py</span></div>
       <div class="cell stat"><span class="lbl">perfiles de stack</span><b>8</b><span class="why">python, node, front, go, rust, .NET, Maven, Gradle — cada uno instalado en un repo temporal con su gate.</span><span class="cmd">self-test §11</span></div>
@@ -521,7 +523,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
   <div class="rail"><b>11</b>principios</div>
   <div>
     <div class="col stack">
-      <h2>Veintitrés principios, cada uno con su comando</h2>
+      <h2>Veinticinco principios, cada uno con su comando</h2>
       <p class="lede">Un principio que dice BLOCKING nombra el comando que falla. Los nuevos respecto de agent-harness están marcados.</p>
     </div>
     <ol class="laws">
@@ -548,6 +550,8 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
       <li><b>El loop autónomo tiene salida, tope y freno de mano</b>, y nunca publica.<span class="tag new">nuevo</span></li>
       <li><b>Lo que el arnés hace se ve fuera de la conversación</b> — eventos y panel.<span class="tag new">nuevo</span></li>
       <li><b>Lo que el arnés promete se reproduce de punta a punta</b> — 17 casos replicables en el gate.<span class="tag new">nuevo</span></li>
+      <li><b>Lo que entra de un tercero no sale solo</b> — tras leer una web o un ticket, publicar o persistir escala a un humano.<span class="tag new">nuevo</span></li>
+      <li><b>Un sensor inferencial se mide con una tasa</b> — recall y precisión del revisor contra atajos reales.<span class="tag new">nuevo</span></li>
     </ol>
   </div>
 </div></section>
@@ -578,8 +582,9 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
   <div class="stack col">
     <h2>Lo que este arnés todavía no hace</h2>
     <p>Los patrones del escáner de inyección de Hermes están copiados a mano en el config: si Hermes suma uno, el lint no lo sabe hasta que alguien lo copie.</p>
-    <p>Lo que un programa hace por dentro (un script, una ruta armada por partes) un freno por regex no lo ve: dentro del loop lo cubren los intocables; afuera, el pre-commit. La lista completa, en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md">docs/huecos.md</a>.</p>
-    <p>El sensor inferencial (<code>harness-review</code>) no tiene prueba de vida con tasa de acierto: lo que el gate no puede verificar sigue siendo juicio sin medir.</p>
+    <p>En una sesión interactiva, fuera del loop, lo que un programa hace por dentro sigue sin verse: el loop lo cierra (worktree aislado y guardia de Python), afuera quedan el pre-commit y no dejar secretos en el disco. La lista completa, con lo cerrado y lo abierto, en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md">docs/huecos.md</a>.</p>
+    <p>El revisor inferencial ya tiene su tasa de acierto (<code>scripts/revision.py</code>), pero medirla con un modelo de verdad necesita una key: hasta que el dueño cargue el secreto <code>HERMES_ENV</code>, sale omitido.</p>
+    <p>La inyección de prompt no se detecta: se corta su daño. Lo que el agente escribe en un texto (una copia en una respuesta) depende del gate de cada tarea.</p>
     <p>El loop es tan bueno como el gate que lo cierra: si las pruebas del repo no prueban nada, el verde no significa nada.</p>
   </div>
 </div></section>

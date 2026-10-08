@@ -22,12 +22,13 @@ Este repo se audita a sí mismo: si algo acá no cumple lo que el arnés predica
 .hermes/harness.config.json  la única fuente de especificidad (reglas, rutas, nombres de herramientas)
 plugin/                      el plugin `repo-harness`: pre_tool_call · transform_tool_result · pre_verify · pre_llm_call
 plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (frenos) · rules (lint) · turn (turno) · events (registro)
+plugin/guardia/              la guardia de Python (audit hook PEP 578) que el loop carga en cada proceso Python del agente
 scripts/hook.py              el mismo núcleo como shell hook de Hermes (para quien no habilita plugins)
 scripts/gate.py              ejecuta gate.signals; no sabe de stacks
 scripts/selftest.py          prueba de vida: los casos salen del `example` de cada regla
 scripts/lint.py              7 clases de regla; CONTEXTO evita que Hermes descarte AGENTS.md, COHERENCIA que una guía recomiende lo que un freno veda
 scripts/install.py           instalador en otro repo (dry-run por defecto, perfil de stack)
-scripts/mutations.py         la prueba de vida del self-test: 38 mutaciones, todas tienen que ponerlo rojo
+scripts/mutations.py         la prueba de vida del self-test: cada mutación tiene que ponerlo rojo
 scripts/map.py               el arnés como sistema de control: guía · freno · sensor por etapa (`taxonomy`)
 scripts/timing.py            el costo: latencia de cada callback contra su presupuesto (en Hermes, pasarse bloquea)
 scripts/drift.py             lo que se degrada sin que ningún cambio lo rompa (semanal, fuera del gate)
@@ -37,6 +38,8 @@ scripts/loop.py              el lazo de la tarea: tarea → agente → gate; el 
 scripts/cli.py               parametrizar sin editar JSON: `rule add` prueba la regla ANTES de escribirla
 scripts/panel.py             el panel en vivo (SSE, 127.0.0.1) sobre el registro de eventos (P22)
 scripts/casos.py             17 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
+scripts/revision.py          el revisor inferencial medido: recall y precisión contra evals/revision.json (P25)
+scripts/hermes_fuente.py     Hermes desde su código fuente, en el commit verificado (CI: job hermes-real)
 .hermes/loop/tasks.md        la cola del loop autónomo
 .hermes/skills/              gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
 plantillas/                  lo que se copia al repo destino, y los perfiles de stack
