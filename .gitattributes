@@ -1,0 +1,2 @@
+# Las semillas de los casos se comparan byte a byte (hashes, intocables): sin conversión CRLF en Windows.
+casos/** text eol=lf

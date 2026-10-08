@@ -62,7 +62,7 @@ CODIGO = {
     "deriva: un veredicto vencido pasa": ("scripts/drift.py", "    if dias > maximo:", "    if False:"),
     "deriva: el historial no cuenta": ("scripts/drift.py", "                vistas.add(i)", "                pass"),
     "mapa: un hook de git sin clasificar pasa": ("scripts/map.py", '                sin.append(f"hook de git', '                pass  # sin.append(f"hook de git'),
-    "timing no mide": ("scripts/timing.py", "                tiempos.append((time.perf_counter() - t0) * 1000)", "                tiempos.append(0.0)"),
+    "timing no mide": ("scripts/timing.py", "                    tiempos.append((time.perf_counter() - t0) * 1000)", "                    tiempos.append(0.0)"),
     # La autonomía (P21): el loop, la CLI, el panel y el registro de eventos.
     "loop: el mismo rojo no escala (P16)": ("scripts/loop.py", "    if limite > 0 and len(firmas) >= limite and len(set(firmas[-limite:])) == 1:", "    if False:"),
     "loop: sin tope de iteraciones": ("scripts/loop.py", "    if len(intentos) >= tope:", "    if False:"),
@@ -73,6 +73,14 @@ CODIGO = {
     "cli: no mira los inocentes ni el gate": ("scripts/cli.py", "    for texto in dict.fromkeys(inocentes):", "    for texto in []:"),
     "panel: escucha en todas las interfaces": ("scripts/panel.py", 'HOST = "127.0.0.1"', 'HOST = "0.0.0.0"'),
     "eventos: el plugin no registra los bloqueos": ("plugin/__init__.py", "    if d.block or d.approve:\n        # Lo que el freno", "    if False:\n        # Lo que el freno"),
+    "rm con varios argumentos: sólo se mira el grupo entero": ("plugin/harness/guards.py", "        for destino in (tok for grupo in destinos for tok in grupo.split()):", "        for destino in destinos:"),
+    "loop: no mira los intocables": ("scripts/loop.py", "        if tocados:\n            # Ni se corre el gate", "        if False:\n            # Ni se corre el gate"),
+    "loop: un verde adulterado vale": ("scripts/loop.py", '    if intentos and intentos[-1].get("tampered"):', '    if False:'),
+    "loop: dos loops en el mismo repo": ("scripts/loop.py", "    if candado is not None and candado_vivo(candado, spec):", "    if False:"),
+    "freno de lectura desenchufado": ("plugin/harness/guards.py", '"read": [read_guard],', '"read": [],'),
+    "la terminal lee secretos sin freno": ("plugin/harness/guards.py", '    for patron in t.get("readTargets") or []:', "    for patron in []:"),
+    "casos: no compara el resultado": ("scripts/casos.py", '        if obs["resultado"] != corrida.get("resultado"):', "        if False:"),
+    "casos: los inocentes del caso no se prueban": ("scripts/casos.py", '    for donde, lista in (c.get("inocentes") or {}).items():', "    for donde, lista in {}.items():"),
     "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
 }
 

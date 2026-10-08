@@ -22,7 +22,12 @@ Lo que lo hace un loop y no un `while true` (docs/ingenieria-de-loops.md):
   - topes: `maxIterations` por tarea y `maxMinutes` de reloj;
   - freno de mano: `loop.stopFile` existe → para entre iteraciones, sin matar al agente a mitad;
   - nunca publica (P13): no empuja ni abre PR. Lo verde queda en una rama `branchPrefix*` y el
-    humano decide. Si arranca en una rama de `branches.protected`, abre una rama nueva primero.
+    humano decide. Si arranca en una rama de `branches.protected`, abre una rama nueva primero;
+  - intocables: entre el antes y el después de cada intento compara lo que el agente no puede
+    cambiar —los `protectedPaths` versionados y `loop.lockedPaths` (su config, su cola, su
+    verificador)—, sin importar por qué canal lo cambió. Cambió → escala aunque el gate dé verde:
+    un verde conseguido ablandando el criterio de salida no es verde (P8);
+  - un loop por repo: `.git/harness-loop.lock` (dos loops se pisan el estado y la rama).
 
 Todo lo que hace queda en `loop.stateFile` y en el registro de eventos: el panel lo muestra en vivo.
 
@@ -30,6 +35,7 @@ Exit: 0 verde (o nada que hacer) · 2 escaló a un humano o se pidió parar · 1
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -64,6 +70,9 @@ def firma(salida: str) -> str:
 
 def decidir(intentos: list[dict], spec: dict, transcurrido_s: float, parar: bool) -> tuple[str, str]:
     """('verde' | 'seguir' | 'escalar' | 'parado', motivo) después de cada intento."""
+    if intentos and intentos[-1].get("tampered"):
+        return "escalar", ("el agente cambió lo que no puede tocar durante la tarea: "
+                           f"{', '.join(intentos[-1]['tampered'][:5])}. Aunque el gate diera verde, no vale (P8). Lo mira un humano.")
     if intentos and intentos[-1].get("green"):
         return "verde", f"gate verde en el intento {len(intentos)}"
     if parar:
@@ -175,6 +184,47 @@ def cola(texto: str, lineas: int = 40, chars: int = 4000) -> str:
     return "\n".join(texto.strip().splitlines()[-lineas:])[-chars:]
 
 
+def _ls(root: Path, *args: str) -> list[str]:
+    p = subprocess.run(["git", "ls-files", "-z", *args], cwd=root, capture_output=True)
+    return [f for f in p.stdout.decode("utf-8", "replace").split("\0") if f and not f.endswith("/")] if p.returncode == 0 else []
+
+
+def intocables(config: dict, root: Path) -> dict[str, str]:
+    """{ruta: hash} de lo que el agente no puede cambiar durante una tarea.
+
+    - los archivos VERSIONADOS que casan con `protectedPaths` del repo (no los de fuera del repo);
+    - los que casan con `loop.lockedPaths`, versionados o no, incluso ignorados (un `.env`).
+    Lo regenerable sin versionar (`__pycache__/`, `node_modules/`) no se mira: cambia solo.
+    """
+    def rx(lista):
+        out = []
+        for p in lista:
+            try:
+                out.append(re.compile(p))
+            except (re.error, TypeError):
+                continue
+        return out
+
+    protegidas = rx([r.get("pattern") for r in config.get("protectedPaths") or [] if not r.get("outsideRepo")])
+    trabadas = rx((config.get("loop") or {}).get("lockedPaths") or [])
+    versionados = _ls(root, "-c")
+    candidatos = {f for f in versionados if any(r.search(f) for r in protegidas + trabadas)}
+    if trabadas:
+        sueltos = _ls(root, "-o", "--exclude-standard") + _ls(root, "-o", "-i", "--exclude-standard", "--directory")
+        candidatos |= {f for f in sueltos if any(r.search(f) for r in trabadas)}
+    huellas = {}
+    for f in sorted(candidatos):
+        try:
+            huellas[f] = hashlib.sha256((root / f).read_bytes()).hexdigest()
+        except OSError:
+            huellas[f] = ""  # no existe (o no se lee): que aparezca después también es un cambio
+    return huellas
+
+
+def cambiaron(antes: dict[str, str], despues: dict[str, str]) -> list[str]:
+    return sorted(f for f in set(antes) | set(despues) if antes.get(f) != despues.get(f))
+
+
 # ── el loop ───────────────────────────────────────────────────────────────────
 
 def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tuple[str, str, list[dict]]:
@@ -196,16 +246,23 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
         guardar_estado(spec, root, estado)
         log(f"\n▶ intento {n}: agente")
         t0 = time.time()
+        antes = intocables(config, root)
         rc_agente, salida_agente = correr(argv_de(spec.get("agentCommand") or [], prompt), root,
                                           float(spec.get("agentTimeoutMinutes", 30)) * 60)
         log(cola(salida_agente, 15, 1500))
-        estado.update(phase="gate")
-        guardar_estado(spec, root, estado)
-        log(f"▶ intento {n}: gate (`{gate_txt}`)")
-        rc_gate, salida_gate = correr(argv_de(gate_argv), root, float(spec.get("gateTimeoutMinutes", 30)) * 60)
-        intento = {"n": n, "green": rc_gate == 0, "agentExit": rc_agente, "gateExit": rc_gate,
-                   "signature": "" if rc_gate == 0 else firma(salida_gate), "tail": "" if rc_gate == 0 else cola(salida_gate),
-                   "secs": round(time.time() - t0, 1)}
+        tocados = cambiaron(antes, intocables(config, root))
+        if tocados:
+            # Ni se corre el gate: lo que decide si terminó puede ser justo lo que se cambió.
+            intento = {"n": n, "green": False, "agentExit": rc_agente, "gateExit": None, "tampered": tocados,
+                       "signature": "intocables: " + " · ".join(tocados[:5]), "tail": "", "secs": round(time.time() - t0, 1)}
+        else:
+            estado.update(phase="gate")
+            guardar_estado(spec, root, estado)
+            log(f"▶ intento {n}: gate (`{gate_txt}`)")
+            rc_gate, salida_gate = correr(argv_de(gate_argv), root, float(spec.get("gateTimeoutMinutes", 30)) * 60)
+            intento = {"n": n, "green": rc_gate == 0, "agentExit": rc_agente, "gateExit": rc_gate,
+                       "signature": "" if rc_gate == 0 else firma(salida_gate), "tail": "" if rc_gate == 0 else cola(salida_gate),
+                       "secs": round(time.time() - t0, 1)}
         intentos.append(intento)
         events.record(config, root, "loop-iter", task=tarea, n=n, green=intento["green"], signature=intento["signature"])
         log(f"{'✓' if intento['green'] else '✗'} intento {n}: {'verde' if intento['green'] else intento['signature']}")
@@ -315,9 +372,43 @@ def main(argv: list[str]) -> int:
     if not agente or not (shutil.which(agente[0]) or Path(agente[0]).exists()):
         print(f"loop: `loop.agentCommand` no se puede ejecutar ({agente[:1] or 'vacío'}). ¿Hermes instalado?")
         return 1
+    candado = ruta_estado(root, ".git/harness-loop.lock")
+    if candado is not None and candado_vivo(candado, spec):
+        print(f"loop: ya hay un loop corriendo en este repo ({candado}). Dos loops se pisan el estado y la rama.")
+        return 1
     if stop and stop.exists():
         stop.unlink()  # un pedido de parada viejo no frena una corrida nueva
+    try:
+        if candado is not None:
+            candado.write_text(json.dumps({"pid": os.getpid(), "at": time.time()}), encoding="utf-8")
+        return correr_tareas(config, root, a, tareas, indice, tarea, siguiente)
+    finally:
+        if candado is not None:
+            try:
+                candado.unlink()
+            except OSError:
+                pass
 
+
+def candado_vivo(candado: Path, spec: dict) -> bool:
+    """¿El candado es de un loop que sigue corriendo? Uno viejo (un loop matado con -9) no traba."""
+    try:
+        dato = json.loads(candado.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    tope_s = (float(spec.get("maxMinutes", 60)) + float(spec.get("agentTimeoutMinutes", 30))
+              + float(spec.get("gateTimeoutMinutes", 30))) * 60
+    if time.time() - float(dato.get("at", 0)) > tope_s:
+        return False
+    if os.name != "nt":  # en Windows os.kill(pid, 0) no pregunta: manda una señal
+        try:
+            os.kill(int(dato.get("pid", 0)), 0)
+        except (OSError, ValueError):
+            return False
+    return True
+
+
+def correr_tareas(config, root, a, tareas, indice, tarea, siguiente) -> int:
     codigo = 0
     while tarea:
         rama = asegurar_rama(config, root, tarea)

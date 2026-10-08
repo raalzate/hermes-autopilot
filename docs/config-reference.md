@@ -14,7 +14,7 @@ sin `example` es roja.
 
 | Clave | Qué declara |
 |---|---|
-| `tools.{shell,write,memory,skill,cron}` | qué herramientas de Hermes le tocan a cada familia de frenos |
+| `tools.{shell,write,read,memory,skill,cron}` | qué herramientas de Hermes le tocan a cada familia de frenos (`read`: hoy sólo `read_file`, la verificada) |
 | `tools.$args.{command,path,content}` | en qué argumento de la herramienta está el comando, la ruta, el contenido |
 | `tools.$multiFilePatch` | `{args[], pathPatterns[], addedLine}` — la gramática V4A del `patch` de Hermes: de dónde salen las rutas y qué líneas se agregan |
 | `tools.$written`, `tools.$removeActions` | qué campos de memory/skill_manage/cronjob_manage son lo que se GUARDA, y qué acciones son borrados (no se filtran) |
@@ -27,10 +27,12 @@ sin `example` es roja.
 | `terminal.ask[]` | comandos que piden aprobación humana (`{"action":"approve"}`) |
 | `terminal.innocent[]` | comandos que NO deben frenar (P3) |
 | `terminal.dataArgs[]` | prefijos cuyo texto entre comillas es dato (mensaje de commit, término de búsqueda) y no se compara |
-| `terminal.redirectTargets[]` | regex con un grupo: destinos de escritura por la terminal, evaluados contra `protectedPaths` |
+| `terminal.redirectTargets[]` | regex con un grupo: destinos de escritura por la terminal (`>`, `tee`, destino de `cp`/`mv`, argumentos de `rm`, archivo de `sed -i`…), evaluados contra `protectedPaths`. Un grupo con varios argumentos se evalúa token por token (salteando las banderas) |
+| `terminal.readTargets[]` | igual, para los comandos que LEEN (`cat`, `grep`, `head`, origen de `cp`, `source`, `< archivo`, lo que `curl` sube con `@`): evaluados contra `protectedReads` |
 | `moreExamples[]` (en cualquier regla) | variantes que el `reason` dice cubrir; el self-test y el e2e prueban cada una |
 | `protectedPaths[]` | rutas que el agente no escribe. `agentOnly: true` = el agente no, el humano sí puede commitearla. `outsideRepo: true` = se evalúa sobre la ruta absoluta (p.ej. `~/.hermes/.env`) |
 | `protectedInnocent[]` | rutas que NO deben frenar |
+| `protectedReads[]`, `protectedReadsInnocent[]` | lo que el agente no **lee** (lo leído viaja al proveedor del modelo): mismas claves que `protectedPaths`, incluido `outsideRepo`. Lo aplican `read_guard` (sobre `tools.read`) y `readTargets` en la terminal |
 | `patterns[]` | regex prohibida en lo que se escribe (multilínea: `^` es cada línea). `paths`/`exceptPaths` la acotan; `examplePath` es dónde se prueba el ejemplo y `exceptExample` una ruta de `exceptPaths` donde NO debe frenar |
 | `memory.deny[]`, `memory.innocent[]` | lo que no entra a la memoria persistente |
 | `skills.roots`, `namePattern`, `maxName`, `maxDescription`, `maxBodyChars` | forma de las skills versionadas |
@@ -50,6 +52,7 @@ sin `example` es roja.
 | `branches.protected[]`, `reason` | ramas a las que `.githooks/pre-push` no deja empujar directo. Vacío = el freno no corre |
 | `observability.budgetMs`, `runs`, `budgets{}`, `probe{command, filePath, content, prompt}`, `reason` | presupuesto de latencia de cada callback del plugin (P19); `probe.filePath` tiene que ser código |
 | `observability.events{file, maxBytes}` | el registro de eventos (P22): una línea JSON por bloqueo, escalada, hallazgo, gate y vuelta del loop, bajo `.git/`. Rota pasado `maxBytes`. Sin `events` no se escribe nada |
+| `loop.lockedPaths[]` | regex de rutas que el agente no puede cambiar DURANTE una tarea por ningún canal (su config, su cola, `.env`), aunque estén ignoradas por git. Junto con los `protectedPaths` versionados, el loop las compara antes y después de cada intento: si cambió alguna, escala aunque el gate dé verde |
 | `loop.tasksFile`, `agentCommand`, `gateCommand`, `maxIterations`, `sameFailureLimit`, `maxMinutes`, `agentTimeoutMinutes`, `gateTimeoutMinutes`, `branchPrefix`, `stopFile`, `stateFile`, `prompt`, `retryPrompt`, `reason` | el loop autónomo (P21). Ver [`loop-autonomo.md`](loop-autonomo.md) |
 | `drift.statusDatePattern`, `statusMaxAgeDays`, `historyCommits`, `runner`, `command`, `reason` | el barrido de deriva (P20). `runner` es el pipeline que lo corre y `command` lo que ese pipeline tiene que invocar |
 | `taxonomy.stages`, `events`, `gitHooksDir`, `gitHooks`, `gateStages`, `skills`, `guides`, `pieces`, `pipelines` | el mapa guía/freno/sensor (P20): cada pieza con `direction`, `kind` (opcional) y `stage`. Una sin clasificar es rojo |
@@ -63,7 +66,8 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `tools` | `plugin/harness/core.py` (`tool_kind`, `command_of`, `paths_of`, `content_of`, `written_text`), `scripts/selftest.py`, `scripts/hermes_e2e.py` |
 | `gate.*` | `scripts/gate.py`, `plugin/harness/core.py` (`is_code`, `marker_path`), `plugin/harness/turn.py`, `scripts/selftest.py` |
 | `terminal.*` | `plugin/harness/guards.py` (`terminal_guard`, `skill_guard`), `scripts/selftest.py`, `plugin/__init__.py` (`/harness`) |
-| `protectedPaths`, `protectedInnocent` | `plugin/harness/guards.py`, `scripts/githooks.py`, `scripts/selftest.py` |
+| `protectedPaths`, `protectedInnocent` | `plugin/harness/guards.py`, `scripts/githooks.py`, `scripts/loop.py` (intocables), `scripts/selftest.py` |
+| `protectedReads`, `protectedReadsInnocent` | `plugin/harness/guards.py` (`read_guard`, `terminal_guard`), `scripts/cli.py`, `scripts/selftest.py` |
 | `patterns` | `plugin/harness/guards.py`, `plugin/harness/rules.py`, `scripts/selftest.py` |
 | `memory.*` | `plugin/harness/guards.py`, `scripts/doctor.py`, `scripts/selftest.py` |
 | `skills.*` | `plugin/harness/guards.py`, `plugin/harness/rules.py`, `scripts/doctor.py`, `scripts/selftest.py` |

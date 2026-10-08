@@ -9,6 +9,9 @@
       "write_file",
       "patch"
     ],
+    "read": [
+      "read_file"
+    ],
     "memory": [
       "memory"
     ],
@@ -101,6 +104,14 @@
           "scripts/mutations.py"
         ],
         "why": "un self-test verde sólo vale si el self-test mismo muerde: cada mutación rompe un freno en una copia del repo y exige rojo. Una que sobrevive es un freno que se puede romper sin que nadie se entere"
+      },
+      {
+        "name": "casos replicables (de punta a punta)",
+        "command": [
+          "python3",
+          "scripts/casos.py"
+        ],
+        "why": "el self-test prueba cada freno suelto; los casos prueban la historia entera —un agente con un atajo real, el freno que lo para, el loop que escala o llega a verde— en un repo instalado de cero. Cazan lo que sólo aparece combinando piezas (un perfil que choca con una regla, un intocable que el loop no ve) y que el catálogo del workshop no se pudra"
       },
       {
         "name": "mapa del arnés (guía · freno · sensor)",
@@ -239,6 +250,16 @@
         "pattern": "(--ignore-rules|HERMES_IGNORE_RULES)",
         "example": "hermes chat --ignore-rules -q 'x'",
         "reason": "`--ignore-rules` arranca Hermes sin AGENTS.md, sin memoria y sin skills: una sesión sin las reglas del repo."
+      },
+      {
+        "id": "descartar-cambios",
+        "pattern": "git(?:\\s+-[Cc]\\s+\\S+)*\\s+(checkout|restore)\\b[^|;&]*\\s(--\\s+)?\\.(\\s|$)|git(?:\\s+-[Cc]\\s+\\S+)*\\s+stash\\s+(drop|clear)\\b",
+        "example": "git checkout -- .",
+        "moreExamples": [
+          "git restore .",
+          "git stash drop"
+        ],
+        "reason": "descarta trabajo sin commitear que puede no ser tuyo (el humano deja cambios a medias). Mirá `git status` y `git diff`, y si estorban, `git stash` (recuperable) o preguntá."
       }
     ],
     "ask": [
@@ -268,17 +289,36 @@
       "grep -rn -- '--no-verify' docs/",
       "git log -S 'git reset --hard' --oneline",
       "echo hola > /tmp/salida.txt",
-      "python3 scripts/lint.py 2>&1 | tee /tmp/lint.log"
+      "python3 scripts/lint.py 2>&1 | tee /tmp/lint.log",
+      "cp README.md /tmp/README.bak",
+      "git rm --cached .env",
+      "mv notas/a.txt notas/b.txt",
+      "git checkout -b feat/x",
+      "git restore --staged app/x.py",
+      "git stash",
+      "cat .env.example",
+      "grep -rn TODO app/",
+      "head -n 20 README.md"
     ],
     "$dataArgs": "Argumentos cuyo texto entre comillas es DATO (un mensaje de commit, un término de búsqueda) y no se compara con las reglas. `bash -c` no va acá: eso se ejecuta.",
     "dataArgs": [
       "(?:^|\\s)(?:-m|--message|-S|-G|--grep)[= ]?\\s*",
       "\\b(?:grep|rg|egrep)\\b(?:\\s+-\\S+)*\\s+(?:--\\s+)?"
     ],
-    "$redirectTargets": "Destinos de escritura por la terminal: se evalúan contra `protectedPaths`, como un write_file.",
+    "$redirectTargets": "Destinos de escritura por la terminal —redirección, `tee`, el destino de `cp`/`mv`/`install`/`ln`/`rsync`, los argumentos de `rm`/`shred`/`truncate`/`unlink` (no `git rm`, que limpia el índice) y el archivo de `sed -i`/`perl -i`—: se evalúan contra `protectedPaths`, como un write_file.",
     "redirectTargets": [
       "(?<![0-9&<])>>?\\s*([^\\s|;&<>]+)",
-      "\\btee\\s+(?:-a\\s+)?([^\\s|;&<>]+)"
+      "\\btee\\s+(?:-a\\s+)?([^\\s|;&<>]+)",
+      "\\b(?:cp|mv|install|ln|rsync)\\b[^|;&<>]*\\s([^\\s|;&<>]+)\\s*(?=$|[|;&])",
+      "(?<!git )\\b(?:rm|shred|truncate|unlink)\\b((?:\\s+[^\\s|;&<>]+)+)",
+      "\\b(?:sed|perl)\\b[^|;&<>]*\\s-[a-zA-Z]*i[^|;&<>]*\\s([^\\s|;&<>]+)\\s*(?=$|[|;&])"
+    ],
+    "$readTargets": "Argumentos de comandos que LEEN archivos (cat, grep, head, cp de origen, `source`, `< archivo`, lo que `curl`/`wget` suben con `@archivo` o `-T`): cada uno se evalúa contra `protectedReads`, como un read_file. Un `python3 -c` que abre el archivo no se ve: para eso, el loop vigila los intocables y el humano no deja secretos donde el agente trabaja.",
+    "readTargets": [
+      "\\b(?:cat|tac|less|more|head|tail|bat|nl|base64|xxd|od|strings|grep|egrep|rg|awk|sed|cut|sort|uniq|wc|diff|cp|scp|rsync|tar|zip|source)\\b((?:\\s+[^\\s|;&<>]+)+)",
+      "(?:^|[;&|]\\s*)\\.\\s+([^\\s|;&<>]+)",
+      "(?<![<0-9])<\\s*([^\\s|;&<>(]+)",
+      "\\b(?:curl|wget|http)\\b[^|;&]*?(?:@|(?:-T|--upload-file|--post-file)[= ]\\s*)([^\\s|;&<>'\"]+)"
     ]
   },
   "protectedPaths": [
@@ -337,12 +377,61 @@
       "pattern": "[/\\\\]\\.hermes[/\\\\](profiles[/\\\\][^/\\\\]+[/\\\\])?plugins[/\\\\]repo-harness([/\\\\]|$)",
       "example": "/home/u/.hermes/plugins/repo-harness/__init__.py",
       "reason": "el agente no edita el plugin que lo frena."
+    },
+    {
+      "id": "cola-del-loop",
+      "pattern": "^\\.hermes/loop/",
+      "agentOnly": true,
+      "example": ".hermes/loop/tasks.md",
+      "reason": "la cola del loop la decide un humano: el agente no se asigna, no se cierra ni se borra tareas. Si una tarea está mal, decilo y terminá el turno."
     }
   ],
   "protectedInnocent": [
     "harness/core.py",
     "docs/arnes.md",
     "/home/u/proyectos/otro/.env.example.md"
+  ],
+  "$protectedReads": "LO QUE EL AGENTE NO LEE: lo que lee entra al contexto del modelo, viaja al proveedor y queda en el historial. Escribir y leer son riesgos distintos: `protectedPaths` cuida lo primero, ésto lo segundo. Mismas claves que `protectedPaths` (`outsideRepo` incluido).",
+  "protectedReads": [
+    {
+      "id": "env-lectura",
+      "pattern": "(^|/)\\.env(\\.[\\w-]+)*$(?<!\\.example)(?<!\\.sample)(?<!\\.template)",
+      "example": ".env",
+      "moreExamples": [
+        ".env.production",
+        "services/api/.env.local"
+      ],
+      "reason": "el .env tiene los secretos del repo. Para saber qué variables hay, leé .env.example; si falta una, pedíla al humano."
+    },
+    {
+      "id": "claves-ssh-y-certificados",
+      "pattern": "(^|/)(id_(rsa|ed25519|ecdsa)|[^/]+\\.(pem|key|p12|pfx))$",
+      "example": "deploy/id_ed25519",
+      "moreExamples": [
+        "certs/servidor.key"
+      ],
+      "reason": "una clave privada leída por el agente sale hacia el proveedor del modelo: queda comprometida aunque no se escriba en ningún lado."
+    },
+    {
+      "id": "ssh-del-usuario",
+      "outsideRepo": true,
+      "pattern": "[/\\\\]\\.ssh[/\\\\]",
+      "example": "/home/u/.ssh/id_ed25519",
+      "reason": "las claves SSH del usuario no las lee el agente."
+    },
+    {
+      "id": "hermes-secretos-lectura",
+      "outsideRepo": true,
+      "pattern": "[/\\\\]\\.hermes[/\\\\](profiles[/\\\\][^/\\\\]+[/\\\\])?(\\.env|auth\\.json)$",
+      "example": "/home/u/.hermes/.env",
+      "reason": "las credenciales de Hermes (keys de los proveedores) no las lee el agente."
+    }
+  ],
+  "protectedReadsInnocent": [
+    ".env.example",
+    "README.md",
+    "docs/arnes.md",
+    "app/keyboard.py"
   ],
   "patterns": [
     {
@@ -577,7 +666,8 @@
       ".hermes/",
       "plantillas/",
       ".githooks/",
-      ".github/"
+      ".github/",
+      "casos/"
     ],
     "$externalPaths": "`.hermes/harness/` es dónde vive el código en un repo DESTINO (lo nombran las skills y docs/portar.md): acá no existe y no es un puntero roto.",
     "externalPaths": [
@@ -676,7 +766,7 @@
     "reason": "un veredicto viejo que se lee como actual es peor que no tener veredicto."
   },
   "loop": {
-    "$comment": "EL LOOP AUTÓNOMO (P21, `scripts/loop.py`): tarea → agente → gate, hasta verde o hasta un tope. `agentCommand` es argv sin shell; `{prompt}` se reemplaza dentro de cada argumento. `gateCommand` decide la salida: el loop no le cree al agente, le cree al gate. `sameFailureLimit`: el mismo rojo N veces seguidas escala a un humano (P16 hecho mecanismo). `maxIterations` y `maxMinutes` son topes por tarea. `stopFile` es el freno de mano (lo crea `loop.py --stop`). Nunca publica (P13): lo verde queda en una rama `branchPrefix*`.",
+    "$comment": "EL LOOP AUTÓNOMO (P21, `scripts/loop.py`): tarea → agente → gate, hasta verde o hasta un tope. `agentCommand` es argv sin shell; `{prompt}` se reemplaza dentro de cada argumento. `gateCommand` decide la salida: el loop no le cree al agente, le cree al gate. `sameFailureLimit`: el mismo rojo N veces seguidas escala a un humano (P16 hecho mecanismo). `maxIterations` y `maxMinutes` son topes por tarea. `stopFile` es el freno de mano (lo crea `loop.py --stop`). Nunca publica (P13): lo verde queda en una rama `branchPrefix*`. `lockedPaths`: además de los `protectedPaths` versionados, lo que el agente no puede cambiar DURANTE una tarea por ningún canal (su config, su cola, `.env`), aunque esté ignorado por git: si cambia, el intento escala aunque el gate dé verde. En ESTE repo el config no está en `lockedPaths`: acá el config es el producto, y agregar una regla es una tarea legítima del loop. En un repo destino (la plantilla) sí lo está.",
     "tasksFile": ".hermes/loop/tasks.md",
     "agentCommand": [
       "hermes",
@@ -687,6 +777,11 @@
     "gateCommand": [
       "python3",
       "scripts/gate.py"
+    ],
+    "lockedPaths": [
+      "^\\.hermes/loop/",
+      "^CONSTITUTION\\.md$",
+      "(^|/)\\.env"
     ],
     "maxIterations": 4,
     "sameFailureLimit": 2,
