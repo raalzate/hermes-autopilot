@@ -12,6 +12,7 @@ prueba. Si una fila no tiene comando, no es un freno: es una esperanza.
 | antes de `write_file`/`patch` | `protectedPaths`, `patterns` | freno | self-test §3 (+ symlink interno, + rutas de Windows) |
 | antes de leer (`read_file`, `cat`, `grep`, `source`, `< archivo`, `curl @archivo`) | `protectedReads` — lo leído viaja al proveedor del modelo | freno | self-test §3 (cada regla por la herramienta y por la terminal; `.env.example` y otros inocentes pasan) |
 | antes de `execute_code` y del código en línea (`python3 -c`, `bash -c`) | `code_guard` + `terminal.inlineCode`: las reglas de la terminal sobre el código y cada cadena, las rutas que nombra, y mandar datos desde Python escala | freno | self-test §3 (cada regla dentro de `execute_code`, cada secreto que lee, cada ruta protegida que escribe; código inocente pasa) |
+| después de leer a un tercero (web, navegador, `tickets/`…) | **sesión contaminada** (`taint`): publicar, hablar con otro servidor, escribir `AGENTS.md`/CI/skills o guardar memoria escala a un humano; en el loop se niega | freno | self-test §3 (cada fuente, cada regla y cada inocente, en sesiones contaminadas y limpias; limpiar no escala) y 2 mutaciones; caso `soporte-ticket-inyeccion` (`persistente`) |
 | antes de `memory` | `memory.deny` | freno | self-test §3 |
 | antes de `skill_manage` | `skills.deny` + `terminal.deny` heredado | freno | self-test §3 |
 | antes de `cronjob_manage` | `cron.deny`, `cron.minIntervalMinutes` | freno | self-test §3 |

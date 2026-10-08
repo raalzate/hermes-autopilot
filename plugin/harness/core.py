@@ -115,6 +115,7 @@ class Event:
     args: dict
     cwd: str = ""
     session_id: str = ""
+    contaminada: str = ""  # de dónde vino el contenido de terceros que esta sesión ya leyó ("" = limpia)
 
 
 def tool_kind(config: dict, tool: str) -> str | None:

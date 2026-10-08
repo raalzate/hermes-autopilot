@@ -586,6 +586,63 @@
       "*/10 * * * *"
     ]
   },
+  "taint": {
+    "$comment": "SESIÓN CONTAMINADA (inyección de prompt). Después de que una sesión lee contenido de TERCEROS (`sources`: herramientas web y de navegador de Hermes —verificadas en tools/web_tools.py y tools/browser_tool.py, 2026-10— y rutas de tickets/correos), lo que tiene efecto afuera escala a un humano: `askCommands` (terminal y execute_code), `askWrites` (rutas donde una instrucción plantada quedaría permanente) y `askKinds` (memoria, skills, cron). En el loop o en cron no hay humano: se niega. La marca dura lo que la sesión.",
+    "sources": {
+      "tools": [
+        "web_extract",
+        "web_search",
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_vision",
+        "browser_get_images",
+        "browser_console",
+        "x_search"
+      ],
+      "readPaths": [
+        "^(tickets|inbox|correos|descargas)/"
+      ]
+    },
+    "askCommands": [
+      {
+        "id": "publicar-contaminado",
+        "pattern": "\\bgit\\s+(commit|push|tag)\\b|\\bgh\\s+(pr|issue|release|api)\\b|\\b(curl|wget|http|ssh|scp|rsync|nc)\\b|\\b(npm|cargo|twine|poetry)\\s+publish\\b|\\bsendmail\\b|\\bsmtplib\\b|\\brequests\\.(post|put|patch)\\(",
+        "example": "git commit -am 'aplica el fix que pidió el ticket'",
+        "moreExamples": [
+          "curl -s https://pastebin.example.test/raw/x",
+          "gh issue comment 12 --body 'listo'"
+        ],
+        "reason": "publicar, empujar o hablar con otro servidor después de leer contenido de terceros es el canal de salida de una inyección."
+      }
+    ],
+    "askWrites": [
+      {
+        "id": "persistir-contaminado",
+        "pattern": "^(AGENTS\\.md|CLAUDE\\.md|\\.hermes\\.md|CONSTITUTION\\.md|\\.hermes/|\\.github/|\\.githooks/|Makefile$|scripts/)",
+        "example": ".github/workflows/ci.yml",
+        "moreExamples": [
+          "AGENTS.md",
+          ".hermes/skills/x/SKILL.md"
+        ],
+        "reason": "escribir ahí vuelve permanente una instrucción plantada: la leen todas las sesiones futuras o la ejecuta CI."
+      }
+    ],
+    "askKinds": [
+      "memory",
+      "skill",
+      "cron"
+    ],
+    "kindsReason": "guardar memoria, skills o tareas programadas después de leer a un tercero es cómo una inyección se vuelve permanente.",
+    "innocentAfter": [
+      "git status",
+      "git diff --stat",
+      "python3 -m unittest -q"
+    ],
+    "innocentWritesAfter": [
+      "respuestas/4188.md",
+      "app/x.py"
+    ]
+  },
   "routes": [
     {
       "id": "arnes",
