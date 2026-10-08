@@ -131,6 +131,21 @@ python3 scripts/cli.py config set loop.maxIterations 6
 python3 scripts/cli.py config set loop.maxIterations 6 --apply
 ```
 
+## Aislado (por defecto)
+
+Con `loop.aislar: true` (lo trae la plantilla, y este repo también) cada tarea corre en su propio
+`git worktree`, aunque sea una sola. Un worktree tiene sólo lo versionado: el `.env` y cualquier
+secreto ignorado por git **no existen** ahí. Ningún programa del agente los puede leer por dentro:
+un script, un test o una ruta armada por partes (`'.e' + 'nv'`) se encuentran con un archivo que
+no está. El trabajo sin commitear del humano tampoco está ahí, así que queda a salvo.
+
+El estado principal (`--status`, el panel) es el del worktree: los mismos intentos, firmas y motivo,
+más la ruta del worktree. Si una tarea necesita de verdad un secreto, no es una tarea para el
+loop desatendido: la corre una persona, o se le da un secreto de prueba versionado en el repo.
+
+`--en-sitio` corre en el árbol actual aunque `aislar` esté encendido; lo usa el coordinador dentro
+de cada worktree.
+
 ## En paralelo
 
 `--paralelo N` toma las primeras N casillas `- [ ]` y le da a cada una un `git worktree` propio
