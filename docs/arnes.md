@@ -23,7 +23,7 @@ prueba. Si una fila no tiene comando, no es un freno: es una esperanza.
 | escribir una guía | lint `COHERENCIA`: lo que `AGENTS.md`, `docs/` o una skill recomiendan en un bloque de shell no puede estar en `terminal.deny` | sensor | self-test §12 (cada `example` de `terminal.deny` recomendado en una guía) |
 | escribir un perfil | lint `PERFIL`: un perfil de stack no trae reglas (`profiles.forbiddenKeys`) | sensor | self-test §12 y §11 (los perfiles reales) |
 | entregar | `scripts/gate.py` | freno | es el gate; CI lo corre igual |
-| el self-test mismo | `scripts/mutations.py` — 64 mutaciones (frenos, config, cada hallazgo de la revisión, cada pieza traída de agent-harness y la autonomía) | sensor | señal del gate: cada una tiene que poner rojo el self-test |
+| el self-test mismo | `scripts/mutations.py` — 72 mutaciones (frenos, config, cada hallazgo de la revisión, cada pieza traída de agent-harness y la autonomía) | sensor | señal del gate: cada una tiene que poner rojo el self-test |
 | el arnés entero | `scripts/map.py` — cada pieza con dirección (guía · freno · sensor), tipo y etapa desde `taxonomy` | sensor | señal del gate: una pieza sin clasificar es rojo |
 | el costo | `scripts/timing.py` — la mediana de cada callback del plugin contra `observability.budgetMs` | sensor | señal del gate; self-test §12 (con presupuesto 0 tiene que salir rojo) |
 | continuo (semanal) | `scripts/drift.py` por `.github/workflows/drift.yml`: `STATUS.md` vencido = rojo, regla que nunca cazó nada = aviso | sensor | self-test §12 (que el `runner` invoque el comando, y los casos de fecha e historial) |

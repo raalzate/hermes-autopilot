@@ -196,6 +196,8 @@ Cada fila salió de un tropiezo real (los detalles, en `docs/gotchas.md`).
 | `MEMORY.md` casi lleno, el agente "olvida" guardar | Hermes rechaza escrituras sobre el tope, no compacta | `/memory` para limpiar; `doctor.py` muestra el uso |
 | el gate de un repo recién instalado sale rojo en `harness self-test` | versión vieja: el self-test intentaba re-portar el arnés desde `.hermes/harness/` | `install.py --upgrade --apply` |
 | el pre-commit frena el commit del arnés recién instalado (`clave-privada` en la plantilla del config) | versión vieja de la plantilla | agregá `^\.hermes/harness/plantillas/harness\.config\.json$` a `exceptPaths` de esa regla |
+| `hermes plugins doctor` no existe / falta la sección de estado al abrir la sesión | Hermes de PyPI (0.19.0) va meses atrás del que verifica el arnés | `python3 scripts/hermes_fuente.py <dir>`: Hermes desde su código fuente, en el commit verificado (ver `docs/hermes.md`) |
+| el gate dice «revisor inferencial: OMITIDA» | no hay un modelo configurado (`HARNESS_REVIEW`) | es lo esperado en local y en CI; lo mide `hermes-nocturno.yml` con el secreto `HERMES_ENV` |
 | el loop escala enseguida con el mismo rojo | el agente repite el error: es lo que tiene que pasar (P16) | leé el motivo en el panel; achicá o aclará la tarea |
 | `cli.py rule add` dice «muerde de más» | la regla frena un inocente o el gate | hacé el patrón más preciso; si el inocente está mal, sacalo a conciencia |
 

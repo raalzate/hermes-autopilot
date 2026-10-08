@@ -26,7 +26,10 @@ AGENTS.md  STATUS.md  docs/gotchas.md  .githooks/ (pre-commit · commit-msg · p
 `branches.protected` arranca vacío: si el equipo trabaja por PR, poné ahí la rama principal y
 `pre-push` frena el empujón directo. También es lo que hace que el loop autónomo abra una rama
 `loop/…` en vez de trabajar sobre `main`. `observability.probe.filePath` lo completa el perfil, y
-`observability.events` (el registro que lee el panel) viene encendido.
+`observability.events` (el registro que lee el panel) viene encendido. El loop arranca **aislado**
+(`loop.aislar`: cada tarea en su worktree, sin los secretos ignorados) y con la **guardia de
+Python** (`loop.guardiaPython`), y la sesión contaminada (`taint`) viene con las herramientas web
+de Hermes y las rutas `tickets/`, `inbox/`, `correos/`: ajustá esas rutas a las de tu repo.
 
 Todo se parametriza con la CLI del repo instalado: `python3 .hermes/harness/scripts/cli.py`.
 Ver [`cli-y-panel.md`](cli-y-panel.md).
