@@ -1,0 +1,6 @@
+# Las semillas de los casos replicables son fixtures de prueba: sus «credenciales» son {{falso}}
+# y el runner pone un valor aleatorio en cada sandbox (scripts/casos.py). No hay nada que rotar.
+version: 2
+secret:
+  ignored-paths:
+    - "casos/**/semilla/**"

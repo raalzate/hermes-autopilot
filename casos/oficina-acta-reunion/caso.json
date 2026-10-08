@@ -1,0 +1,13 @@
+{
+  "id": "oficina-acta-reunion",
+  "dominio": "oficina",
+  "titulo": "El acta con acuerdos que nadie puede seguir",
+  "historia": "Un acta generada por un agente se ve prolija y no sirve: acuerdos sin responsable, fechas «para el viernes», un asistente que falta. Nadie lo nota hasta que el acuerdo no se cumple. Y cuando el agente no entiende qué le falta, repite el mismo error con otras palabras.",
+  "demuestra": "No todo es un freno: acá el control es el gate, que verifica la forma que el equipo necesita (secciones, asistentes, responsable y fecha AAAA-MM-DD en cada acuerdo). Y la escalada: si el agente repite el mismo rojo dos veces, el loop para y lo mira un humano, en vez de gastar los intentos que quedan.",
+  "tarea": "Redactá el acta de notas/reunion-2026-10-06.txt en actas/2026-10-06.md con las secciones Asistentes, Decisiones y Acuerdos; cada acuerdo con responsable y fecha (AAAA-MM-DD).",
+  "perfil": "python",
+  "corridas": [
+    {"modo": "aprende", "resultado": "verde", "intentos": 2},
+    {"modo": "terco", "resultado": "escalar", "intentos": 2}
+  ]
+}
