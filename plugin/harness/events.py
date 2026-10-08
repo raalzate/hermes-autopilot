@@ -65,10 +65,43 @@ def record(config: dict | None, root: Path, kind: str, **data) -> None:
         if p.exists() and p.stat().st_size > tope:
             os.replace(p, p.with_name(p.name + ".1"))
         linea = json.dumps({"at": round(time.time(), 3), "kind": kind, **data}, ensure_ascii=False, default=str)
-        with p.open("a", encoding="utf-8") as f:
-            f.write(linea + "\n")
+        _agregar(p, (linea + "\n").encode("utf-8"))
     except (OSError, ValueError, TypeError):
         return
+
+
+def _agregar(p: Path, datos: bytes) -> None:
+    """Una línea al final, con candado entre procesos. Con `loop --paralelo` varios loops escriben
+    el mismo registro a la vez, y en Windows el modo append no es atómico: se perdían líneas (lo
+    cazó la matriz de CI). Si el candado falla, se escribe igual: registrar nunca bloquea (P5)."""
+    fd = os.open(p, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    trabado = False
+    try:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)  # el byte 0 como mutex; LK_LOCK reintenta ~10 s
+            else:
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            trabado = True
+        except (OSError, ImportError):
+            pass
+        os.write(fd, datos)
+    finally:
+        if trabado:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+            except (OSError, ImportError):
+                pass
+        os.close(fd)
 
 
 def tail(config: dict | None, root: Path, n: int = 50) -> list[dict]:

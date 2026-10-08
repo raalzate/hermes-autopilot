@@ -902,6 +902,22 @@ def main() -> int:
         finally:
             os.environ["HARNESS_REPO"] = str(REPO_ROOT)
             os.environ["HARNESS_NO_EVENTS"] = "1"
+    # Varios procesos escribiendo a la vez (loop --paralelo): no se pierde ninguna línea.
+    with tempfile.TemporaryDirectory() as tmp:
+        troot = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=troot, capture_output=True)
+        cfg_c = {"observability": {"events": {"file": ".git/harness-events.jsonl", "maxBytes": 10_000_000}}}
+        prog = ("import sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; from harness import events\n"
+                "for i in range(200): events.record({'observability': {'events': {'file': '.git/harness-events.jsonl', "
+                "'maxBytes': 10000000}}}, Path(sys.argv[2]), 'x', i=i, w=sys.argv[3])")
+        env_c = {k: v for k, v in os.environ.items() if k not in ("HARNESS_NO_EVENTS", "HARNESS_EVENTS_FILE")}
+        procs = [subprocess.Popen([sys.executable, "-c", prog, str(HARNESS_HOME / "plugin"), str(troot), str(w)], env=env_c)
+                 for w in range(4)]
+        for pr_ in procs:
+            pr_.wait(timeout=120)
+        lineas = [l for l in events_mod.path(cfg_c, troot).read_text(encoding="utf-8").splitlines() if l.strip()]
+        check(len(lineas) == 800 and all(l.startswith("{") and l.endswith("}") for l in lineas),
+              f"registro de eventos: 4 procesos × 200 líneas dejaron {len(lineas)} (se pisan al escribir a la vez)")
     try:
         events_mod.record({"observability": {"events": {"file": "no/existe/\0/x"}}}, Path("/nonexistent-dir-xyz"), "x")
         check(True, "")
