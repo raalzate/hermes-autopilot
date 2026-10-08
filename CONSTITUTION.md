@@ -1,6 +1,6 @@
 # Constitución — Hermes Autopilot
 
-**Versión 1.4.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
+**Versión 1.5.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
 viven en `AGENTS.md`; el arnés que los hace cumplir, en `docs/arnes.md`.
 
 Cada principio dice su **fuerza**:
@@ -82,7 +82,9 @@ y queda en el historial de la sesión. Escribir y leer son riesgos distintos, co
 
 *Mecanismo:* freno `protected_paths` del plugin + `.githooks/pre-commit`, leyendo la misma lista;
 freno `read_guard` y `terminal.readTargets` sobre `protectedReads`; `code_guard` y
-`terminal.inlineCode` para lo que el código (`execute_code`, `python3 -c`) nombra.
+`terminal.inlineCode` para lo que el código (`execute_code`, `python3 -c`) nombra; la guardia de
+Python (`plugin/guardia`, audit hook PEP 578) para lo que un programa del agente ABRE, aunque arme
+la ruta por partes.
 
 ## P9 — Acciones amplias: dry-run y reversibilidad · BLOCKING
 
@@ -197,7 +199,8 @@ persona (P13).
 
 El agente tampoco puede tocar lo que decide si terminó: el verificador, sus reglas, su cola. Un
 verde conseguido ablandando el criterio de salida no es verde. Y hay un loop por repo, o uno
-por worktree cuando las tareas corren en paralelo.
+por worktree cuando las tareas corren en paralelo. Por defecto cada tarea corre AISLADA en su
+worktree (`loop.aislar`): lo que git ignora —los secretos— no existe donde trabaja el agente.
 
 *Mecanismo:* `scripts/loop.py` (`decidir`, con la configuración de `loop`; los intocables
 —`protectedPaths` versionados y `loop.lockedPaths`— comparados entre intentos; el candado),
@@ -229,6 +232,26 @@ con sus corridas esperadas. El agente es determinista, pero sus acciones pasan p
 real. Self-test §13: la forma del catálogo, que el runner compare de verdad y que las reglas de
 un caso no muerdan sus inocentes. Lo que los casos no cubren está en `docs/huecos.md`.
 
+## P24 — Lo que entra de un tercero no sale solo · BLOCKING
+
+Un texto no dice si es dato o instrucción: la inyección de prompt no se detecta. Su daño sí se
+corta, porque necesita tres cosas juntas —datos, contenido de un tercero y un canal hacia afuera—.
+Una sesión que leyó contenido de terceros (una web, un ticket, un correo) no publica, no habla con
+otro servidor, no escribe donde una instrucción quedaría permanente (AGENTS.md, CI, skills) y no
+guarda memoria sin un humano. En el loop o en cron, sin humano, no lo hace.
+
+*Mecanismo:* sesión contaminada (`taint` en el config, `taint_guard` + la marca del plugin), con su
+caso en el self-test, mutaciones y el caso `soporte-ticket-inyeccion` (modo `persistente`).
+
+## P25 — Un sensor inferencial se mide con una tasa · BLOCKING
+
+Un juicio de un modelo (`harness-review`) acierta a veces: no se prueba con un ejemplo que muerde,
+se mide contra un conjunto etiquetado, con umbrales. Sin modelo, la medición sale OMITIDA —nunca
+verde— y la corre un pipeline que sí lo tiene.
+
+*Mecanismo:* `scripts/revision.py` (recall y precisión contra `evals/revision.json`, umbrales en
+`review`), señal del gate con `omitIfExit` y `hermes-nocturno.yml`.
+
 ## Precedencia — cuando dos BLOCKING chocan · REVIEW
 
 Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el resto en orden.
@@ -244,3 +267,4 @@ Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el 
 | 1.2.0 | 2026-10-07 | Autonomía: P21 (el loop autónomo tiene salida —el gate—, tope y freno de mano; nunca publica) y P22 (lo que el arnés hace se ve: registro de eventos y panel en vivo). P16 gana mecanismo dentro del loop. El proyecto pasa a llamarse Hermes Autopilot: el propósito es un agente autónomo, y el arnés es lo que lo hace confiable. |
 | 1.3.0 | 2026-10-07 | Auditoría de huecos con casos replicables: P8 también veda **leer** secretos (`protectedReads`); P21 suma los intocables (el agente no ablanda su criterio de salida) y el candado; P23 (lo que el arnés promete se reproduce de punta a punta: `scripts/casos.py` en el gate). |
 | 1.4.0 | 2026-10-08 | Herramientas verificadas contra el código de Hermes: P8 suma `code_guard` (`execute_code` no pasaba por ningún freno) y el código en línea; P21 suma el paralelo por worktrees. |
+| 1.5.0 | 2026-10-08 | Cierre de huecos: P8 suma la guardia de Python; P21, el loop aislado en worktree; P24 (lo que entra de un tercero no sale solo: sesión contaminada); P25 (un sensor inferencial se mide con una tasa: `revision.py`). |
