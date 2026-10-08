@@ -31,8 +31,9 @@ prueba. Si una fila no tiene comando, no es un freno: es una esperanza.
 | de punta a punta | `scripts/casos.py`: 17 casos replicables (programación, infraestructura, oficina, datos, soporte, operación) con un agente determinista cuyas acciones pasan por el plugin real | sensor | señal del gate; self-test §13 (forma del catálogo, que el runner compare, que las reglas de un caso no muerdan sus inocentes) |
 | cambiar una regla | `scripts/cli.py rule add`: la regla pasa por `guards.evaluate` con su `example`, los inocentes y el gate del repo, y el config resultante por el lint, antes de escribirse | freno | self-test §13 (cada rechazo) y 2 mutaciones |
 | siempre (observabilidad) | registro de eventos (`plugin/harness/events.py`) y `scripts/panel.py` en vivo por SSE, sólo en 127.0.0.1 (P22) | sensor | self-test §13 (registra lo que frena y no lo que deja pasar, rota, el panel responde y empuja) y 3 mutaciones |
+| el revisor inferencial | `scripts/revision.py` — recall y precisión de `harness-review` (o del revisor de `review.command`) contra diffs etiquetados de los casos, con umbrales | sensor | señal del gate (OMITIDA sin modelo) y `hermes-nocturno.yml` con el modelo; self-test (un revisor perfecto, uno que aprueba todo, uno sin modelo) y 2 mutaciones |
 | esta máquina | `scripts/doctor.py` | sensor | a mano / skill `harness-audit` |
-| el Hermes real: carga | `hermes plugins doctor plugin --ci` | sensor | señal del gate (OMITIDA sin Hermes) |
+| el Hermes real: carga | `hermes plugins doctor plugin --ci` | sensor | señal del gate (OMITIDA sin Hermes); corre en CI en el job `hermes-real` (`scripts/hermes_fuente.py`) |
 | el Hermes real: contrato | `scripts/hermes_e2e.py` — cada `example` por `get_pre_tool_call_directive`, `pre_verify`, `pre_llm_call`, `transform_tool_result` y la sección del prompt, dentro de Hermes | sensor | señal del gate (OMITIDA sin Hermes) |
 
 ## Por qué el self-test no necesita Hermes

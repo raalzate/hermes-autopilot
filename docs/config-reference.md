@@ -20,7 +20,7 @@ sin `example` es roja.
 | `tools.$multiFilePatch` | `{args[], pathPatterns[], addedLine}` — la gramática V4A del `patch` de Hermes: de dónde salen las rutas y qué líneas se agregan |
 | `tools.$written`, `tools.$removeActions` | qué campos de memory/skill_manage/cronjob_manage son lo que se GUARDA, y qué acciones son borrados (no se filtran) |
 | `gate.command`, `gate.fastCommand` | cómo se corre el gate (lo nombran los mensajes al agente) |
-| `gate.signals[]` | `{name, command[], why, fastSkip?, skipIfMissing?, skipIfNoExecutable?}` — `why` obligatorio (P6) |
+| `gate.signals[]` | `{name, command[], why, fastSkip?, skipIfMissing?, skipIfNoExecutable?, omitIfExit?}` — `why` obligatorio (P6). `omitIfExit`: el código con que la señal dice «no tengo con qué correr» (sale OMITIDA, nunca verde) |
 | `gate.marker` | el archivo que dice "hay código editado sin gate verde" |
 | `gate.codeGlobs`, `gate.codeExtensions` | qué cuenta como código (marca el gate al escribirlo) |
 | `gate.installHooksCommand` | lo que el aviso de sesión sugiere si los hooks de git no están |
@@ -60,6 +60,7 @@ sin `example` es roja.
 | `loop.lockedPaths[]` | regex de rutas que el agente no puede cambiar DURANTE una tarea por ningún canal (su config, su cola, `.env`), aunque estén ignoradas por git. Junto con los `protectedPaths` versionados, el loop las compara antes y después de cada intento: si cambió alguna, escala aunque el gate dé verde |
 | `loop.tasksFile`, `agentCommand`, `gateCommand`, `maxIterations`, `sameFailureLimit`, `maxMinutes`, `agentTimeoutMinutes`, `gateTimeoutMinutes`, `branchPrefix`, `stopFile`, `stateFile`, `prompt`, `retryPrompt`, `reason` | el loop autónomo (P21). Ver [`loop-autonomo.md`](loop-autonomo.md) |
 | `drift.statusDatePattern`, `statusMaxAgeDays`, `historyCommits`, `runner`, `command`, `reason` | el barrido de deriva (P20). `runner` es el pipeline que lo corre y `command` lo que ese pipeline tiene que invocar |
+| `review.command`, `dataset`, `minRecall`, `minPrecision`, `timeoutSeconds`, `requiresEnv`, `runner`, `runnerCommand`, `reason` | el revisor inferencial medido (`scripts/revision.py`): `command` es el revisor (`{prompt}` lleva el diff y la tarea), `dataset` los diffs etiquetados, los umbrales, y `requiresEnv` la variable que dice que hay un modelo (sin ella, OMITIDA) |
 | `taxonomy.stages`, `events`, `gitHooksDir`, `gitHooks`, `gateStages`, `skills`, `guides`, `pieces`, `pipelines` | el mapa guía/freno/sensor (P20): cada pieza con `direction`, `kind` (opcional) y `stage`. Una sin clasificar es rojo |
 
 ## Quién lee cada clave

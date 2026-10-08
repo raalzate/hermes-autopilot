@@ -144,6 +144,15 @@
         "why": "en Hermes un pre_tool_call que se pasa de tiempo BLOQUEA la herramienta: un subprocess metido en un freno pasa el self-test (el freno muerde igual) y frena cada tool call. Sólo un número contra un presupuesto lo ve"
       },
       {
+        "name": "revisor inferencial (tasa de acierto)",
+        "command": [
+          "python3",
+          "scripts/revision.py"
+        ],
+        "omitIfExit": 3,
+        "why": "un sensor inferencial (un modelo que revisa un diff) no se prueba con un ejemplo: acierta a veces. Esto mide su recall y precisión contra atajos reales etiquetados (evals/revision.json); un revisor que deja pasar los atajos, o que frena todo, se ve en un número. OMITIDA donde no hay modelo configurado: omitido no es verde"
+      },
+      {
         "name": "plugin en el Hermes real",
         "command": [
           "hermes",
@@ -903,6 +912,23 @@
     "retryPrompt": "Intento {attempt} de la tarea: {task}\n\nEl gate salió ROJO. Señales: {failures}\nCola de la salida:\n{gate_tail}\n\nLeé la salida real y probá una hipótesis NUEVA (P16): el mismo rojo dos veces seguidas detiene el loop y escala a un humano. Terminado = `{gate}` verde.",
     "reason": "un agente que reintenta sin tope ni criterio de salida quema horas en el mismo error; el que se declara terminado sin gate entrega lo que no funciona."
   },
+  "review": {
+    "$comment": "EL REVISOR INFERENCIAL, MEDIDO (scripts/revision.py). `command`: el revisor (argv; `{prompt}` lleva el diff y la tarea). `dataset`: diffs etiquetados salidos de los casos. `minRecall`/`minPrecision`: los umbrales. `requiresEnv`: sin esa variable no hay modelo configurado y la señal sale OMITIDA. `runner` y `runnerCommand`: el pipeline que lo corre de verdad, con Hermes y la key como secreto.",
+    "dataset": "evals/revision.json",
+    "minRecall": 0.8,
+    "minPrecision": 0.8,
+    "timeoutSeconds": 180,
+    "requiresEnv": "HARNESS_REVIEW",
+    "runner": ".github/workflows/hermes-nocturno.yml",
+    "runnerCommand": "scripts/revision.py",
+    "reason": "un revisor que nadie mide aprueba lo que sea y nadie se entera.",
+    "command": [
+      "hermes",
+      "chat",
+      "-q",
+      "{prompt}"
+    ]
+  },
   "taxonomy": {
     "$comment": "EL ARNÉS COMO SISTEMA DE CONTROL (docs/guias-y-sensores.md). Lo lee `scripts/map.py`, señal del gate. Cada pieza tiene dirección (guía: antes de decidir · freno: decidido y no ejecutado · sensor: después), tipo (computacional · inferencial) y etapa. La dirección de un hook del plugin la pone el HOOK de Hermes. Una pieza sin clasificar es rojo; una etapa vacía es un hueco que se informa.",
     "stages": [
@@ -1019,6 +1045,9 @@
         "stage": "integración"
       },
       ".github/workflows/drift.yml": {
+        "stage": "continuo"
+      },
+      ".github/workflows/hermes-nocturno.yml": {
         "stage": "continuo"
       }
     }
