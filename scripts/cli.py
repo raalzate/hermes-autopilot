@@ -12,10 +12,10 @@
     python3 scripts/cli.py signal list | signal add "nombre" --why "…" [--apply] -- cmd args… | signal rm "nombre" [--apply]
     python3 scripts/cli.py profile list
     python3 scripts/cli.py task add "texto" | task list           la cola del loop autónomo
-    python3 scripts/cli.py gate|selftest|lint|map|timing|doctor|drift|install|loop|panel [args…]
+    python3 scripts/cli.py gate|selftest|lint|map|timing|doctor|drift|install|loop|panel|casos [args…]
 
-Familias: terminal.deny · terminal.ask · protectedPaths · patterns · memory.deny · skills.deny ·
-cron.deny · routes.
+Familias: terminal.deny · terminal.ask · protectedPaths · protectedReads · patterns · memory.deny ·
+skills.deny · cron.deny · routes.
 
 Lo que la CLI agrega sobre editar el JSON: una regla nueva se prueba ANTES de escribirse, por el
 mismo `guards.evaluate` que usa el plugin —
@@ -45,13 +45,15 @@ FAMILIAS: dict[str, tuple[str | None, str, str | None]] = {
     "terminal.deny": ("shell", "block", "terminal.innocent"),
     "terminal.ask": ("shell", "approve", "terminal.innocent"),
     "protectedPaths": ("write", "block", "protectedInnocent"),
+    "protectedReads": ("read", "block", "protectedReadsInnocent"),
     "patterns": ("write", "block", None),
     "memory.deny": ("memory", "block", "memory.innocent"),
     "skills.deny": ("skill", "block", "skills.innocent"),
     "cron.deny": ("cron", "block", "cron.innocent"),
     "routes": (None, "hint", None),
 }
-PASAMANOS = ("gate", "selftest", "lint", "map", "timing", "doctor", "drift", "install", "loop", "panel", "mutations", "linkcheck")
+PASAMANOS = ("gate", "selftest", "lint", "map", "timing", "doctor", "drift", "install", "loop", "panel", "mutations", "linkcheck",
+             "casos")
 
 
 # ── rutas con puntos sobre el config ─────────────────────────────────────────
@@ -100,6 +102,8 @@ def caso(familia: str, regla: dict, texto: str) -> dict:
         return {"command": texto}
     if familia == "protectedPaths":
         return {"path": texto, "content": "x"}
+    if familia == "protectedReads":
+        return {"path": texto}
     if familia == "patterns":
         return {"path": regla.get("examplePath", "x.py"), "content": "x = 1\n" + texto}
     if familia == "memory.deny":

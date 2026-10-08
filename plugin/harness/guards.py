@@ -64,15 +64,31 @@ def terminal_guard(ev: Event, config: dict, root: Path) -> Decision:
             "Reformulá el comando o pedí confirmación explícita al humano. No lo reintentes igual.",
             hit,
         )
-    # Escribir una ruta protegida por la terminal (`echo x > .env`, `tee`) es escribirla: las
-    # mismas reglas que a `write_file`, sobre cada destino de redirección.
+    # Escribir una ruta protegida por la terminal (`echo x > .env`, `tee`, `cp x .env`, `rm .env`)
+    # es escribirla: las mismas reglas que a `write_file`, sobre cada destino. Un grupo puede traer
+    # varios (los argumentos de `rm`): se evalúa cada uno que no sea una bandera.
     for patron in t.get("redirectTargets") or []:
         try:
-            destinos = [m.group(1) for m in re.finditer(patron, comparable)]
+            destinos = [m.group(1) for m in re.finditer(patron, comparable) if m.group(1)]
         except re.error:
             continue
-        for destino in destinos:
+        for destino in (tok for grupo in destinos for tok in grupo.split()):
+            if destino.startswith("-"):
+                continue
             d = _ruta_protegida(destino.strip("'\""), config, root, ev.cwd)
+            if d.block:
+                return d
+    # Leer un secreto por la terminal (`cat .env`, `grep X .env`, `< .env`) es leerlo: las mismas
+    # reglas que a la herramienta de lectura, sobre cada argumento de `readTargets`.
+    for patron in t.get("readTargets") or []:
+        try:
+            grupos = [m.group(1) for m in re.finditer(patron, comparable) if m.group(1)]
+        except re.error:
+            continue
+        for arg in (tok for grupo in grupos for tok in grupo.split()):
+            if arg.startswith("-"):
+                continue
+            d = _lectura_protegida(arg.strip("'\""), config, root, ev.cwd)
             if d.block:
                 return d
     # `ask`: Hermes no tiene una clave para sumar patrones propios a "pedir aprobación" (sólo
@@ -105,11 +121,12 @@ def _nombres_fuera(raw: str, root: Path, cwd: str) -> list[str]:
     return list(dict.fromkeys(nombres))
 
 
-def _ruta_protegida(raw: str, config: dict, root: Path, cwd: str) -> Decision:
+def _regla_de_ruta(raw: str, reglas: list, root: Path, cwd: str) -> tuple[dict | None, str]:
+    """(la regla que casa con la ruta, el nombre con que casó). La misma lógica para escribir
+    (`protectedPaths`) y para leer (`protectedReads`)."""
     rel = rel_to_repo(raw, root, cwd)
     if not rel:
-        return Decision.allow()
-    reglas = config.get("protectedPaths") or []
+        return None, ""
     # Fuera del repo sólo se miran las reglas que lo piden (p.ej. `~/.hermes/.env`): el resto
     # del disco no es asunto de este repo.
     if rel.startswith(".."):
@@ -117,10 +134,38 @@ def _ruta_protegida(raw: str, config: dict, root: Path, cwd: str) -> Decision:
         for nombre in _nombres_fuera(raw, root, cwd):
             hit = first_match(fuera, nombre)
             if hit:
-                return _deny_ruta(raw, hit)
-        return Decision.allow()
+                return hit, raw
+        return None, ""
     hit = first_match([r for r in reglas if not r.get("outsideRepo")], rel)
-    return _deny_ruta(rel, hit) if hit else Decision.allow()
+    return hit, rel
+
+
+def _ruta_protegida(raw: str, config: dict, root: Path, cwd: str) -> Decision:
+    hit, nombre = _regla_de_ruta(raw, config.get("protectedPaths") or [], root, cwd)
+    return _deny_ruta(nombre, hit) if hit else Decision.allow()
+
+
+def _lectura_protegida(raw: str, config: dict, root: Path, cwd: str) -> Decision:
+    hit, nombre = _regla_de_ruta(raw, config.get("protectedReads") or [], root, cwd)
+    if not hit:
+        return Decision.allow()
+    return Decision.deny(
+        f"LECTURA PROTEGIDA: `{nombre}` no lo lee el agente.\n"
+        f"Motivo: {hit.get('reason', '(sin motivo declarado)')}\n"
+        "Lo que leés viaja al proveedor del modelo y queda en el historial de la sesión. Si hace falta "
+        "saber QUÉ claves hay, mirá el archivo de ejemplo; el valor lo maneja el humano.",
+        hit,
+    )
+
+
+def read_guard(ev: Event, config: dict, root: Path) -> Decision:
+    """Secretos que el agente no lee (`protectedReads`): lo que lee entra al contexto del modelo,
+    sale hacia el proveedor y queda en el historial. Escribir y leer son riesgos distintos."""
+    for raw in paths_of(config, ev):
+        d = _lectura_protegida(raw, config, root, ev.cwd)
+        if d.block:
+            return d
+    return Decision.allow()
 
 
 def protected_paths(ev: Event, config: dict, root: Path) -> Decision:
@@ -256,6 +301,7 @@ def cron_guard(ev: Event, config: dict, root: Path) -> Decision:
             return Decision.deny(
                 f"CRON RECHAZADO: `{sched}` corre cada {cada:g} min y el mínimo del repo es {minimo}.\n"
                 "Cada corrida es un turno completo del modelo: se paga en tokens aunque no haga nada.",
+                {"id": "cron-intervalo-minimo"},  # sin id, el registro y el panel no saben qué mordió
             )
     return Decision.allow()
 
@@ -318,6 +364,7 @@ def minutos_entre_corridas(sched: str) -> float | None:
 GUARDS = {
     "shell": [terminal_guard],
     "write": [protected_paths, content_patterns],
+    "read": [read_guard],
     "memory": [memory_guard],
     "skill": [skill_guard],
     "cron": [cron_guard],
