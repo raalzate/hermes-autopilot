@@ -40,6 +40,7 @@ sin `example` es roja.
 | `skills.roots`, `namePattern`, `maxName`, `maxDescription`, `maxBodyChars` | forma de las skills versionadas |
 | `skills.deny[]`, `skills.inheritTerminalDeny`, `skills.innocent[]` | lo que una skill escrita por el agente no puede enseñar |
 | `cron.deny[]`, `cron.minIntervalMinutes`, `cron.exampleTooFrequent`, `cron.moreTooFrequent[]`, `cron.scheduleArgs`, `cron.innocent[]` | lo que una tarea programada no puede hacer |
+| `taint.sources{tools[], readPaths[]}`, `askCommands[]`, `askWrites[]`, `askKinds[]`, `kindsReason`, `innocentAfter[]`, `innocentWritesAfter[]` | la **sesión contaminada**: después de leer contenido de terceros (herramientas web y de navegador de Hermes, o rutas como `tickets/`), lo que tiene efecto afuera escala a un humano —comandos (`askCommands`, también en `execute_code`), escrituras donde una instrucción quedaría permanente (`askWrites`) y guardar memoria, skills o cron (`askKinds`; limpiar no). Sólo el plugin (el shell hook no tiene memoria de la sesión) |
 | `routes[]` | `{id, pattern, example, hint}` — pista que se suma al turno si el pedido casa |
 | `context.files`, `maxChars`, `blockedPatterns[]` | archivos de contexto de Hermes: tope y patrones del escáner |
 | `invariants[]` | `{file, mustContain[], mustNotContain[], reason}` |

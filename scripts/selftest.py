@@ -314,7 +314,10 @@ def main() -> int:
         pasa(tools["cron"][0], {"action": "create", "schedule": "in 5m", "prompt": inocente}, "cron one-shot (sin intervalo)")
 
     # Una herramienta que ningún freno reclama pasa siempre: el arnés no inventa jurisdicción.
-    pasa("web_search", {"query": ".env"}, "herramienta sin familia (web_search)")
+    # Con su propia sesión: `web_search` es una fuente de terceros (`taint.sources`) y contaminaría
+    # la sesión `selftest` que usan los demás casos.
+    r_ = pre(tool_name="web_search", args={"query": ".env"}, session_id="selftest-sin-familia")
+    check(r_ is None, f"herramienta sin familia (web_search) → debía pasar (P3), obtuvo {r_!r}")
 
     # Lecturas protegidas: lo que el agente lee viaja al proveedor del modelo. Casos derivados de
     # cada regla, por la herramienta de lectura y por la terminal (cat, grep, `< archivo`).
@@ -1121,6 +1124,41 @@ def main() -> int:
             with tempfile.TemporaryDirectory() as tmp:
                 check(any("muerde de más" in pr for pr in casos_mod.armar(muerde, Path(tmp) / "r")),
                       "casos: una regla que muerde un inocente del caso entra igual")
+
+    # Sesión contaminada: después de leer a un tercero, lo que tiene efecto afuera escala.
+    tt = config.get("taint") or {}
+    if tt.get("sources"):
+        for s_, fuente_ in enumerate((tt["sources"].get("tools") or [])[:2] + [f"{p_.strip('^()').split('|')[0]}/x.txt" for p_ in (tt["sources"].get("readPaths") or [])[:1]]):
+            sesion = f"selftest-taint-{s_}"
+            leer = (fuente_, {"url": "https://x.test"}) if fuente_ in (tt["sources"].get("tools") or []) else ((tools.get("read") or ["read_file"])[0], {"path": fuente_})
+            for regla in tt.get("askCommands") or []:
+                r_ = pre(tool_name=tools["shell"][0], args={"command": regla["example"]}, session_id=sesion + "-limpia")
+                check(not (isinstance(r_, dict) and r_.get("rule_key", "").endswith(regla["id"])), f"taint: `{regla['id']}` escala en una sesión LIMPIA")
+            check(pre(tool_name=leer[0], args=leer[1], session_id=sesion) is None, f"taint: leer la fuente {fuente_} quedó frenado")
+            for regla in tt.get("askCommands") or []:
+                for caso in [regla["example"]] + list(regla.get("moreExamples") or []):
+                    r_ = pre(tool_name=tools["shell"][0], args={"command": caso}, session_id=sesion)
+                    check(isinstance(r_, dict) and r_.get("action") in ("approve", "block"), f"taint: tras leer {fuente_}, `{caso}` no escala")
+            for regla in tt.get("askWrites") or []:
+                for caso in [regla["example"]] + list(regla.get("moreExamples") or []):
+                    r_ = pre(tool_name=tools["write"][0], args={"path": caso, "content": "x"}, session_id=sesion)
+                    check(isinstance(r_, dict) and r_.get("action") in ("approve", "block"), f"taint: tras leer {fuente_}, escribir {caso} no escala")
+            for kind_ in tt.get("askKinds") or []:
+                if tools.get(kind_):
+                    args_k = {"action": "add", "content": "hola"} if kind_ == "memory" else {"action": "create", "schedule": "every day at 9am", "prompt": "hola", "operations": [{"action": "create", "content": "hola"}]}
+                    r_ = pre(tool_name=tools[kind_][0], args=args_k, session_id=sesion)
+                    check(isinstance(r_, dict) and r_.get("action") == "approve", f"taint: tras leer {fuente_}, `{kind_}` no escala")
+            if tools.get("memory"):
+                check(pre(tool_name=tools["memory"][0], args={"action": "remove", "old_text": "algo"}, session_id=sesion) is None,
+                      f"taint: tras leer {fuente_}, LIMPIAR la memoria escala (limpiar no se frena, P3)")
+            for caso in tt.get("innocentAfter") or []:
+                check(pre(tool_name=tools["shell"][0], args={"command": caso}, session_id=sesion) is None, f"taint: tras leer {fuente_}, `{caso}` muerde de más")
+            for caso in tt.get("innocentWritesAfter") or []:
+                check(pre(tool_name=tools["write"][0], args={"path": caso, "content": "x"}, session_id=sesion) is None,
+                      f"taint: tras leer {fuente_}, escribir {caso} muerde de más")
+        r_ = pre(tool_name=tools["shell"][0], args={"command": "cat tickets/9.txt"}, session_id="selftest-taint-cat")
+        r_ = pre(tool_name=tools["shell"][0], args={"command": (tt.get("askCommands") or [{}])[0].get("example", "git commit -m x")}, session_id="selftest-taint-cat")
+        check(isinstance(r_, dict) and r_.get("action") == "approve", "taint: un `cat tickets/x` por la terminal no contamina la sesión")
 
     # Guardia de Python (PEP 578): lo que un programa ABRE, aunque arme la ruta por partes.
     gdir = HARNESS_HOME / "plugin" / "guardia"

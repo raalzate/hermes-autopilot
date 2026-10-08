@@ -92,6 +92,8 @@ CODIGO = {
     "guardia: no decide nada": ("plugin/guardia/guardia.py", '    for regla in spec.get("lee") or []:\n        if _casa(regla, rel):\n            return regla', '    for regla in []:\n        if _casa(regla, rel):\n            return regla'),
     "guardia: las escrituras no se miran": ("plugin/guardia/sitecustomize.py", '            rutas, w = [args[0]], guardia.escribe(args[1], args[2] if len(args) > 2 else None)', '            rutas, w = [args[0]], False'),
     "loop: no enciende la guardia": ("scripts/loop.py", '    if not (config.get("loop") or {}).get("guardiaPython"):\n        return env', '    if True:\n        return env'),
+    "taint: la sesión nunca se marca": ("plugin/__init__.py", "            _CONTAMINADAS[sesion] = fuente", "            pass"),
+    "taint: la marca no llega al freno": ("plugin/harness/guards.py", '    for guard in GUARDS.get(kind or "", []) + ([taint_guard] if ev.contaminada else []):', '    for guard in GUARDS.get(kind or "", []):'),
     "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
 }
 

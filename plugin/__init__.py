@@ -73,6 +73,11 @@ def _cwd_de(args, task_id: str = "") -> str:
     return wd if isinstance(wd, str) and wd else _cwd_de_sesion(task_id)
 
 
+# Sesiones que ya leyeron contenido de terceros: {sesión: de dónde}. Vive en el proceso de Hermes
+# (el plugin se carga una vez); los frenos siguen siendo funciones puras: reciben el dato en el Event.
+_CONTAMINADAS: dict[str, str] = {}
+
+
 @_seguro
 def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_id: str = "", **_):
     args = args if isinstance(args, dict) else {}
@@ -80,8 +85,15 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
     root, config = _contexto(cwd or None)
     if not config:
         return None
-    ev = core.Event(tool=tool_name, args=args, cwd=cwd, session_id=session_id)
+    sesion = session_id or task_id or "default"
+    ev = core.Event(tool=tool_name, args=args, cwd=cwd, session_id=session_id,
+                    contaminada=_CONTAMINADAS.get(sesion, ""))
     d = guards.evaluate(ev, config, root)
+    if not (d.block or d.approve):
+        fuente = guards.fuente_externa(ev, config, root)
+        if fuente and sesion not in _CONTAMINADAS:
+            _CONTAMINADAS[sesion] = fuente
+            events.record(config, root, "contaminada", source=fuente, session=sesion)
     if d.block or d.approve:
         # Lo que el freno decidió, para el panel: sin esto se ve sólo dentro de esta conversación.
         events.record(config, root, "block" if d.block else "ask", rule=(d.rule or {}).get("id", "?"),
