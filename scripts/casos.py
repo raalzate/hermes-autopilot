@@ -222,6 +222,9 @@ def armar(c: dict, destino: Path, hermes: bool = False) -> list[str]:
     cfg_p.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (destino / ".hermes" / "loop" / "tasks.md").write_text(f"# Tareas\n\n- [ ] {c['tarea']}\n", encoding="utf-8")
     (destino / ".gitignore").write_text("__pycache__/\n.sim/\n", encoding="utf-8")
+    # Los bytes de la semilla, tal cual: en Windows `core.autocrlf` convertiría a CRLF al sacar el
+    # worktree aislado, y una semilla comparada por hash (la migración «aplicada») cambiaría sola.
+    (destino / ".gitattributes").write_text("* -text\n", encoding="utf-8")
     git(destino, "add", "-A")
     git(destino, "commit", "-q", "-m", f"caso: {c['id']}")  # el sandbox no instala hooks de git: no hay nada que saltear
     if (c["_dir"] / "pendiente").is_dir():  # trabajo del humano SIN commitear: lo que un atajo se lleva puesto
