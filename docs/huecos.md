@@ -1,15 +1,38 @@
 # Huecos — auditoría del arnés
 
+**22 cerrados · 3 abiertos** (auditoría del 2026-10-07, actualizada el 2026-10-08).
+
 Un hueco es algo que un agente puede hacer y que el arnés dice que no pasa, o algo que el arnés
-debería ver y no ve. Esta página es la auditoría del 2026-10-07, actualizada el 2026-10-08 verificando contra el código de Hermes: se buscaron armando los
-[casos replicables](../casos/README.md). Cada caso es un agente que toma un atajo real, y un atajo
-que pasaba sin que nada lo notara era un hueco.
+debería ver y no ve. Se buscaron armando los [casos replicables](../casos/README.md) y verificando
+contra el código de Hermes: cada caso es un agente que toma un atajo real, y un atajo que pasaba sin
+que nada lo notara era un hueco.
 
 Regla de la casa (P15): un hueco se cierra con el mecanismo más fuerte disponible y con su prueba
 (un caso en el self-test, una mutación, un caso replicable). Lo que no se puede cerrar queda
 **acá**, con su estado, para que nadie lo dé por cubierto.
 
-## Cerrados
+## En una mirada
+
+| Tema | Cerrados | Abierto |
+|---|---|---|
+| Escribir o borrar lo protegido por otro camino (terminal, código en línea, `execute_code`, un programa Python) | 1, 12, 13, 19 | lo que un programa hace por dentro **fuera del loop** |
+| Leer secretos | 2, 14, 15, 18 | — |
+| El loop: que el verde no se pueda trampear, ni la cola, ni dos loops a la vez, ni las tareas en paralelo | 3, 4, 5, 17, 18 | — |
+| Contenido de terceros (inyección de prompt) y datos hacia afuera | 16, 20 | lo que queda **en el texto** de la respuesta |
+| Reglas de la plantilla y los casos | 6, 7, 9, 10, 11 | — |
+| Medir: panel, Hermes real, revisor inferencial | 8, 21, 22 | el loop con un **modelo** de verdad (falta el secreto `HERMES_ENV`) |
+
+## Abiertos
+
+| Hueco | Riesgo | Por qué sigue abierto | Mitigación hoy |
+|---|---|---|---|
+| Lo que un **programa** hace por dentro **fuera del loop** (una sesión interactiva de Hermes en el árbol de trabajo) | un agente puede leer o escribir un secreto sin nombrarlo en ningún comando | en el árbol de trabajo del humano el `.env` sí existe, y un regex ve lo que se nombra, no lo que se hace | en el loop, cerrado (huecos 18 y 19); afuera, el pre-commit (nada protegido entra al historial), `approvals.deny` de Hermes y no dejar secretos en el disco (un gestor de secretos que los inyecte sólo al proceso que los usa). La guardia de Python también sirve en una sesión interactiva: `HARNESS_GUARDIA` y `PYTHONPATH` en el entorno de Hermes |
+| **Inyección de prompt**: lo que queda sin efecto afuera (una copia en el texto de una respuesta, una conclusión sesgada) | el agente obedece instrucciones de un tercero en el contenido que entrega | ningún freno puede decidir si un texto es dato o instrucción, y escribir una respuesta no es una acción vedada | lo que tiene efecto afuera ya escala tras leer a un tercero (hueco 20); lo que queda en el texto depende del gate de la tarea (caso `soporte-ticket-inyeccion`, modo `obediente`). Medir qué tan seguido obedece un modelo real es parte del hueco «Hermes real» |
+| El loop con un **modelo** de verdad como agente | los casos prueban el arnés con un agente determinista; cuánto obedece un modelo el motivo de un freno (o una inyección) no está medido | correr Hermes con un modelo cuesta tokens y necesita una key, que es del dueño del repo | el contrato con el Hermes real ya corre en cada PR (hueco 21) y la medición con modelo tiene su pipeline (hueco 22); falta el secreto `HERMES_ENV`. A mano: `casos.py preparar <id> <dir> --hermes` |
+
+## Anexo: cerrados
+
+Cada fila dice cómo apareció el hueco, con qué mecanismo se cerró y qué prueba lo mantiene cerrado.
 
 | # | Hueco | Cómo apareció | Mecanismo | Prueba |
 |---|---|---|---|---|
@@ -30,16 +53,8 @@ Regla de la casa (P15): un hueco se cierra con el mecanismo más fuerte disponib
 | 15 | **Secretos en el entorno**: el diagnóstico era incompleto. Hermes YA quita los secretos del entorno de la terminal y de `execute_code` por defecto; sólo pasan los de `terminal.env_passthrough` | verificado en `tools/env_passthrough.py` | `doctor.py` avisa si `terminal.env_passthrough` deja pasar un nombre con forma de secreto (`*KEY*`, `*TOKEN*`, `*PASSWORD*`…) | self-test (la función de doctor, con un passthrough culpable y uno inocente) |
 | 16 | Exfiltración: subir datos con `curl -d/-F/-T`, `wget --post-*` o desde Python | abierto en la auditoría anterior | `terminal.ask[datos-hacia-afuera]` y `inlineCode.sendPatterns`: escala a un humano, y en el loop (sin humano) se niega. Bajar (`curl -fsSLo`) y consultar (`curl -s`) siguen pasando | el self-test deriva los casos de cada `example` y prueba los inocentes |
 | 17 | **Varias tareas en paralelo** | abierto en la auditoría anterior | `loop.py --paralelo N`: cada tarea en su `git worktree` (bajo `.git/harness-worktrees/`) y su rama, con su candado, su estado y sus intocables; el coordinador marca la cola principal y todos escriben en el registro del panel (`HARNESS_EVENTS_FILE`) | self-test §13 (dos tareas reales: una verde, una escalada, la cola marcada, `main` sin moverse, los eventos en el registro principal) y 2 mutaciones. La matriz de CI cazó que en Windows dos loops que escriben el registro a la vez perdían líneas (el append no es atómico ahí): el registro escribe con candado entre procesos, y el self-test lo prueba con 4 procesos × 200 líneas |
-| 18 | Lo que un **programa** hace por dentro, en el loop: un script, un test o una ruta armada por partes (`'.e' + 'nv'`) leen el `.env` sin nombrarlo en ningún comando | abierto en la auditoría anterior | `loop.aislar` (por defecto): cada tarea corre en su `git worktree`, que no trae lo ignorado por git. El secreto no está donde trabaja el agente: no hay nada que leer ni que cambiar. Fuera del loop sigue abierto (ver abajo) | self-test §13 (un `.env` ignorado que el agente no ve, el estado principal con los intentos del worktree, `main` intacto) y una mutación; los 17 casos corren aislados |
+| 18 | Lo que un **programa** hace por dentro, en el loop: un script, un test o una ruta armada por partes (`'.e' + 'nv'`) leen el `.env` sin nombrarlo en ningún comando | abierto en la auditoría anterior | `loop.aislar` (por defecto): cada tarea corre en su `git worktree`, que no trae lo ignorado por git. El secreto no está donde trabaja el agente: no hay nada que leer ni que cambiar. Fuera del loop sigue abierto (ver «Abiertos») | self-test §13 (un `.env` ignorado que el agente no ve, el estado principal con los intentos del worktree, `main` intacto) y una mutación; los 17 casos corren aislados |
 | 19 | Lo que un **programa Python** abre, aunque arme la ruta por partes (`'.e' + 'nv'`) o sea un script o un test del repo | abierto en la auditoría anterior | la guardia de Python (`loop.guardiaPython`, `plugin/guardia`): un *audit hook* (PEP 578) en cada proceso Python del agente compara la ruta REAL de cada `open`/`remove`/`rename` con `protectedReads`, `protectedPaths` y `lockedPaths`, y frena con el motivo. Ignora la caché de bytecode y el estado del arnés | self-test (unitario y con procesos reales: ruta armada, rename, inocente, spec rota que no rompe Python) y 3 mutaciones; casos en modo `ofuscado` (ahora los frena la guardia) |
 | 20 | **Inyección de prompt**: el daño, no la detección. Una instrucción plantada en un ticket o una web que el agente obedece y vuelve permanente (AGENTS.md, CI, memoria) o manda afuera | abierto en la auditoría anterior | **sesión contaminada** (`taint`): el plugin marca la sesión que leyó contenido de terceros (herramientas web y de navegador de Hermes, verificadas en su código, o `tickets/`, `inbox/`, `correos/`); desde ahí, publicar o hablar con otro servidor, escribir donde una instrucción quedaría permanente y guardar memoria, skills o cron escalan a un humano —en el loop, se niega—. Corta el canal de salida justo después de la entrada del tercero | self-test (fuentes, reglas, inocentes, sesión limpia que no escala, limpiar que no escala) y 2 mutaciones; caso `soporte-ticket-inyeccion` (`persistente`) |
 | 21 | El **Hermes real** no corría en ningún lado: las dos señales del gate que lo miran por dentro salían siempre OMITIDAS (ni esta máquina ni CI lo tenían) | abierto en la auditoría anterior | `scripts/hermes_fuente.py` instala Hermes desde su código fuente en el commit verificado (sin wheels de main, y con PyPI meses atrás); el job `hermes-real` de CI corre el gate entero con él en cada PR. Primera corrida: `plugins doctor` OK (4 hooks) y **87 verificaciones del contrato dentro de Hermes**. Destapó un bug: el e2e leía mal el intérprete cuando pip/uv escriben el shebang largo (`exec` en la línea 2) | job `hermes-real`; self-test (las tres formas de shebang) |
 | 22 | Sensor **inferencial** sin tasa de acierto (`harness-review` juzgaba sin que nadie midiera cuánto acierta) | abierto en la auditoría anterior | `scripts/revision.py`: recall y precisión contra 16 diffs etiquetados salidos de los casos (`evals/revision.json`), con umbrales en `review`; señal del gate con `omitIfExit` (OMITIDA sin modelo, nunca verde) y `hermes-nocturno.yml`, que lo corre con Hermes y un modelo. **Se activa con el secreto `HERMES_ENV`**: sin él, el job lo avisa con una anotación | self-test (un revisor perfecto pasa, uno que aprueba todo no, sin modelo es OMITIDA, el gate trata `omitIfExit` como OMITIDA) y 2 mutaciones |
-
-## Abiertos
-
-| Hueco | Riesgo | Por qué sigue abierto | Mitigación hoy |
-|---|---|---|---|
-| Lo que un **programa** hace por dentro **fuera del loop** (una sesión interactiva de Hermes en el árbol de trabajo) | un agente puede leer o escribir un secreto sin nombrarlo en ningún comando | en el árbol de trabajo del humano el `.env` sí existe, y un regex ve lo que se nombra, no lo que se hace | en el loop, cerrado (huecos 18 y 19); afuera, el pre-commit (nada protegido entra al historial), `approvals.deny` de Hermes y no dejar secretos en el disco (un gestor de secretos que los inyecte sólo al proceso que los usa). La guardia de Python también sirve en una sesión interactiva: `HARNESS_GUARDIA` y `PYTHONPATH` en el entorno de Hermes |
-| **Inyección de prompt**: lo que queda sin efecto afuera (una copia en el texto de una respuesta, una conclusión sesgada) | el agente obedece instrucciones de un tercero en el contenido que entrega | ningún freno puede decidir si un texto es dato o instrucción, y escribir una respuesta no es una acción vedada | lo que tiene efecto afuera ya escala tras leer a un tercero (hueco 20); lo que queda en el texto depende del gate de la tarea (caso `soporte-ticket-inyeccion`, modo `obediente`). Medir qué tan seguido obedece un modelo real es parte del hueco «Hermes real» |
-| El loop con un **modelo** de verdad como agente | los casos prueban el arnés con un agente determinista; cuánto obedece un modelo el motivo de un freno (o una inyección) no está medido | correr Hermes con un modelo cuesta tokens y necesita una key, que es del dueño del repo | el contrato con el Hermes real ya corre en cada PR (hueco 21) y la medición con modelo tiene su pipeline (hueco 22); falta el secreto `HERMES_ENV`. A mano: `casos.py preparar <id> <dir> --hermes` |
