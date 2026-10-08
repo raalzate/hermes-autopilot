@@ -36,10 +36,17 @@ def spec(config: dict | None) -> dict:
 
 
 def path(config: dict | None, root: Path) -> Path | None:
-    """Dónde vive el registro. `.git/...` se resuelve contra el gitdir real (worktrees)."""
+    """Dónde vive el registro. `.git/...` se resuelve contra el gitdir real (worktrees).
+
+    `HARNESS_EVENTS_FILE` (ruta absoluta) lo redirige: los loops en paralelo corren cada uno en su
+    worktree, y el coordinador los hace escribir en el registro del repo principal, que es el
+    que mira el panel."""
     rel = spec(config).get("file")
     if not rel:
         return None
+    forzado = os.environ.get("HARNESS_EVENTS_FILE")
+    if forzado:
+        return Path(forzado)
     if rel.startswith(".git/"):
         g = git_dir(root)
         return (g / rel[len(".git/"):]) if g is not None else None

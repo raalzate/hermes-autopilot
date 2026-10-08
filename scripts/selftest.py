@@ -332,6 +332,45 @@ def main() -> int:
             pasa(tools["shell"][0], {"command": f"cat {inocente}"}, f"terminal: `cat {inocente}` es inocente")
     if config.get("protectedReads"):
         check(bool(config.get("protectedReadsInnocent")), "protectedReadsInnocent vacío: nada prueba que el freno de lectura no muerde de más")
+    # Un glob que nombra el secreto (`search_files` con `file_glob: .env*`) es leerlo.
+    for regla in (config.get("protectedReads") or [])[:1]:
+        for tool in tools.get("read") or []:
+            bloquea(tool, {"pattern": "x", "path": ".", "file_glob": regla["example"] + "*"}, f"{tool}: file_glob que nombra protectedReads[{regla['id']}]")
+
+    # Código: `execute_code` de Hermes (Python que no pasa por la terminal) y `python3 -c`/`bash -c`.
+    # Lo que la terminal veda lo veda el código; un secreto que el código NOMBRA no se lee; una ruta
+    # protegida que nombra no se escribe. Casos derivados de cada regla.
+    ic = t.get("inlineCode") or {}
+    escritas = [r for r in config.get("protectedPaths") or [] if not r.get("outsideRepo") and r.get("example")]
+    for tool in tools.get("code") or []:
+        for regla in t.get("deny") or []:
+            if regla.get("example"):
+                bloquea(tool, {"code": f"import subprocess\nsubprocess.run({regla['example']!r}, shell=True)"},
+                        f"{tool}: terminal.deny[{regla['id']}] dentro de execute_code")
+        for regla in config.get("protectedReads") or []:
+            bloquea(tool, {"code": f"print(open({regla['example']!r}).read())"}, f"{tool}: lee protectedReads[{regla['id']}]")
+        for regla in escritas:
+            bloquea(tool, {"code": f"open({regla['example']!r}, 'w').write('x')"}, f"{tool}: escribe protectedPaths[{regla['id']}]")
+        for regla in ic.get("sendPatterns") or []:
+            if regla.get("example"):
+                bloquea(tool, {"code": regla["example"]}, f"{tool}: inlineCode.sendPatterns[{regla.get('id')}]", "approve")
+        for regla in (t.get("ask") or [])[:2]:
+            if regla.get("example"):
+                bloquea(tool, {"code": f"import subprocess\nsubprocess.run({regla['example']!r}, shell=True)"},
+                        f"{tool}: terminal.ask[{regla['id']}] dentro de execute_code", "approve")
+        for inocente in ic.get("codeInnocent") or []:
+            pasa(tool, {"code": inocente}, f"{tool}: código inocente «{inocente[:40]}»")
+    if ic.get("interpreters"):
+        for regla in (config.get("protectedReads") or [])[:2]:
+            bloquea(tools["shell"][0], {"command": f"python3 -c \"print(open('{regla['example']}').read())\""},
+                    f"terminal: python3 -c que lee protectedReads[{regla['id']}]")
+            bloquea(tools["shell"][0], {"command": f"bash -c 'cat {regla['example']}'"}, f"terminal: bash -c que lee protectedReads[{regla['id']}]")
+        for regla in escritas[:2]:
+            bloquea(tools["shell"][0], {"command": f"python3 -c \"open('{regla['example']}','w').write('x')\""},
+                    f"terminal: python3 -c que escribe protectedPaths[{regla['id']}]")
+        for inocente in ic.get("innocent") or []:
+            pasa(tools["shell"][0], {"command": inocente}, f"terminal: código en línea inocente `{inocente}`")
+    check(bool(tools.get("code")) == bool(ic.get("codeInnocent")), "tools.code sin inlineCode.codeInnocent (o al revés): nada prueba que no muerde de más")
 
     # ── 3b. Las formas de Hermes que un freno ingenuo no ve (revisión 2026-09-30) ──
     section("3b. formas reales de Hermes: V4A, cwd de sesión, limpiar, homes movidos, worktrees")
@@ -967,6 +1006,42 @@ def main() -> int:
                 json.dumps({"pid": os.getpid(), "at": __import__("time").time()}), encoding="utf-8"))
             check(p_.returncode == 1 and "ya hay un loop" in p_.stdout, f"loop real: arrancó con otro loop corriendo en el repo: {p_.stdout[-300:]}")
         check(not loop_mod.candado_vivo(Path("/no/existe/lock"), sp), "loop: un candado que no existe traba")
+        # En paralelo: cada tarea en su worktree; la cola principal marcada; los eventos en SU registro.
+        check(loop_mod.pendientes("- [x] a\n- [ ] b\n- [ ] c\n- [ ] d\n", 2) == [(1, "b"), (2, "c")], "loop: --paralelo no toma las primeras N pendientes")
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            g_ = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True)  # noqa: E731
+            g_("init", "-q", "-b", "main")
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            (troot / ".hermes" / "loop").mkdir(parents=True)
+            cfg_p = {"branches": {"protected": ["main"]}, "observability": {"events": {"file": ".git/harness-events.jsonl"}},
+                     "loop": {**sp, "tasksFile": ".hermes/loop/tasks.md",
+                              "agentCommand": ["python3", "-c", "import sys,pathlib; None if 'MAL' in sys.argv[1] else "
+                                               "pathlib.Path('ok.txt').write_text('ok', encoding='utf-8')", "{prompt}"],
+                              "gateCommand": ["python3", "-c", "import pathlib,sys; ok=pathlib.Path('ok.txt').exists(); "
+                                              "print('' if ok else '✗ tests (exit 1)'); sys.exit(0 if ok else 1)"]}}
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_p), encoding="utf-8")
+            (troot / ".hermes" / "loop" / "tasks.md").write_text("# t\n- [ ] buena\n- [ ] MAL hecha\n- [ ] tercera\n", encoding="utf-8")
+            g_("add", "-A")
+            g_("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "x")
+            env_l = {k: v for k, v in os.environ.items() if k not in ("HARNESS_REPO", "HARNESS_NO_EVENTS")}
+            p_ = subprocess.run([sys.executable, str(troot / "scripts" / "loop.py"), "--apply", "--paralelo", "2"], cwd=troot, env=env_l,
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+            cola_ = (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8")
+            check(p_.returncode == 2 and "- [x] buena" in cola_ and "- [!] MAL hecha" in cola_ and "- [ ] tercera" in cola_,
+                  f"loop --paralelo: la cola no quedó marcada por resultado:\n{cola_}\n{p_.stdout[-500:]}")
+            check(g_("branch", "--show-current").stdout.strip() == "main", "loop --paralelo: movió la rama del repo principal")
+            check((troot / ".git" / "harness-worktrees" / "buena" / "ok.txt").is_file(), "loop --paralelo: lo hecho no quedó en su worktree")
+            kinds_p = [e.get("kind") for e in events_mod.tail({"observability": {"events": {"file": ".git/harness-events.jsonl"}}}, troot, 100)]
+            check("loop-verde" in kinds_p and "loop-escalar" in kinds_p and kinds_p.count("loop-iter") >= 3,
+                  f"loop --paralelo: los loops de los worktrees no escribieron en el registro del panel ({kinds_p})")
+
+    # doctor: un secreto en `terminal.env_passthrough` de Hermes llega a la terminal del agente.
+    import doctor as doctor_mod  # noqa: E402
+    check(doctor_mod.secretos_en_passthrough("terminal:\n  env_passthrough: [PATH_EXTRA, GITHUB_TOKEN, DB_PASSWORD]\n")
+          == ["GITHUB_TOKEN", "DB_PASSWORD"], "doctor: no ve secretos en terminal.env_passthrough")
+    check(doctor_mod.secretos_en_passthrough("terminal:\n  env_passthrough:\n    - LANG\n") == [], "doctor: marca un passthrough inocente")
 
     # Casos replicables: la forma del catálogo, y que el runner compare de verdad (una expectativa
     # falsa tiene que dar diferencias; una regla que muerde un inocente del caso, romperlo).

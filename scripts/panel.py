@@ -332,7 +332,7 @@ function render(s){
   $("lphase").textContent=(L.stopRequested?"⏸ parada pedida · ":"")+ph+(st.iteration&&!st.endedAt?` · intento ${st.iteration}`:"");$("lphase").className="big "+cls;
   $("ltask").textContent=st.task?`${st.task} · ${hace(st.startedAt)}`:"";
   $("lreason").innerHTML=st.reason?`<p class="${cls}">${esc(st.reason)}</p>`:`<p class="mute">topes: ${esc(L.limits.maxIterations)} intentos · mismo rojo ${esc(L.limits.sameFailureLimit)}× escala · ${esc(L.limits.maxMinutes)} min</p>`;
-  $("attempts").innerHTML=(st.attempts||[]).map(a=>`<li><span class="chip ${a.green?"ok":"bad"}">#${a.n}</span><span>${a.green?"verde":esc(a.signature)}</span><span class="mute n" style="margin-left:auto">${esc(a.secs)}s</span></li>`).join("")}
+  $("attempts").innerHTML=(st.workers||[]).length?st.workers.map(w=>`<li><span class="chip ${{verde:"ok",escalar:"bad",parado:"warn"}[w.phase]||""}">${esc(w.phase)}</span><span>${esc(w.task)}</span></li>`).join(""):(st.attempts||[]).map(a=>`<li><span class="chip ${a.green?"ok":"bad"}">#${a.n}</span><span>${a.green?"verde":esc(a.signature)}</span><span class="mute n" style="margin-left:auto">${esc(a.secs)}s</span></li>`).join("")}
  const T=L.tasks;
  if(!T){$("tasks").innerHTML='<p class="empty">El repo no declara <span class="k">loop</span>.</p>'}
  else{const tot=T.pending.length+T.done+T.escalated.length;

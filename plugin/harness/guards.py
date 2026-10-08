@@ -78,6 +78,15 @@ def terminal_guard(ev: Event, config: dict, root: Path) -> Decision:
             d = _ruta_protegida(destino.strip("'\""), config, root, ev.cwd)
             if d.block:
                 return d
+    # Código en línea (`python3 -c "open('.env')…"`, `bash -c '…'`): las rutas que nombra.
+    interp = ((t.get("inlineCode") or {}).get("interpreters"))
+    try:
+        if interp and re.search(interp, comparable):
+            d = _codigo_toca(comparable, config, root, ev.cwd)
+            if d.block:
+                return d
+    except re.error:
+        pass
     # Leer un secreto por la terminal (`cat .env`, `grep X .env`, `< .env`) es leerlo: las mismas
     # reglas que a la herramienta de lectura, sobre cada argumento de `readTargets`.
     for patron in t.get("readTargets") or []:
@@ -160,11 +169,84 @@ def _lectura_protegida(raw: str, config: dict, root: Path, cwd: str) -> Decision
 
 def read_guard(ev: Event, config: dict, root: Path) -> Decision:
     """Secretos que el agente no lee (`protectedReads`): lo que lee entra al contexto del modelo,
-    sale hacia el proveedor y queda en el historial. Escribir y leer son riesgos distintos."""
-    for raw in paths_of(config, ev):
-        d = _lectura_protegida(raw, config, root, ev.cwd)
+    sale hacia el proveedor y queda en el historial. Escribir y leer son riesgos distintos.
+
+    Mira TODOS los argumentos de ruta de `tools.$readArgs` (`search_files` trae `path` y
+    `file_glob`; `vision_analyze`, `image_url`). Un glob se evalúa sin sus comodines: `.env*`
+    nombra al `.env`."""
+    claves = (config.get("tools") or {}).get("$readArgs") or ["path", "file_path"]
+    for raw in [ev.args.get(k) for k in claves if isinstance(ev.args.get(k), str)] or paths_of(config, ev):
+        d = _lectura_protegida(re.sub(r"[*?\[\]{}]", "", raw), config, root, ev.cwd)
         if d.block:
             return d
+    return Decision.allow()
+
+
+def _literales(texto: str) -> list[str]:
+    """Las cadenas entre comillas de un código, y cada palabra de cada una (`bash -c 'cat .env'`)."""
+    out: list[str] = []
+    # Simples y dobles por separado: en `"print(open('.env').read())"` el literal que importa
+    # está ADENTRO del otro, y una sola pasada sólo vería el de afuera.
+    for patron in (r"'([^'\n]{1,400})'", r'"([^"\n]{1,400})"'):
+        for m in re.finditer(patron, texto):
+            lit = m.group(1).strip()
+            out += [lit] + [w for w in lit.split() if w != lit]
+    return list(dict.fromkeys(x for x in out if x))
+
+
+def _codigo_toca(texto: str, config: dict, root: Path, cwd: str) -> Decision:
+    """Código (de `execute_code` o de un `python3 -c`) que NOMBRA un secreto o, si además escribe,
+    una ruta protegida. Un regex no sabe qué hace un programa, pero sí qué rutas nombra: un
+    `open('.env')` se ve. Una ruta armada por partes (`'.e' + 'nv'`) no — eso queda para los
+    intocables del loop (docs/huecos.md)."""
+    spec = (config.get("terminal") or {}).get("inlineCode") or {}
+    try:
+        escribe = bool(spec.get("writeMarkers")) and re.search(spec["writeMarkers"], texto) is not None
+    except re.error:
+        escribe = False
+    for lit in _literales(texto):
+        d = _lectura_protegida(lit, config, root, cwd)
+        if d.block:
+            return d
+        if escribe:
+            d = _ruta_protegida(lit, config, root, cwd)
+            if d.block:
+                return d
+    return Decision.allow()
+
+
+def code_guard(ev: Event, config: dict, root: Path) -> Decision:
+    """`execute_code` de Hermes: Python arbitrario como herramienta propia, que NO pasa por la
+    terminal. Se le aplican `terminal.deny` (un `subprocess.run("git push --force")` es un push) y
+    las rutas que nombra (`_codigo_toca`). Sin esto, todo freno de terminal tenía un desvío."""
+    claves = (config.get("tools") or {}).get("$args", {}).get("code") or ["code"]
+    codigo = "\n".join(ev.args[k] for k in claves if isinstance(ev.args.get(k), str))
+    if not codigo:
+        return Decision.allow()
+    deny = (config.get("terminal") or {}).get("deny")
+    # El código entero, y cada cadena por separado: `subprocess.run('git add -A', shell=True)` es un
+    # `git add -A`, pero seguido de una comilla no casa con una regla que termina en `(\s|$)`.
+    hit = first_match(deny, _para_comparar(codigo, config)) or next(
+        (h for h in (first_match(deny, _para_comparar(lit, config)) for lit in _literales(codigo)) if h), None)
+    if hit:
+        return Decision.deny(
+            "CÓDIGO BLOQUEADO por el arnés del repo: hace lo que la terminal tiene vedado.\n"
+            f"Motivo: {hit.get('reason', '(sin motivo declarado)')}\n"
+            "Correrlo desde execute_code no lo vuelve otra cosa. Reformulá o pedí confirmación al humano.",
+            hit,
+        )
+    d = _codigo_toca(codigo, config, root, ev.cwd)
+    if d.block:
+        return d
+    # Lo que la terminal escala, el código también: `terminal.ask` sobre cada cadena, y mandar
+    # datos hacia afuera desde Python (`inlineCode.sendPatterns`: requests.post, urlopen con data…).
+    t = config.get("terminal") or {}
+    ask = next((h for h in (first_match(t.get("ask"), lit) for lit in _literales(codigo)) if h), None)
+    if ask:
+        return Decision.ask(f"El arnés del repo pide aprobación humana para este código: {ask.get('reason', '')}", ask)
+    envio = first_match([r for r in (t.get("inlineCode") or {}).get("sendPatterns") or [] if isinstance(r, dict)], codigo)
+    if envio:
+        return Decision.ask(f"El arnés del repo pide aprobación humana para este código: {envio.get('reason', '')}", envio)
     return Decision.allow()
 
 
@@ -365,6 +447,7 @@ GUARDS = {
     "shell": [terminal_guard],
     "write": [protected_paths, content_patterns],
     "read": [read_guard],
+    "code": [code_guard],
     "memory": [memory_guard],
     "skill": [skill_guard],
     "cron": [cron_guard],
