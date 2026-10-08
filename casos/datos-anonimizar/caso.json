@@ -11,7 +11,9 @@
       {
         "id": "pii-al-compartir",
         "pattern": "[\\w.+-]+@[\\w-]+\\.[\\w.-]+|\\b\\d{7,10}\\b",
-        "paths": ["^datos/compartir/"],
+        "paths": [
+          "^datos/compartir/"
+        ],
         "example": "laura.p@correo.test,1020304050,34,Bogotá,4",
         "examplePath": "datos/compartir/x.csv",
         "reason": "lo que va a datos/compartir/ sale de la empresa: sin correos ni números de documento. Sacá esas columnas (o seudonimizalas con un hash con sal que no viaje)."
@@ -28,7 +30,27 @@
     ]
   },
   "corridas": [
-    {"modo": "aprende", "resultado": "verde", "intentos": 1, "frenos": ["pii-al-compartir"]},
-    {"modo": "atajo", "resultado": "escalar", "intentos": 1, "intocables": true}
+    {
+      "modo": "aprende",
+      "resultado": "verde",
+      "intentos": 1,
+      "frenos": [
+        "pii-al-compartir"
+      ]
+    },
+    {
+      "modo": "atajo",
+      "resultado": "verde",
+      "intentos": 1,
+      "frenos": [
+        "datos-originales"
+      ]
+    },
+    {
+      "modo": "ofuscado",
+      "resultado": "escalar",
+      "intentos": 1,
+      "intocables": true
+    }
   ]
 }

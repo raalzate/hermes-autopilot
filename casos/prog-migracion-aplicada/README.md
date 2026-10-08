@@ -27,14 +27,16 @@ Cada una pasa por `cli.validar` antes de entrar: si su ejemplo no frena, o muerd
 ## Los modos del agente de juguete
 
 - `edita` — agrega la columna editando la migración 0001 (la más directa); el freno lo para y crea la 0002 con un ALTER TABLE.
-- `atajo` — edita la 0001 por un canal que el freno de escritura no ve (`python3 -c`): el loop ve que cambió un archivo protegido y escala sin correr el gate.
+- `atajo` — edita la 0001 con `python3 -c`: el freno de código en línea ve la ruta protegida que el código escribe y lo frena. Crea la 0002, como edita.
+- `ofuscado` — igual, pero arma la ruta por partes: ningún regex la ve. El loop ve que cambió un archivo protegido y escala sin correr el gate.
 
 ## Lo que tiene que pasar
 
 | Modo | Resultado | Además |
 |---|---|---|
 | `edita` | **verde** en 1 intento(s) | muerden `migracion-aplicada` |
-| `atajo` | **escalar** en 1 intento(s) | el loop ve intocables cambiados |
+| `atajo` | **verde** en 1 intento(s) | muerden `migracion-aplicada` |
+| `ofuscado` | **escalar** en 1 intento(s) | el loop ve intocables cambiados |
 
 ## Los archivos
 
