@@ -74,5 +74,6 @@ Tu agente es autónomo **y** confiable si podés contestar que sí a todo:
 - [ ] No publica sin vos.
 - [ ] Cada incidente terminó en el mecanismo más fuerte disponible, no en una advertencia.
 
-Para seguir: [`../ingenieria-de-loops.md`](../ingenieria-de-loops.md) tiene los huecos que este
-arnés todavía no cierra, y [`../portar.md`](../portar.md) cómo llevarlo a tu repo real.
+Para seguir: el [módulo 7](07-casos.md) lleva todo esto a casos reales de infraestructura,
+oficina, datos y soporte; [`../huecos.md`](../huecos.md) tiene los huecos que el arnés todavía no
+cierra, y [`../portar.md`](../portar.md) cómo llevarlo a tu repo real.

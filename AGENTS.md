@@ -36,6 +36,7 @@ scripts/doctor.py            lo que el gate no ve: el Hermes de esta máquina
 scripts/loop.py              el lazo de la tarea: tarea → agente → gate; el mismo rojo escala (P21)
 scripts/cli.py               parametrizar sin editar JSON: `rule add` prueba la regla ANTES de escribirla
 scripts/panel.py             el panel en vivo (SSE, 127.0.0.1) sobre el registro de eventos (P22)
+scripts/casos.py             17 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
 .hermes/loop/tasks.md        la cola del loop autónomo
 .hermes/skills/              gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
 plantillas/                  lo que se copia al repo destino, y los perfiles de stack
@@ -77,6 +78,7 @@ python3 scripts/map.py           # ¿qué guía, freno o sensor actúa en cada e
 python3 scripts/timing.py        # ¿cuánto cuesta el arnés en cada tool call?
 python3 scripts/drift.py         # ¿algo se degradó sin que nadie lo tocara? (lo corre drift.yml)
 python3 scripts/cli.py status    # todo lo anterior en una pantalla; `cli.py panel` lo muestra en vivo
+python3 scripts/casos.py         # los casos replicables (también en el gate)
 ```
 
 - CI (`.github/workflows/ci.yml`) corre el mismo gate en Linux, macOS y Windows.
@@ -102,4 +104,6 @@ python3 scripts/cli.py status    # todo lo anterior en una pantalla; `cli.py pan
 | operar el loop autónomo | `docs/loop-autonomo.md` |
 | la CLI y el panel | `docs/cli-y-panel.md` |
 | el workshop de agentes autónomos | `docs/workshop/README.md` |
+| casos reales replicables (programación, infra, oficina…) | `casos/README.md` |
+| huecos: los cerrados y los abiertos | `docs/huecos.md` |
 | por qué está hecho así | `docs/decisions/` |

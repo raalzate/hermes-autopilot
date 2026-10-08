@@ -26,6 +26,7 @@ bueno: es un modelo metido en lazos de control bien hechos
 | [5 · Operar](05-operar.md) | 25 min | panel en vivo, freno de mano, leer una escalada, Hermes real | lo que pasa adentro se ve afuera |
 | [6 · Aprender de los incidentes](06-aprender.md) | 20 min | de una escalada a una regla nueva, con la skill `lesson` | cada incidente deja infraestructura |
 | Cierre | 5 min | la lista de chequeo | |
+| [7 · Casos reales](07-casos.md) *(extra)* | 30–60 min | infra, oficina, datos, soporte: correr un caso y escribir el de tu equipo | lo que pasa con la calculadora pasa en todos lados |
 
 ## Requisitos
 
