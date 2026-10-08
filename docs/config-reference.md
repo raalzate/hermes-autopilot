@@ -14,7 +14,8 @@ sin `example` es roja.
 
 | Clave | Qué declara |
 |---|---|
-| `tools.{shell,write,read,memory,skill,cron}` | qué herramientas de Hermes le tocan a cada familia de frenos (`read`: hoy sólo `read_file`, la verificada) |
+| `tools.{shell,write,read,code,memory,skill,cron}` | qué herramientas de Hermes le tocan a cada familia de frenos. `read`: `read_file`, `search_files`, `vision_analyze`; `code`: `execute_code` (verificadas contra el código de hermes-agent, 2026-10) |
+| `tools.$readArgs`, `tools.$args.code` | qué argumentos de una herramienta de lectura son rutas (`path`, `file_glob` —sin comodines—, `image_url`), y en cuál viene el código de `execute_code` |
 | `tools.$args.{command,path,content}` | en qué argumento de la herramienta está el comando, la ruta, el contenido |
 | `tools.$multiFilePatch` | `{args[], pathPatterns[], addedLine}` — la gramática V4A del `patch` de Hermes: de dónde salen las rutas y qué líneas se agregan |
 | `tools.$written`, `tools.$removeActions` | qué campos de memory/skill_manage/cronjob_manage son lo que se GUARDA, y qué acciones son borrados (no se filtran) |
@@ -28,6 +29,7 @@ sin `example` es roja.
 | `terminal.innocent[]` | comandos que NO deben frenar (P3) |
 | `terminal.dataArgs[]` | prefijos cuyo texto entre comillas es dato (mensaje de commit, término de búsqueda) y no se compara |
 | `terminal.redirectTargets[]` | regex con un grupo: destinos de escritura por la terminal (`>`, `tee`, destino de `cp`/`mv`, argumentos de `rm`, archivo de `sed -i`…), evaluados contra `protectedPaths`. Un grupo con varios argumentos se evalúa token por token (salteando las banderas) |
+| `terminal.inlineCode` | `{interpreters, writeMarkers, sendPatterns[], innocent[], codeInnocent[]}`: código en línea (`python3 -c`, `bash -c`…) y `execute_code`. Cada cadena entre comillas se evalúa contra `protectedReads` y, si el código escribe, contra `protectedPaths`; `sendPatterns` (mandar datos desde Python) escala a un humano |
 | `terminal.readTargets[]` | igual, para los comandos que LEEN (`cat`, `grep`, `head`, origen de `cp`, `source`, `< archivo`, lo que `curl` sube con `@`): evaluados contra `protectedReads` |
 | `moreExamples[]` (en cualquier regla) | variantes que el `reason` dice cubrir; el self-test y el e2e prueban cada una |
 | `protectedPaths[]` | rutas que el agente no escribe. `agentOnly: true` = el agente no, el humano sí puede commitearla. `outsideRepo: true` = se evalúa sobre la ruta absoluta (p.ej. `~/.hermes/.env`) |

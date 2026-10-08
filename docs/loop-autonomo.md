@@ -19,6 +19,7 @@ python3 scripts/cli.py task add "Agregá la regla X con su example y su caso"   
 python3 scripts/cli.py loop                    # DRY-RUN: tarea, rama, prompt, comandos, topes
 python3 scripts/cli.py loop --apply            # una tarea, hasta verde o hasta escalar
 python3 scripts/cli.py loop --apply --all      # sigue mientras salgan verdes
+python3 scripts/cli.py loop --apply --paralelo 3   # hasta 3 tareas a la vez, cada una en su worktree
 python3 scripts/cli.py loop --stop             # freno de mano: para entre iteraciones
 ```
 
@@ -130,9 +131,23 @@ python3 scripts/cli.py config set loop.maxIterations 6
 python3 scripts/cli.py config set loop.maxIterations 6 --apply
 ```
 
+## En paralelo
+
+`--paralelo N` toma las primeras N casillas `- [ ]` y le da a cada una un `git worktree` propio
+(bajo `.git/harness-worktrees/<slug>`, rama `branchPrefix<slug>`):
+
+- cada worktree tiene su gitdir, y con él su candado, su estado y sus intocables: los loops no se pisan;
+- el repo principal no se mueve de rama;
+- todos escriben en el registro de eventos del repo principal (`HARNESS_EVENTS_FILE`): el panel los ve en vivo;
+- el coordinador marca la cola según cada resultado (`[x]`, `[!]`), y los worktrees quedan: ahí está lo
+  hecho, para revisarlo. Al terminar, `git worktree remove <dir>` (la rama queda).
+
+Cada worktree corre el arnés **commiteado**: un cambio sin commitear del config o de los scripts no
+llega a los loops en paralelo.
+
 ## Lo que el loop no hace
 
 - **No empuja ni abre PR.** Lo verde queda en la rama y lo publica un humano.
 - **No se saltea frenos.** Si la tarea choca con uno, el agente lo explica y el gate no da verde.
 - **No reintenta a ciegas.** Cada reintento lleva el rojo, y el mismo rojo dos veces es escalada.
-- **No paraleliza.** Trabaja una tarea por vez, en una rama.
+- **No paraleliza sin pedírselo.** Una tarea por vez, salvo con `--paralelo N`.

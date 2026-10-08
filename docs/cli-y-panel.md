@@ -60,7 +60,7 @@ python3 scripts/panel.py --once           # el mismo estado, como JSON, una vez
 | Tarjeta | De dónde sale |
 |---|---|
 | **Gate**: veredicto, modo, hora y cada señal | `.git/harness-gate.json` (lo escribe `gate.py`) y el marcador de gate pendiente |
-| **Loop autónomo**: fase, tarea, intento, firma de cada rojo, motivo de la escalada, parada pedida | `loop.stateFile`, `loop.stopFile` |
+| **Loop autónomo**: fase, tarea, intento, firma de cada rojo, motivo de la escalada, parada pedida; con `--paralelo`, cada tarea y su resultado | `loop.stateFile`, `loop.stopFile` |
 | **Tareas**: pendientes, verdes, escaladas y la barra de avance | `loop.tasksFile` |
 | **Frenos activos**: cuántas reglas tiene cada familia, y **los que más mordieron** (bloqueos y escaladas por regla) | el config y el registro de eventos |
 | **Salud**: edad del veredicto de `STATUS.md`, piezas del mapa, sin clasificar, etapas sin control y si el registro está encendido | `STATUS.md`, `map.construir`, el config |
