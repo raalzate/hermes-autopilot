@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -36,13 +37,25 @@ def interprete_de_hermes() -> str | None:
     if not exe:
         return None
     try:
-        primera = Path(exe).read_text(encoding="utf-8", errors="replace").splitlines()[0]
-    except (OSError, IndexError):
+        lineas = Path(exe).read_text(encoding="utf-8", errors="replace").splitlines()[:3]
+    except OSError:
         return None
-    if primera.startswith("#!"):
-        partes = primera[2:].strip().split()
-        return partes[-1] if partes and "env" in partes[0] and len(partes) > 1 else (partes[0] if partes else None)
-    return None
+    return interprete_del_shebang(lineas)
+
+
+def interprete_del_shebang(lineas: list[str]) -> str | None:
+    """El Python de un script de consola. Tres formas: `#!/ruta/python`, `#!/usr/bin/env python3`
+    y, cuando la ruta es larga (un venv en un directorio profundo), la que escriben pip y uv:
+    `#!/bin/sh` y en la línea 2 un `exec` del Python real. Leer sólo la primera línea tomaba `sh`
+    por intérprete y corría este script con sh (lo cazó la primera corrida con Hermes de PyPI)."""
+    if not lineas or not lineas[0].startswith("#!"):
+        return None
+    if len(lineas) > 1 and lineas[1].startswith("'''exec'"):
+        m = re.match(r"'''exec' +['\"]?([^'\"]+)['\"]?", lineas[1])
+        if m:
+            return m.group(1)
+    partes = lineas[0][2:].strip().split()
+    return partes[-1] if partes and "env" in partes[0] and len(partes) > 1 else (partes[0] if partes else None)
 
 
 def main() -> int:

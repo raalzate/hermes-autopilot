@@ -15,6 +15,8 @@ Contrato de cada señal:
     fastSkip       true = se omite en modo fast
     skipIfMissing  ruta que, si no existe, hace que la señal salga OMITIDA en vez de fallar.
     skipIfNoExecutable  true = si `command[0]` no está instalado, OMITIDA (p.ej. `hermes` en CI).
+    omitIfExit     código de salida con el que la PROPIA señal dice «no tengo con qué correr» (p.ej. un
+                   sensor que necesita un modelo y no hay uno configurado): OMITIDA, nunca verde.
                    "Omitido" se imprime SIEMPRE: nunca se confunde con "pasó".
 
 Cuando TODAS las señales pasan en modo completo, borra el marcador `gate.marker`: es lo que
@@ -111,6 +113,11 @@ def main() -> None:
         if proc.returncode == 0:
             print(f"✓ {nombre} ({dur:.1f}s)")
             resultados[nombre] = "verde"
+        elif senal.get("omitIfExit") is not None and proc.returncode == senal.get("omitIfExit"):
+            print(f"· {nombre}: OMITIDA (la señal no tiene con qué correr: exit {proc.returncode})")
+            omitidas.append(nombre)
+            resultados[nombre] = "omitida"
+            corridas -= 1
         else:
             print(f"✗ {nombre} (exit {proc.returncode}, {dur:.1f}s)")
             fallidas.append(nombre)

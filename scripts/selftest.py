@@ -839,7 +839,7 @@ def main() -> int:
         if isinstance(spec_, dict) and spec_.get("runner"):
             runner = REPO_ROOT / spec_["runner"]
             check(runner.is_file(), f"`{clave}.runner` apunta a {spec_['runner']}, que no existe")
-            cmd_ = spec_.get("command") or ""
+            cmd_ = spec_.get("runnerCommand") or spec_.get("command") or ""  # `runnerCommand` si `command` es otra cosa (review)
             check(bool(cmd_) and runner.is_file() and Path(cmd_).name in runner.read_text(encoding="utf-8"),
                   f"`{clave}.runner` ({spec_['runner']}) no invoca `{cmd_}`: el control está encendido y nadie lo corre")
 
@@ -1160,6 +1160,14 @@ def main() -> int:
         r_ = pre(tool_name=tools["shell"][0], args={"command": (tt.get("askCommands") or [{}])[0].get("example", "git commit -m x")}, session_id="selftest-taint-cat")
         check(isinstance(r_, dict) and r_.get("action") == "approve", "taint: un `cat tickets/x` por la terminal no contamina la sesión")
 
+    # El e2e encuentra el Python de Hermes en las tres formas de shebang (pip/uv usan un exec en la línea 2).
+    if (HARNESS_HOME / "scripts" / "hermes_e2e.py").is_file():  # en un repo instalado no viaja
+        import hermes_e2e as e2e_mod  # noqa: E402
+        check(e2e_mod.interprete_del_shebang(["#!/v/bin/python3"]) == "/v/bin/python3", "e2e: no lee un shebang directo")
+        check(e2e_mod.interprete_del_shebang(["#!/usr/bin/env python3"]) == "python3", "e2e: no lee un shebang con env")
+        check(e2e_mod.interprete_del_shebang(["#!/bin/sh", "'''exec' '/muy/largo/venv/bin/python3' \"$0\" \"$@\"", "' '''"]) == "/muy/largo/venv/bin/python3",
+              "e2e: con una ruta larga (pip/uv escriben un exec en la línea 2) toma sh por intérprete")
+
     # Guardia de Python (PEP 578): lo que un programa ABRE, aunque arme la ruta por partes.
     gdir = HARNESS_HOME / "plugin" / "guardia"
     if (gdir / "sitecustomize.py").is_file():
@@ -1204,6 +1212,45 @@ def main() -> int:
             r_ = subprocess.run([sys.executable, "-c", "open('.env').read()"], cwd=troot, env={**env_g, "HARNESS_GUARDIA": "{roto"},
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             check(r_.returncode == 0, "guardia: una spec rota rompe el arranque de Python (tiene que dejar pasar)")
+
+    # Revisor inferencial: la medición mide (un revisor que acierta pasa; uno que aprueba todo, no;
+    # sin modelo, OMITIDA con 3 — nunca verde).
+    if (HARNESS_HOME / "scripts" / "revision.py").is_file() and config.get("review"):
+        import revision as revision_mod  # noqa: E402
+        items_ = json.loads((REPO_ROOT / config["review"].get("dataset", "evals/revision.json")).read_text(encoding="utf-8"))["items"]
+        check(sum(i["esperado"] == "rechazar" for i in items_) >= 5 and sum(i["esperado"] == "aprobar" for i in items_) >= 3,
+              "revision: el conjunto etiquetado no tiene atajos y arreglos suficientes")
+        perfecto = revision_mod.medir(items_, lambda it: it["esperado"])
+        check(perfecto["recall"] == 1 and perfecto["precision"] == 1, f"revision: un revisor perfecto no mide 100 %: {perfecto}")
+        todo_ok = revision_mod.medir(items_, lambda it: "aprobar")
+        check(todo_ok["recall"] == 0, "revision: un revisor que aprueba todo no mide recall 0")
+        r_ = subprocess.run([sys.executable, str(HARNESS_HOME / "scripts" / "revision.py"), "--comando", "python3", "-c",
+                             "print('VEREDICTO: APROBAR')", "{prompt}"], cwd=REPO_ROOT, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", timeout=300)
+        check(r_.returncode == 1 and "DEBAJO DEL UMBRAL" in r_.stdout, f"revision: un revisor que aprueba todo pasa el umbral: {r_.stdout[-300:]}")
+        juez = ("import sys,re; d=sys.argv[1]; malo=re.search(r'skip|assertTrue|except Exception|sk_live|0001_inicial|import requests|"
+                "logs_2026|\\{nombre\\}|email,cedula|cerrar\\(t', d); print('VEREDICTO: ' + ('RECHAZAR' if malo else 'APROBAR'))")
+        r_ = subprocess.run([sys.executable, str(HARNESS_HOME / "scripts" / "revision.py"), "--comando", "python3", "-c", juez, "{prompt}"],
+                            cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        check(r_.returncode == 0 and "SOBRE EL UMBRAL" in r_.stdout, f"revision: un revisor que acierta no pasa el umbral: {r_.stdout[-500:]}")
+        env_sin = {k: v for k, v in os.environ.items() if k != config["review"].get("requiresEnv", "HARNESS_REVIEW")}
+        r_ = subprocess.run([sys.executable, str(HARNESS_HOME / "scripts" / "revision.py")], cwd=REPO_ROOT, env=env_sin,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+        check(r_.returncode == 3 and "OMITIDA" in r_.stdout, "revision: sin modelo configurado no sale OMITIDA (3)")
+        # El gate trata `omitIfExit` como OMITIDA (no verde, no roja), de punta a punta.
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            (troot / ".hermes").mkdir()
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps({"gate": {"signals": [
+                {"name": "sin modelo", "command": ["python3", "-c", "raise SystemExit(3)"], "omitIfExit": 3, "why": "x"}]}}), encoding="utf-8")
+            r_ = subprocess.run([sys.executable, str(troot / "scripts" / "gate.py")], cwd=troot, capture_output=True, text=True,
+                                encoding="utf-8", errors="replace", timeout=60)
+            check(r_.returncode == 0 and "OMITIDA" in r_.stdout and "sin modelo" in r_.stdout,
+                  f"gate: una señal que sale con su `omitIfExit` no queda OMITIDA: {r_.stdout[-300:]}")
+        senal_ = next((s for s in (config.get("gate") or {}).get("signals") or [] if "revision.py" in " ".join(s.get("command") or [])), None)
+        check(bool(senal_) and senal_.get("omitIfExit") == 3, "revision: la señal del gate no declara `omitIfExit: 3` (saldría roja sin modelo)")
 
     # CLI: una regla se prueba por el plugin ANTES de escribirse.
     buena = {"id": "selftest-nueva", "pattern": r"\bzzq-selftest\b", "example": "zzq-selftest --go", "reason": "prueba."}
