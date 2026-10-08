@@ -1,0 +1,35 @@
+# El revisor inferencial, medido con un modelo de verdad (scripts/revision.py, `review` en el
+# config). Nocturno y no en cada PR: cada corrida gasta tokens. Sin el secreto HERMES_ENV la
+# medición no corre y el job lo avisa (anotación), nunca da por verde lo que no midió.
+#
+# HERMES_ENV: el contenido del `.env` de Hermes (la key del proveedor, p.ej. OPENROUTER_API_KEY=…).
+# HERMES_MODEL (opcional, variable del repo): el modelo con el que revisa.
+name: hermes-nocturno
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+jobs:
+  revisor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Hermes desde el código fuente
+        run: python scripts/hermes_fuente.py "$RUNNER_TEMP/hermes"
+      - name: Revisor inferencial
+        env:
+          HERMES_HOME: ${{ runner.temp }}/hermes-home
+          HERMES_ENV: ${{ secrets.HERMES_ENV }}
+          HERMES_MODEL: ${{ vars.HERMES_MODEL }}
+        run: |
+          if [ -z "$HERMES_ENV" ]; then
+            echo "::warning::sin el secreto HERMES_ENV no hay modelo: el revisor inferencial NO se midió esta noche"
+            exit 0
+          fi
+          mkdir -p "$HERMES_HOME"
+          printf '%s\n' "$HERMES_ENV" > "$HERMES_HOME/.env"
+          if [ -n "$HERMES_MODEL" ]; then hermes config set model "$HERMES_MODEL"; fi
+          HARNESS_REVIEW=1 python scripts/revision.py

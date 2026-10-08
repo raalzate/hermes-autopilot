@@ -19,3 +19,20 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python scripts/gate.py
+
+  # El MISMO gate, con Hermes de verdad: las dos señales que en la matriz salen OMITIDAS (`hermes
+  # plugins doctor` y el e2e del contrato) acá corren. Hermes desde su código fuente, en el commit
+  # verificado (scripts/hermes_fuente.py): no publica wheels de main y PyPI va meses atrás.
+  hermes-real:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Hermes desde el código fuente
+        run: python scripts/hermes_fuente.py "$RUNNER_TEMP/hermes"
+      - name: Gate con Hermes real
+        env:
+          HERMES_HOME: ${{ runner.temp }}/hermes-home
+        run: python scripts/gate.py

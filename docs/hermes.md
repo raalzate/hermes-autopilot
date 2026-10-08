@@ -106,6 +106,24 @@ Consecuencias que el arnés vigila:
   (`tools/skill_manager_tool.py`). El agente las crea con `skill_manage`; `skill_guard` le aplica
   `terminal.deny` a lo que enseñan.
 
+## Hermes desde el código fuente (y por qué no el de PyPI)
+
+El arnés se verificó contra el código de `NousResearch/hermes-agent` (commit `aa74e184`, 2026.9.24).
+Hermes no publica wheels de su rama principal (el build los rechaza a propósito) y el paquete de
+PyPI va meses atrás: la 0.19.0 no tiene `hermes plugins doctor` ni `register_system_prompt_section`.
+El plugin tolera esa versión (el estado al abrir la sesión simplemente no aparece), pero el gate
+la prueba contra la que corresponde:
+
+```bash
+python3 scripts/hermes_fuente.py ~/hermes-dev            # clon + venv + un `hermes` del clon
+export PATH=~/hermes-dev/bin:$PATH HERMES_HOME=~/hermes-dev/home
+python3 scripts/gate.py                                  # las dos señales de Hermes ya no salen OMITIDAS
+```
+
+CI hace lo mismo en el job `hermes-real`, en cada PR: `hermes plugins doctor` y el e2e del
+contrato corren de verdad. El pipeline `hermes-nocturno.yml` usa el mismo Hermes para medir al
+revisor inferencial con un modelo (necesita el secreto `HERMES_ENV`).
+
 ## Lo que Hermes ya hace y el arnés no duplica
 
 - `approvals.deny` (globs que bloquean aun con `--yolo`) y los `HARDLINE_PATTERNS`: el piso de

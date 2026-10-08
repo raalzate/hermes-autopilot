@@ -81,7 +81,7 @@ lo que el config describe.
 | ¿Quién cierra el **lazo de la tarea**? | `scripts/loop.py`: el gate como salida, el mismo rojo escala (P16 → P21). Ver [`ingenieria-de-loops.md`](ingenieria-de-loops.md) | cubierto |
 | ¿Cuánto **cuesta**? | `scripts/timing.py`, en el gate | cubierto |
 | ¿Qué pasa cuando **dos instrucciones chocan**? | la precedencia de la constitución, y parar y escalar | declarado (REVIEW) |
-| ¿Cómo se prueba un control **inferencial**? | `harness-review` no tiene todavía una prueba de vida con tasa (en `agent-harness` es `reviewer-eval`) | **hueco** |
+| ¿Cómo se prueba un control **inferencial**? | con una tasa, no con un ejemplo: `scripts/revision.py` mide recall y precisión del revisor contra 16 diffs etiquetados salidos de los casos (`evals/revision.json`), con umbrales en `review`. Sin modelo sale OMITIDA; lo corre `hermes-nocturno.yml` con la key como secreto | cubierto (se activa con el secreto `HERMES_ENV`) |
 | **Deriva** continua | `scripts/drift.py` por `drift.yml`: un `STATUS.md` vencido es rojo; una regla que nunca cazó nada es aviso (P20) | cubierto para el arnés |
 | **Comportamiento** | la forma del proceso (gate, registro); que las pruebas prueben algo es del repo destino | a medias |
 

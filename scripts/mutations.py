@@ -94,6 +94,8 @@ CODIGO = {
     "loop: no enciende la guardia": ("scripts/loop.py", '    if not (config.get("loop") or {}).get("guardiaPython"):\n        return env', '    if True:\n        return env'),
     "taint: la sesión nunca se marca": ("plugin/__init__.py", "            _CONTAMINADAS[sesion] = fuente", "            pass"),
     "taint: la marca no llega al freno": ("plugin/harness/guards.py", '    for guard in GUARDS.get(kind or "", []) + ([taint_guard] if ev.contaminada else []):', '    for guard in GUARDS.get(kind or "", []):'),
+    "revisión: el umbral no se mira": ("scripts/revision.py", '    if r["recall"] < min_r or r["precision"] < min_p:', "    if False:"),
+    "gate: omitIfExit como verde": ("scripts/gate.py", '        elif senal.get("omitIfExit") is not None and proc.returncode == senal.get("omitIfExit"):', '        elif False:'),
     "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
 }
 
