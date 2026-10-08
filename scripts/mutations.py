@@ -88,6 +88,7 @@ CODIGO = {
     "paralelo: no marca la cola": ("scripts/loop.py", '            texto = marcar(texto, indice, "x" if resultado == "verde" else "!", "" if resultado == "verde" else motivo.split(":")[0])', "            pass"),
     "paralelo: los eventos no llegan al panel": ("scripts/loop.py", '        env["HARNESS_EVENTS_FILE"] = str(registro.resolve())', "        pass"),
     "execute_code manda datos sin preguntar": ("plugin/harness/guards.py", '    envio = first_match([r for r in (t.get("inlineCode") or {}).get("sendPatterns") or [] if isinstance(r, dict)], codigo)', "    envio = None"),
+    "loop.aislar no aísla": ("scripts/loop.py", '        aislar = bool(spec.get("aislar")) and not a.en_sitio', "        aislar = False"),
     "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
 }
 

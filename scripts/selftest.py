@@ -1027,6 +1027,38 @@ def main() -> int:
                 json.dumps({"pid": os.getpid(), "at": __import__("time").time()}), encoding="utf-8"))
             check(p_.returncode == 1 and "ya hay un loop" in p_.stdout, f"loop real: arrancó con otro loop corriendo en el repo: {p_.stdout[-300:]}")
         check(not loop_mod.candado_vivo(Path("/no/existe/lock"), sp), "loop: un candado que no existe traba")
+        # Aislado (`loop.aislar`): la tarea corre en un worktree, donde lo ignorado por git no existe.
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            g_ = lambda *a: subprocess.run(["git", *a], cwd=troot, capture_output=True, text=True)  # noqa: E731
+            g_("init", "-q", "-b", "main")
+            for d in ("plugin", "scripts"):
+                shutil.copytree(HARNESS_HOME / d, troot / d, ignore=shutil.ignore_patterns("__pycache__"))
+            (troot / ".hermes" / "loop").mkdir(parents=True)
+            (troot / ".gitignore").write_text(".env\n", encoding="utf-8")
+            (troot / ".env").write_text("SECRETO=no-lo-veas\n", encoding="utf-8")
+            cfg_a = {"loop": {**sp, "aislar": True, "tasksFile": ".hermes/loop/tasks.md",
+                              "agentCommand": ["python3", "-c", "import pathlib; pathlib.Path('vio.txt').write_text("
+                                               "str(pathlib.Path('.env').exists()), encoding='utf-8')", "{prompt}"],
+                              "gateCommand": ["python3", "-c", "import pathlib,sys; sys.exit(0 if pathlib.Path('vio.txt').exists() else 1)"]}}
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_a), encoding="utf-8")
+            (troot / ".hermes" / "loop" / "tasks.md").write_text("# t\n- [ ] mirar el entorno\n", encoding="utf-8")
+            g_("add", "-A")
+            g_("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "x")
+            env_l = {k: v for k, v in os.environ.items() if k not in ("HARNESS_REPO", "HARNESS_NO_EVENTS")}
+            p_ = subprocess.run([sys.executable, str(troot / "scripts" / "loop.py"), "--apply"], cwd=troot, env=env_l,
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+            vio = troot / ".git" / "harness-worktrees" / "mirar-el-entorno" / "vio.txt"
+            check(vio.is_file() and vio.read_text(encoding="utf-8") == "False",
+                  f"loop.aislar: el agente vio el .env ignorado (o no corrió en un worktree): {p_.stdout[-400:]}{p_.stderr[-400:]}")
+            est_a = json.loads((troot / ".git" / "harness-loop.json").read_text(encoding="utf-8")) if (troot / ".git" / "harness-loop.json").is_file() else {}
+            check(p_.returncode == 0 and est_a.get("phase") == "verde" and len(est_a.get("attempts") or []) == 1 and est_a.get("worktree"),
+                  f"loop.aislar: el estado principal no refleja la corrida del worktree: {est_a}")
+            check(not (troot / "vio.txt").exists() and g_("branch", "--show-current").stdout.strip() == "main",
+                  "loop.aislar: tocó el árbol o la rama del repo principal")
+            check("- [x] mirar el entorno" in (troot / ".hermes" / "loop" / "tasks.md").read_text(encoding="utf-8"),
+                  "loop.aislar: no marcó la tarea en la cola principal")
+
         # En paralelo: cada tarea en su worktree; la cola principal marcada; los eventos en SU registro.
         check(loop_mod.pendientes("- [x] a\n- [ ] b\n- [ ] c\n- [ ] d\n", 2) == [(1, "b"), (2, "c")], "loop: --paralelo no toma las primeras N pendientes")
         with tempfile.TemporaryDirectory() as tmp:

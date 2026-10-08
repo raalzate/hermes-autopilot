@@ -29,7 +29,9 @@ Lo que lo hace un loop y no un `while true` (docs/ingenieria-de-loops.md):
     verificador)—, sin importar por qué canal lo cambió. Cambió → escala aunque el gate dé verde:
     un verde conseguido ablandando el criterio de salida no es verde (P8);
   - un loop por repo: `.git/harness-loop.lock` (dos loops se pisan el estado y la rama).
-    En paralelo (`--paralelo N`) cada tarea corre en su `git worktree` (bajo `.git/harness-worktrees/`,
+    Con `loop.aislar` (por defecto en la plantilla) cada tarea corre en su `git worktree` aunque sea
+    una sola: lo que git ignora —el `.env`, los secretos sin versionar— no existe ahí, así que un
+    programa del agente no lo puede leer ni por dentro. En paralelo (`--paralelo N`) cada tarea corre en su `git worktree` (bajo `.git/harness-worktrees/`,
     rama `branchPrefix<slug>`): cada worktree tiene su gitdir, y con él su candado, su estado y sus
     intocables. El coordinador marca la cola del repo principal y todos escriben en SU registro de
     eventos, así el panel los ve. Los worktrees quedan: ahí está lo hecho, para revisarlo.
@@ -336,6 +338,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--stop", action="store_true", help="pedir que el loop pare entre iteraciones")
     ap.add_argument("--status", action="store_true", help="dónde está el loop")
     ap.add_argument("--paralelo", type=int, default=0, metavar="N", help="hasta N tareas a la vez, cada una en su worktree")
+    ap.add_argument("--en-sitio", action="store_true", help="correr en este árbol aunque `loop.aislar` pida un worktree (lo usa el coordinador)")
     a = ap.parse_args(argv)
 
     try:
@@ -393,8 +396,14 @@ def main(argv: list[str]) -> int:
     try:
         if candado is not None:
             candado.write_text(json.dumps({"pid": os.getpid(), "at": time.time()}), encoding="utf-8")
-        if a.paralelo > 1 and not a.task:
-            return en_paralelo(config, root, a.paralelo, tareas)
+        aislar = bool(spec.get("aislar")) and not a.en_sitio
+        if a.task and aislar:
+            return en_paralelo(config, root, 1, tareas, [a.task])
+        if (a.paralelo > 1 or aislar) and not a.task:
+            codigo = en_paralelo(config, root, max(1, a.paralelo), tareas)
+            while a.all and codigo == 0 and pendientes(tareas.read_text(encoding="utf-8"), 1):
+                codigo = en_paralelo(config, root, max(1, a.paralelo), tareas)
+            return codigo
         return correr_tareas(config, root, a, tareas, indice, tarea, siguiente)
     finally:
         if candado is not None:
@@ -434,15 +443,21 @@ def pendientes(texto: str, n: int) -> list[tuple[int, str]]:
     return out
 
 
-def en_paralelo(config: dict, root: Path, n: int, tareas: Path) -> int:
-    """Hasta `n` tareas a la vez, cada una en su worktree y su rama. Devuelve 0 si todas verdes."""
+def en_paralelo(config: dict, root: Path, n: int, tareas: Path, sueltas: list[str] | None = None) -> int:
+    """Hasta `n` tareas a la vez, cada una en su worktree y su rama. Devuelve 0 si todas verdes.
+
+    También es el camino de `loop.aislar` con una sola tarea: el worktree no trae lo que git ignora
+    (el `.env`, los secretos sin versionar), así que el agente trabaja donde no existen."""
     from concurrent.futures import ThreadPoolExecutor
 
     spec = config.get("loop") or {}
-    try:
-        lote = pendientes(tareas.read_text(encoding="utf-8"), n)
-    except OSError:
-        lote = []
+    if sueltas:
+        lote = [(None, s) for s in sueltas]
+    else:
+        try:
+            lote = pendientes(tareas.read_text(encoding="utf-8"), n)
+        except OSError:
+            lote = []
     if not lote:
         print("Nada que hacer: no hay casillas `- [ ]` en la cola.")
         return 0
@@ -481,27 +496,38 @@ def en_paralelo(config: dict, root: Path, n: int, tareas: Path) -> int:
         if not (wt / rel_script).is_file():
             return indice, tarea, "error", f"el worktree no tiene {rel_script.as_posix()} (¿el arnés sin commitear?)", wt
         events.record(config, root, "loop-start", task=tarea, worktree=str(wt))
-        subprocess.run([sys.executable, str(wt / rel_script), "--apply", "--task", tarea], cwd=wt, env=env,
+        subprocess.run([sys.executable, str(wt / rel_script), "--apply", "--en-sitio", "--task", tarea], cwd=wt, env=env,
                        stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", errors="replace")
         est = leer_estado(spec, wt)
         return indice, tarea, est.get("phase", "error"), est.get("reason", ""), wt
 
-    guardar_estado(spec, root, {"task": f"{len(lote)} tareas en paralelo", "phase": "paralelo", "startedAt": time.time(),
-                                "attempts": [], "workers": [{"task": t, "phase": "agente"} for _, t in lote]})
-    print(f"━━ {len(lote)} tareas en paralelo (worktrees en {base})")
+    if len(lote) > 1:
+        guardar_estado(spec, root, {"task": f"{len(lote)} tareas en paralelo", "phase": "paralelo", "startedAt": time.time(),
+                                    "attempts": [], "workers": [{"task": t, "phase": "agente"} for _, t in lote]})
+    else:
+        guardar_estado(spec, root, {"task": lote[0][1], "phase": "agente", "startedAt": time.time(), "attempts": [],
+                                    "worktree": str(base / slug(lote[0][1]))})
+    print(f"━━ {len(lote)} tarea(s) en worktree aislado ({base})")
     with ThreadPoolExecutor(max_workers=len(lote)) as ex:
         resultados = list(ex.map(una, lote))
-    texto = tareas.read_text(encoding="utf-8")
+    texto = tareas.read_text(encoding="utf-8") if tareas.is_file() else ""
     for indice, tarea, resultado, motivo, wt in resultados:
         print(f"{'✓' if resultado == 'verde' else '✗'} {resultado.upper():<8} {tarea}\n           {wt}" + (f"\n           {motivo}" if resultado != "verde" else ""))
-        if resultado in ("verde", "escalar"):
+        if indice is not None and resultado in ("verde", "escalar"):
             texto = marcar(texto, indice, "x" if resultado == "verde" else "!", "" if resultado == "verde" else motivo.split(":")[0])
-    tareas.write_text(texto, encoding="utf-8")
+    if any(r[0] is not None for r in resultados):
+        tareas.write_text(texto, encoding="utf-8")
     verdes = sum(1 for r in resultados if r[2] == "verde")
-    guardar_estado(spec, root, {"task": f"{len(lote)} tareas en paralelo", "phase": "verde" if verdes == len(lote) else "escalar",
-                                "startedAt": time.time(), "endedAt": time.time(), "attempts": [],
-                                "reason": f"{verdes} de {len(lote)} verdes; lo hecho quedó en cada worktree",
-                                "workers": [{"task": t, "phase": r, "worktree": str(w)} for _, t, r, _, w in resultados]})
+    if len(lote) == 1:
+        # Una sola tarea: el estado principal ES el del worktree (intentos, firmas, motivo), así el
+        # panel y `--status` muestran lo mismo que si hubiera corrido en el lugar.
+        wt = resultados[0][4]
+        guardar_estado(spec, root, {**leer_estado(spec, wt), "worktree": str(wt)})
+    else:
+        guardar_estado(spec, root, {"task": f"{len(lote)} tareas en paralelo", "phase": "verde" if verdes == len(lote) else "escalar",
+                                    "startedAt": time.time(), "endedAt": time.time(), "attempts": [],
+                                    "reason": f"{verdes} de {len(lote)} verdes; lo hecho quedó en cada worktree",
+                                    "workers": [{"task": t, "phase": r, "worktree": str(w)} for _, t, r, _, w in resultados]})
     print("\nLo verde queda en cada rama y worktree: el loop no empuja ni abre PR (P13). "
           "Al terminar de revisar: `git worktree remove <dir>`.")
     return 0 if verdes == len(lote) else 2
