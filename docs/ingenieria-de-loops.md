@@ -30,9 +30,10 @@ un PR rojo en el lazo 5.
 
 ## Las siete reglas de un lazo bien hecho
 
-1. **La salida la decide un sensor, no el actor.** El agente no se declara terminado: el lazo 3
-   le pide el gate y el lazo 4 lo corre él mismo. `scripts/loop.py` registra lo que dice el
-   agente, pero solo decide con el código de salida del gate.
+1. **La salida la decide un sensor, no el actor, y el actor no puede tocar el sensor.** El agente
+   no se declara terminado: el lazo 3 le pide el gate y el lazo 4 lo corre él mismo. Si el agente
+   cambia lo que decide «terminado» (el verificador, su config, la cola), el loop lo ve en los
+   intocables y escala aunque el gate dé verde: es el *reward hacking* de manual.
 2. **El error vuelve con contenido.** Un «falló» no sirve para reintentar. El `reason` de un freno
    dice qué pasó, por qué importa y qué hacer. El reintento del loop lleva las señales rojas y la
    cola de la salida del gate (`loop.retryPrompt`).
@@ -57,6 +58,9 @@ deja lo verde en una rama `loop/*`. El lazo 5 exige PR. Empujar es `terminal.ask
 está vedado (`cron.deny`).
 
 ## Lo que este arnés todavía no cierra
+
+La auditoría completa —lo cerrado con su prueba y lo abierto con su porqué— está en
+[`huecos.md`](huecos.md). Los del lazo de la tarea:
 
 | Hueco | Por qué importa | Estado |
 |---|---|---|

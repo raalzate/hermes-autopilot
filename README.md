@@ -26,6 +26,11 @@ archivos, y un gate que define qué es "terminado".
   en que pasa. Usa Server-Sent Events y escucha solo en 127.0.0.1.
 - **Workshop** ([`docs/workshop/`](docs/workshop/README.md)): 3 h 30 min prácticas en un sandbox,
   con un agente de juguete y sin API key.
+- **17 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
+  oficina, datos, soporte y operación: un agente toma un atajo y el arnés lo frena, lo escala o lo
+  deja llegar a verde. Se corre cada uno con un comando, y el gate los corre todos.
+- **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): lo que se cerró, con su prueba, y
+  lo que sigue abierto.
 - **Plugin `repo-harness`** para Hermes: frena herramientas en `pre_tool_call` (terminal,
   escritura, memoria, skills, cron), corre el lint del archivo recién escrito y se lo muestra al
   modelo, no deja cerrar el turno con el gate pendiente (`pre_verify`) e inyecta el estado
