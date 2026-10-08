@@ -99,7 +99,9 @@ class Hermes:
         if not self._pedir("shell", {"command": f"python3 -c {codigo!r}"}):
             return False
         print(f"  [{self._tool('shell')}] ✓ python3 -c …")
-        p = subprocess.run([sys.executable, "-c", codigo], cwd=self.raiz, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+        import os
+        p = subprocess.run([sys.executable, "-c", codigo], cwd=self.raiz, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
         if p.returncode != 0:
             # Lo que Hermes le devolvería al modelo: la salida del comando, con el error de la guardia.
             ultima = [l for l in (p.stderr or "").splitlines() if l.strip()]

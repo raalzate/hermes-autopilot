@@ -1151,9 +1151,10 @@ def main() -> int:
             cfg_g = {"protectedReads": [{"id": "env-lectura", "pattern": "(^|/)\\.env$", "reason": "secreto"}],
                      "loop": {"lockedPaths": ["^verificar\\.py$"]}}
             env_g = {**os.environ, "HARNESS_GUARDIA": json.dumps(guardia_mod.spec_de(cfg_g, str(troot))),
-                     "PYTHONPATH": str(gdir)}
+                     "PYTHONPATH": str(gdir), "PYTHONIOENCODING": "utf-8"}
+            # UTF-8 de los dos lados: en Windows el stderr del hijo llegaba en cp1252 y «ARNÉS» no casaba.
             prueba = lambda code: subprocess.run([sys.executable, "-c", code], cwd=troot, env=env_g,  # noqa: E731
-                                                 capture_output=True, text=True, timeout=60)
+                                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             r_ = prueba("open('.e' + 'nv').read()")
             check(r_.returncode != 0 and "GUARDIA DEL ARNÉS" in r_.stderr, f"guardia: un programa leyó el .env armando la ruta: {r_.stderr[-300:]}")
             r_ = prueba("import pathlib; pathlib.Path('verif' + 'icar.py').write_text('x')")
@@ -1163,7 +1164,7 @@ def main() -> int:
             r_ = prueba("print(open('README.md').read()); open('notas.txt', 'w').write('ok')")
             check(r_.returncode == 0 and (troot / "notas.txt").is_file(), f"guardia: muerde a un programa inocente: {r_.stderr[-300:]}")
             r_ = subprocess.run([sys.executable, "-c", "open('.env').read()"], cwd=troot, env={**env_g, "HARNESS_GUARDIA": "{roto"},
-                                capture_output=True, text=True, timeout=60)
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             check(r_.returncode == 0, "guardia: una spec rota rompe el arranque de Python (tiene que dejar pasar)")
 
     # CLI: una regla se prueba por el plugin ANTES de escribirse.
