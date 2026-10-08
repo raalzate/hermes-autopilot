@@ -815,7 +815,7 @@
     "reason": "un veredicto viejo que se lee como actual es peor que no tener veredicto."
   },
   "loop": {
-    "$comment": "EL LOOP AUTÓNOMO (P21, `scripts/loop.py`): tarea → agente → gate, hasta verde o hasta un tope. `agentCommand` es argv sin shell; `{prompt}` se reemplaza dentro de cada argumento. `gateCommand` decide la salida: el loop no le cree al agente, le cree al gate. `sameFailureLimit`: el mismo rojo N veces seguidas escala a un humano (P16 hecho mecanismo). `maxIterations` y `maxMinutes` son topes por tarea. `stopFile` es el freno de mano (lo crea `loop.py --stop`). Nunca publica (P13): lo verde queda en una rama `branchPrefix*`. `lockedPaths`: además de los `protectedPaths` versionados, lo que el agente no puede cambiar DURANTE una tarea por ningún canal (su config, su cola, `.env`), aunque esté ignorado por git: si cambia, el intento escala aunque el gate dé verde. En ESTE repo el config no está en `lockedPaths`: acá el config es el producto, y agregar una regla es una tarea legítima del loop. En un repo destino (la plantilla) sí lo está. `aislar`: cada tarea corre en su `git worktree` (bajo `.git/harness-worktrees/`), aunque sea una sola: lo que git ignora —`.env`, secretos sin versionar— no existe donde trabaja el agente, así que ni un programa suyo lo lee por dentro. El trabajo sin commitear del humano tampoco está ahí: queda a salvo.",
+    "$comment": "EL LOOP AUTÓNOMO (P21, `scripts/loop.py`): tarea → agente → gate, hasta verde o hasta un tope. `agentCommand` es argv sin shell; `{prompt}` se reemplaza dentro de cada argumento. `gateCommand` decide la salida: el loop no le cree al agente, le cree al gate. `sameFailureLimit`: el mismo rojo N veces seguidas escala a un humano (P16 hecho mecanismo). `maxIterations` y `maxMinutes` son topes por tarea. `stopFile` es el freno de mano (lo crea `loop.py --stop`). Nunca publica (P13): lo verde queda en una rama `branchPrefix*`. `lockedPaths`: además de los `protectedPaths` versionados, lo que el agente no puede cambiar DURANTE una tarea por ningún canal (su config, su cola, `.env`), aunque esté ignorado por git: si cambia, el intento escala aunque el gate dé verde. En ESTE repo el config no está en `lockedPaths`: acá el config es el producto, y agregar una regla es una tarea legítima del loop. En un repo destino (la plantilla) sí lo está. `aislar`: cada tarea corre en su `git worktree` (bajo `.git/harness-worktrees/`), aunque sea una sola: lo que git ignora —`.env`, secretos sin versionar— no existe donde trabaja el agente, así que ni un programa suyo lo lee por dentro. El trabajo sin commitear del humano tampoco está ahí: queda a salvo. `guardiaPython`: cada proceso Python que lance el agente carga la guardia del arnés (plugin/guardia, PEP 578): lo que ABRE —no lo que nombra— se compara con `protectedReads`, `protectedPaths` y `lockedPaths` del repo.",
     "tasksFile": ".hermes/loop/tasks.md",
     "agentCommand": [
       "hermes",
@@ -828,6 +828,7 @@
       "scripts/gate.py"
     ],
     "aislar": true,
+    "guardiaPython": true,
     "lockedPaths": [
       "^\\.hermes/loop/",
       "^CONSTITUTION\\.md$",

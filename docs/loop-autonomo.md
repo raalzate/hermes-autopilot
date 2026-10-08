@@ -146,6 +146,19 @@ loop desatendido: la corre una persona, o se le da un secreto de prueba versiona
 `--en-sitio` corre en el árbol actual aunque `aislar` esté encendido; lo usa el coordinador dentro
 de cada worktree.
 
+## La guardia de Python (por defecto)
+
+Con `loop.guardiaPython: true`, cada proceso Python que lance el agente carga
+`plugin/guardia/sitecustomize.py` (el loop pone `PYTHONPATH` y `HARNESS_GUARDIA` en su entorno). Es
+un *audit hook* (PEP 578): ve cada `open()`, `os.remove`, `os.rename`… con la **ruta real**, no con
+el texto del comando. Así, un script, un test o una ruta armada por partes (`'.e' + 'nv'`) no leen
+un secreto ni escriben una ruta protegida o un intocable. El error que reciben (`PermissionError`)
+dice el motivo, y el bloqueo queda en el registro: el panel lo ve.
+
+Sólo cubre Python: un binario (`rm`, `cp`, `git`) no pasa por ahí. Para eso están los frenos de
+terminal, el worktree aislado y los intocables del loop. Mira sólo reglas del repo, porque Hermes,
+si corre con este entorno, tiene que poder leer sus propias credenciales de `~/.hermes`.
+
 ## En paralelo
 
 `--paralelo N` toma las primeras N casillas `- [ ]` y le da a cada una un `git worktree` propio

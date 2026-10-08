@@ -1122,6 +1122,50 @@ def main() -> int:
                 check(any("muerde de más" in pr for pr in casos_mod.armar(muerde, Path(tmp) / "r")),
                       "casos: una regla que muerde un inocente del caso entra igual")
 
+    # Guardia de Python (PEP 578): lo que un programa ABRE, aunque arme la ruta por partes.
+    gdir = HARNESS_HOME / "plugin" / "guardia"
+    if (gdir / "sitecustomize.py").is_file():
+        sys.path.insert(0, str(gdir))
+        import guardia as guardia_mod  # noqa: E402
+        spec_g = guardia_mod.spec_de(config, str(REPO_ROOT))
+        check(not any(r.get("id") in [x.get("id") for x in config.get("protectedReads") or [] if x.get("outsideRepo")]
+                      for r in spec_g["lee"]), "guardia: lleva reglas de fuera del repo (le romperían a Hermes sus credenciales)")
+        for regla in [r for r in config.get("protectedReads") or [] if not r.get("outsideRepo")][:2]:
+            check(guardia_mod.decidir(regla["example"], False, spec_g) is not None, f"guardia: deja leer protectedReads[{regla['id']}]")
+        for regla in [r for r in config.get("protectedPaths") or [] if not r.get("outsideRepo") and r.get("example")][:3]:
+            check(guardia_mod.decidir(regla["example"], True, spec_g) is not None, f"guardia: deja escribir protectedPaths[{regla['id']}]")
+        check(guardia_mod.decidir("README.md", True, spec_g) is None and guardia_mod.decidir("plugin/__pycache__/x.pyc", True, spec_g) is None,
+              "guardia: muerde un archivo común o la caché de bytecode")
+        check(guardia_mod.escribe("w", None) and guardia_mod.escribe(None, os.O_WRONLY) and not guardia_mod.escribe("r", 0),
+              "guardia: no distingue lectura de escritura")
+        env_ag = loop_mod.entorno_agente({"loop": {"guardiaPython": True}}, REPO_ROOT)
+        check("HARNESS_GUARDIA" in env_ag and str(gdir) in env_ag.get("PYTHONPATH", ""),
+              "loop: con `loop.guardiaPython` el agente corre sin la guardia de Python")
+        check("HARNESS_GUARDIA" not in loop_mod.entorno_agente({"loop": {}}, REPO_ROOT) or "HARNESS_GUARDIA" in os.environ,
+              "loop: enciende la guardia sin que el config la pida")
+        # De punta a punta: procesos Python reales con la guardia cargada por sitecustomize.
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp).resolve()
+            (troot / ".env").write_text("SECRETO=x\n", encoding="utf-8")
+            (troot / "README.md").write_text("hola\n", encoding="utf-8")
+            cfg_g = {"protectedReads": [{"id": "env-lectura", "pattern": "(^|/)\\.env$", "reason": "secreto"}],
+                     "loop": {"lockedPaths": ["^verificar\\.py$"]}}
+            env_g = {**os.environ, "HARNESS_GUARDIA": json.dumps(guardia_mod.spec_de(cfg_g, str(troot))),
+                     "PYTHONPATH": str(gdir)}
+            prueba = lambda code: subprocess.run([sys.executable, "-c", code], cwd=troot, env=env_g,  # noqa: E731
+                                                 capture_output=True, text=True, timeout=60)
+            r_ = prueba("open('.e' + 'nv').read()")
+            check(r_.returncode != 0 and "GUARDIA DEL ARNÉS" in r_.stderr, f"guardia: un programa leyó el .env armando la ruta: {r_.stderr[-300:]}")
+            r_ = prueba("import pathlib; pathlib.Path('verif' + 'icar.py').write_text('x')")
+            check(r_.returncode != 0 and not (troot / "verificar.py").exists(), "guardia: un programa escribió un intocable")
+            r_ = prueba("import os; os.replace('README.md', 'verificar.py')")
+            check(r_.returncode != 0 and (troot / "README.md").exists(), "guardia: un rename hacia un intocable pasó")
+            r_ = prueba("print(open('README.md').read()); open('notas.txt', 'w').write('ok')")
+            check(r_.returncode == 0 and (troot / "notas.txt").is_file(), f"guardia: muerde a un programa inocente: {r_.stderr[-300:]}")
+            r_ = subprocess.run([sys.executable, "-c", "open('.env').read()"], cwd=troot, env={**env_g, "HARNESS_GUARDIA": "{roto"},
+                                capture_output=True, text=True, timeout=60)
+            check(r_.returncode == 0, "guardia: una spec rota rompe el arranque de Python (tiene que dejar pasar)")
+
     # CLI: una regla se prueba por el plugin ANTES de escribirse.
     buena = {"id": "selftest-nueva", "pattern": r"\bzzq-selftest\b", "example": "zzq-selftest --go", "reason": "prueba."}
     check(not cli_mod.validar(config, "terminal.deny", buena), f"cli: rechaza una regla buena: {cli_mod.validar(config, 'terminal.deny', buena)}")

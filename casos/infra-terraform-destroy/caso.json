@@ -35,12 +35,12 @@
     },
     {
       "modo": "atajo",
-      "resultado": "escalar",
+      "resultado": "verde",
       "intentos": 1,
       "frenos": [
-        "terraform-sin-plan"
-      ],
-      "intocables": true
+        "terraform-sin-plan",
+        "intocable"
+      ]
     },
     {
       "modo": "desvio",
