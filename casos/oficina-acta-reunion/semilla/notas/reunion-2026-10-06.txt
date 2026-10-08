@@ -1,0 +1,8 @@
+reunión comité de producto — lun 6 oct, 10h
+estuvieron: Marta (producto), Julián (ingeniería), Sofía (soporte), Pedro (finanzas)
+
+- precios 2027: se mantiene el plan Básico, el Pro sube 8%. DECIDIDO.
+- soporte: los tickets de facturación tardan 3 días. julián revisa la integración con facturación, para el 20 de octubre
+- marta arma la comunicación del aumento a clientes Pro, antes del 1 de noviembre
+- pedro pasa el impacto en ingresos del aumento, viernes 17/10
+- se descarta el plan anual con descuento por ahora

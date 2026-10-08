@@ -1,0 +1,1 @@
+- confirmar con compras el mínimo de seguridad de los repuestos (Marcela)
