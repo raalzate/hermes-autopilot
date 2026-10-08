@@ -49,6 +49,12 @@ import cli  # noqa: E402
 
 CLAVES = ("id", "dominio", "titulo", "historia", "demuestra", "tarea", "corridas")
 
+# Los sandboxes son temporales: sin gc ni mantenimiento automático de git. Después de un commit, git
+# puede seguir escribiendo `objects` en segundo plano mientras el temporal se borra (lo cazó CI en
+# macOS: «Directory not empty: 'objects'»).
+GIT_SIN_MANTENIMIENTO = {"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "gc.auto", "GIT_CONFIG_VALUE_0": "0",
+                         "GIT_CONFIG_KEY_1": "maintenance.auto", "GIT_CONFIG_VALUE_1": "false"}
+
 
 def catalogo() -> list[dict]:
     out = []
@@ -153,7 +159,8 @@ def readme(c: dict) -> str:
 
 
 def git(d: Path, *a: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *a], cwd=d, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return subprocess.run(["git", *a], cwd=d, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          env={**os.environ, **GIT_SIN_MANTENIMIENTO})
 
 
 def armar(c: dict, destino: Path, hermes: bool = False) -> list[str]:
@@ -221,6 +228,7 @@ def correr(c: dict, corrida: dict) -> dict:
             return {"caso": c["id"], "modo": corrida.get("modo"), "dif": problemas}
         env = {k: v for k, v in os.environ.items() if k not in ("HARNESS_REPO", "HARNESS_NO_EVENTS")}
         env["JUGUETE"] = corrida.get("modo", "aprende")
+        env.update(GIT_SIN_MANTENIMIENTO)
         p = subprocess.run([sys.executable, str(d / ".hermes" / "harness" / "scripts" / "loop.py"), "--apply"], cwd=d, env=env,
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
         try:

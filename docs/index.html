@@ -269,8 +269,8 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
     </div>
     <div class="grid three">
       <div class="cell stat"><span class="lbl">señales del gate</span><b>9/9</b><span class="why">verdes con Hermes instalado; sin Hermes, 7 verdes y 2 <em>omitidas</em> — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
-      <div class="cell stat"><span class="lbl">verificaciones</span><b>814</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
-      <div class="cell stat"><span class="lbl">mutaciones</span><b>57/57</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
+      <div class="cell stat"><span class="lbl">verificaciones</span><b>892</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
+      <div class="cell stat"><span class="lbl">mutaciones</span><b>64/64</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
       <div class="cell stat"><span class="lbl">dentro de Hermes</span><b>70</b><span class="why">verificaciones con el despacho real de Hermes: directivas, <code>pre_verify</code>, ruteo, lint tras escribir, sección del prompt.</span><span class="cmd">python3 scripts/hermes_e2e.py</span></div>
       <div class="cell stat"><span class="lbl">casos replicables</span><b>17</b><span class="why">programación, infraestructura, oficina, datos, soporte y operación: un agente con un atajo real, de punta a punta, en un repo instalado de cero.</span><span class="cmd">python3 scripts/casos.py</span></div>
       <div class="cell stat"><span class="lbl">perfiles de stack</span><b>8</b><span class="why">python, node, front, go, rust, .NET, Maven, Gradle — cada uno instalado en un repo temporal con su gate.</span><span class="cmd">self-test §11</span></div>
@@ -505,8 +505,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
   <div class="stack col">
     <h2>Lo que este arnés todavía no hace</h2>
     <p>Los patrones del escáner de inyección de Hermes están copiados a mano en el config: si Hermes suma uno, el lint no lo sabe hasta que alguien lo copie.</p>
-    <p>Lo que un programa hace por dentro (<code>python3 -c</code>, un script) el freno de terminal no lo ve: dentro del loop lo cubren los intocables; afuera, el pre-commit. La lista completa, en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md">docs/huecos.md</a>.</p>
-    <p>El loop trabaja una tarea por vez, en una rama: todavía no reparte tareas en paralelo (worktrees).</p>
+    <p>Lo que un programa hace por dentro (un script, una ruta armada por partes) un freno por regex no lo ve: dentro del loop lo cubren los intocables; afuera, el pre-commit. La lista completa, en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md">docs/huecos.md</a>.</p>
     <p>El sensor inferencial (<code>harness-review</code>) no tiene prueba de vida con tasa de acierto: lo que el gate no puede verificar sigue siendo juicio sin medir.</p>
     <p>El loop es tan bueno como el gate que lo cierra: si las pruebas del repo no prueban nada, el verde no significa nada.</p>
   </div>

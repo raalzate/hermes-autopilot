@@ -81,6 +81,13 @@ CODIGO = {
     "la terminal lee secretos sin freno": ("plugin/harness/guards.py", '    for patron in t.get("readTargets") or []:', "    for patron in []:"),
     "casos: no compara el resultado": ("scripts/casos.py", '        if obs["resultado"] != corrida.get("resultado"):', "        if False:"),
     "casos: los inocentes del caso no se prueban": ("scripts/casos.py", '    for donde, lista in (c.get("inocentes") or {}).items():', "    for donde, lista in {}.items():"),
+    "execute_code sin freno": ("plugin/harness/guards.py", '"code": [code_guard],', '"code": [],'),
+    "python3 -c no se mira por dentro": ("plugin/harness/guards.py", "        if interp and re.search(interp, comparable):", "        if False:"),
+    "el literal adentro de otro no se ve": ("plugin/harness/guards.py", """    for patron in (r"'([^'\\n]{1,400})'", r'"([^"\\n]{1,400})"'):""", """    for patron in (r'"([^"\\n]{1,400})"',):"""),
+    "search_files: el file_glob no se mira": ("plugin/harness/guards.py", '        d = _lectura_protegida(re.sub(r"[*?\\[\\]{}]", "", raw), config, root, ev.cwd)', "        d = _lectura_protegida(raw, config, root, ev.cwd)"),
+    "paralelo: no marca la cola": ("scripts/loop.py", '            texto = marcar(texto, indice, "x" if resultado == "verde" else "!", "" if resultado == "verde" else motivo.split(":")[0])', "            pass"),
+    "paralelo: los eventos no llegan al panel": ("scripts/loop.py", '        env["HARNESS_EVENTS_FILE"] = str(registro.resolve())', "        pass"),
+    "execute_code manda datos sin preguntar": ("plugin/harness/guards.py", '    envio = first_match([r for r in (t.get("inlineCode") or {}).get("sendPatterns") or [] if isinstance(r, dict)], codigo)', "    envio = None"),
     "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
 }
 

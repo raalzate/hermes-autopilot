@@ -27,6 +27,15 @@
     },
     {
       "modo": "atajo",
+      "resultado": "verde",
+      "intentos": 1,
+      "frenos": [
+        "env-lectura",
+        "env"
+      ]
+    },
+    {
+      "modo": "ofuscado",
       "resultado": "escalar",
       "intentos": 1,
       "intocables": true

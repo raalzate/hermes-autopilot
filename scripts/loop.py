@@ -6,6 +6,7 @@ El loop autónomo: tarea → agente → gate → verde, o reintento con el rojo 
     python3 scripts/loop.py --apply             corre UNA tarea hasta verde o hasta escalar
     python3 scripts/loop.py --apply --all       sigue con la próxima mientras salgan verdes
     python3 scripts/loop.py --task "texto"      una tarea suelta, sin la lista
+    python3 scripts/loop.py --apply --paralelo 3   hasta 3 tareas a la vez, cada una en su worktree
     python3 scripts/loop.py --stop              pide parar: el loop lo lee entre iteraciones
     python3 scripts/loop.py --status            dónde está el loop (lo mismo que ve el panel)
 
@@ -28,6 +29,10 @@ Lo que lo hace un loop y no un `while true` (docs/ingenieria-de-loops.md):
     verificador)—, sin importar por qué canal lo cambió. Cambió → escala aunque el gate dé verde:
     un verde conseguido ablandando el criterio de salida no es verde (P8);
   - un loop por repo: `.git/harness-loop.lock` (dos loops se pisan el estado y la rama).
+    En paralelo (`--paralelo N`) cada tarea corre en su `git worktree` (bajo `.git/harness-worktrees/`,
+    rama `branchPrefix<slug>`): cada worktree tiene su gitdir, y con él su candado, su estado y sus
+    intocables. El coordinador marca la cola del repo principal y todos escriben en SU registro de
+    eventos, así el panel los ve. Los worktrees quedan: ahí está lo hecho, para revisarlo.
 
 Todo lo que hace queda en `loop.stateFile` y en el registro de eventos: el panel lo muestra en vivo.
 
@@ -324,6 +329,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--task", help="una tarea suelta, sin la lista")
     ap.add_argument("--stop", action="store_true", help="pedir que el loop pare entre iteraciones")
     ap.add_argument("--status", action="store_true", help="dónde está el loop")
+    ap.add_argument("--paralelo", type=int, default=0, metavar="N", help="hasta N tareas a la vez, cada una en su worktree")
     a = ap.parse_args(argv)
 
     try:
@@ -381,6 +387,8 @@ def main(argv: list[str]) -> int:
     try:
         if candado is not None:
             candado.write_text(json.dumps({"pid": os.getpid(), "at": time.time()}), encoding="utf-8")
+        if a.paralelo > 1 and not a.task:
+            return en_paralelo(config, root, a.paralelo, tareas)
         return correr_tareas(config, root, a, tareas, indice, tarea, siguiente)
     finally:
         if candado is not None:
@@ -406,6 +414,83 @@ def candado_vivo(candado: Path, spec: dict) -> bool:
         except (OSError, ValueError):
             return False
     return True
+
+
+def pendientes(texto: str, n: int) -> list[tuple[int, str]]:
+    """Las primeras `n` casillas `- [ ]` de la cola: (índice de línea, tarea)."""
+    out = []
+    for i, linea in enumerate(texto.splitlines()):
+        m = PENDIENTE.match(linea)
+        if m:
+            out.append((i, m.group(2)))
+        if len(out) >= n:
+            break
+    return out
+
+
+def en_paralelo(config: dict, root: Path, n: int, tareas: Path) -> int:
+    """Hasta `n` tareas a la vez, cada una en su worktree y su rama. Devuelve 0 si todas verdes."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    spec = config.get("loop") or {}
+    try:
+        lote = pendientes(tareas.read_text(encoding="utf-8"), n)
+    except OSError:
+        lote = []
+    if not lote:
+        print("Nada que hacer: no hay casillas `- [ ]` en la cola.")
+        return 0
+    g = git_dir(root)
+    base = (g / "harness-worktrees") if g else root / ".harness-worktrees"
+    script = Path(__file__).resolve()
+    try:
+        rel_script = script.relative_to(root.resolve())
+    except ValueError:
+        print("loop: el script no vive dentro del repo; --paralelo necesita que el arnés esté versionado.")
+        return 1
+    registro = events.path(config, root)
+    env = {**os.environ}
+    if registro is not None:
+        env["HARNESS_EVENTS_FILE"] = str(registro.resolve())
+    env.pop("HARNESS_REPO", None)
+
+    def una(item):
+        indice, tarea = item
+        rama = f"{spec.get('branchPrefix', 'loop/')}{slug(tarea)}"
+        wt = base / slug(tarea)
+        if not wt.exists():
+            p = git(root, "worktree", "add", "-q", "-b", rama, str(wt))
+            if p.returncode != 0:
+                p = git(root, "worktree", "add", "-q", str(wt), rama)
+            if p.returncode != 0:
+                return indice, tarea, "error", f"no pude crear el worktree: {(p.stderr or p.stdout).strip()[:200]}", wt
+        if not (wt / rel_script).is_file():
+            return indice, tarea, "error", f"el worktree no tiene {rel_script.as_posix()} (¿el arnés sin commitear?)", wt
+        events.record(config, root, "loop-start", task=tarea, worktree=str(wt))
+        subprocess.run([sys.executable, str(wt / rel_script), "--apply", "--task", tarea], cwd=wt, env=env,
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        est = leer_estado(spec, wt)
+        return indice, tarea, est.get("phase", "error"), est.get("reason", ""), wt
+
+    guardar_estado(spec, root, {"task": f"{len(lote)} tareas en paralelo", "phase": "paralelo", "startedAt": time.time(),
+                                "attempts": [], "workers": [{"task": t, "phase": "agente"} for _, t in lote]})
+    print(f"━━ {len(lote)} tareas en paralelo (worktrees en {base})")
+    with ThreadPoolExecutor(max_workers=len(lote)) as ex:
+        resultados = list(ex.map(una, lote))
+    texto = tareas.read_text(encoding="utf-8")
+    for indice, tarea, resultado, motivo, wt in resultados:
+        print(f"{'✓' if resultado == 'verde' else '✗'} {resultado.upper():<8} {tarea}\n           {wt}" + (f"\n           {motivo}" if resultado != "verde" else ""))
+        if resultado in ("verde", "escalar"):
+            texto = marcar(texto, indice, "x" if resultado == "verde" else "!", "" if resultado == "verde" else motivo.split(":")[0])
+    tareas.write_text(texto, encoding="utf-8")
+    verdes = sum(1 for r in resultados if r[2] == "verde")
+    guardar_estado(spec, root, {"task": f"{len(lote)} tareas en paralelo", "phase": "verde" if verdes == len(lote) else "escalar",
+                                "startedAt": time.time(), "endedAt": time.time(), "attempts": [],
+                                "reason": f"{verdes} de {len(lote)} verdes; lo hecho quedó en cada worktree",
+                                "workers": [{"task": t, "phase": r, "worktree": str(w)} for _, t, r, _, w in resultados]})
+    print("\nLo verde queda en cada rama y worktree: el loop no empuja ni abre PR (P13). "
+          "Al terminar de revisar: `git worktree remove <dir>`.")
+    return 0 if verdes == len(lote) else 2
 
 
 def correr_tareas(config, root, a, tareas, indice, tarea, siguiente) -> int:

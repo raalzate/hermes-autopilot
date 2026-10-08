@@ -98,6 +98,14 @@ class Hermes:
         subprocess.run([sys.executable, "-c", codigo], cwd=self.raiz, stdin=subprocess.DEVNULL)
         return True
 
+    def codigo(self, codigo: str) -> bool:
+        """`execute_code` de Hermes: Python que no pasa por la terminal (y sí por el freno de código)."""
+        if not self._pedir("code", {"code": codigo}):
+            return False
+        print(f"  [{self._tool('code')}] ✓ ejecutado")
+        subprocess.run([sys.executable, "-c", codigo], cwd=self.raiz, stdin=subprocess.DEVNULL)
+        return True
+
     def memoria(self, texto: str) -> bool:
         if not self._pedir("memory", {"action": "add", "target": "memory", "content": texto}):
             return False

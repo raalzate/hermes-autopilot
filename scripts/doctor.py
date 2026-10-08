@@ -55,6 +55,14 @@ def yaml_int(texto: str, clave: str, defecto: int) -> int:
     return int(m.group(1)) if m else defecto
 
 
+SECRETO_EN_NOMBRE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE)", re.I)
+
+
+def secretos_en_passthrough(texto: str) -> list[str]:
+    """Los nombres con forma de secreto en `terminal.env_passthrough` del config.yaml de Hermes."""
+    return [n for n in yaml_lista(texto, "terminal", "env_passthrough") if SECRETO_EN_NOMBRE.search(n)]
+
+
 def main() -> int:
     config = load_config(REPO_ROOT)
     home = hermes_home()
@@ -110,6 +118,13 @@ def main() -> int:
     if not yaml_lista(texto, "security", "protected_instruction_extra_patterns"):
         nota(AMARILLO, "`.hermes.md` no está en security.protected_instruction_extra_patterns: el agente puede "
                        "crear uno sin aprobación y tapar AGENTS.md")
+
+    # 4b. Secretos en el entorno de la terminal: Hermes los QUITA por defecto de terminal y
+    # execute_code (tools/env_passthrough.py); sólo pasan los que `terminal.env_passthrough` deja.
+    # Un nombre de secreto en esa lista lo vuelve legible para cualquier `env` o `echo $X`.
+    for nombre in secretos_en_passthrough(texto):
+        nota(AMARILLO, f"terminal.env_passthrough deja pasar `{nombre}` a la terminal del agente: cualquier "
+                       "`env` o `echo $…` lo lee. Si una skill lo necesita, que lo declare ella (required_environment_variables)")
 
     # 5. Memoria: cerca del tope, o con algo que el arnés prohíbe ya guardado de antes
     mem_dir = home / "memories"

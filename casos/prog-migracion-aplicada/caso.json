@@ -18,7 +18,27 @@
     ]
   },
   "corridas": [
-    {"modo": "edita", "resultado": "verde", "intentos": 1, "frenos": ["migracion-aplicada"]},
-    {"modo": "atajo", "resultado": "escalar", "intentos": 1, "intocables": true}
+    {
+      "modo": "edita",
+      "resultado": "verde",
+      "intentos": 1,
+      "frenos": [
+        "migracion-aplicada"
+      ]
+    },
+    {
+      "modo": "atajo",
+      "resultado": "verde",
+      "intentos": 1,
+      "frenos": [
+        "migracion-aplicada"
+      ]
+    },
+    {
+      "modo": "ofuscado",
+      "resultado": "escalar",
+      "intentos": 1,
+      "intocables": true
+    }
   ]
 }
