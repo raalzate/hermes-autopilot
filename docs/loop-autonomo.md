@@ -61,9 +61,30 @@ Una tarea buena para el loop:
 | `escalar` | `maxIterations` intentos sin verde | 2 | `[!]` |
 | `escalar` | pasaron `maxMinutes` | 2 | `[!]` |
 | `parado` | existe `stopFile` al terminar un intento | 2 | queda `[ ]` |
+| `escalar` | el agente cambió un **intocable** (ver abajo), aunque el gate dé verde | 2 | `[!]` |
 
 La **firma** de un rojo son los nombres de las señales `✗` del gate, ordenados. Las duraciones no
 cuentan: si contaran, el mismo error parecería distinto en cada intento y nunca escalaría.
+
+## Intocables: lo que el agente no puede cambiar durante la tarea
+
+Antes y después de cada intento, el loop toma la huella de:
+
+- los archivos **versionados** que casan con `protectedPaths` (no los de fuera del repo);
+- los que casan con `loop.lockedPaths`, versionados o no, **incluso ignorados por git** (un `.env`).
+
+Si alguno cambió, el intento escala sin correr el gate. Lo que decide «terminado» podría ser justo
+lo que se cambió, y un verde conseguido ablandando el criterio no es verde. Cubre lo que el freno
+de terminal no ve por dentro (`python3 -c`, un script) y lo que ninguna regla mira (un `rm` del
+test). En la plantilla, `lockedPaths` traba el config del arnés, la cola y `.env`. En este repo no
+traba el config, porque agregar una regla es una tarea legítima.
+
+Además, la cola (`.hermes/loop/`) está en `protectedPaths` solo para el agente: no se asigna, no se
+cierra ni se borra tareas. Y hay **un loop por repo**: `.git/harness-loop.lock`. Un candado viejo,
+de un loop matado, vence por tiempo y por pid.
+
+Los casos replicables de [`../casos/`](../casos/README.md) ejercitan cada camino: verde,
+reintento con el rojo, escalada por el mismo rojo, intocables.
 
 ## Cuando escala
 

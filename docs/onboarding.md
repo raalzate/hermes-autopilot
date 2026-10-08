@@ -51,7 +51,7 @@ python3 scripts/gate.py
 Tiene que terminar en una de estas dos líneas:
 
 ```
-GATE VERDE — 8 señales.                                        # con Hermes en el PATH
+GATE VERDE — 9 señales.                                        # con Hermes en el PATH
 GATE VERDE con 2 OMITIDA(S): plugin en el Hermes real, …       # sin Hermes
 ```
 

@@ -20,10 +20,10 @@ Sin esa bandera, la CLI muestra qué cambiaría y no toca nada (P9).
 | `config get [ruta]` · `config set <ruta> <valor> [--apply]` | cualquier clave escalar u objeto; el valor se lee como JSON si se puede. Las listas de reglas no: van por `rule` |
 | `task add "texto"` · `task list` | la cola del loop autónomo |
 | `profile list` | los perfiles de stack del instalador |
-| `gate` · `selftest` · `lint` · `map` · `timing` · `doctor` · `drift` · `install` · `loop` · `panel` · `mutations` · `linkcheck` | pasamanos al script del mismo nombre, con sus argumentos |
+| `gate` · `selftest` · `lint` · `map` · `timing` · `doctor` · `drift` · `install` · `loop` · `panel` · `mutations` · `linkcheck` · `casos` | pasamanos al script del mismo nombre, con sus argumentos |
 
-Familias de reglas: `terminal.deny`, `terminal.ask`, `protectedPaths`, `patterns`,
-`memory.deny`, `skills.deny`, `cron.deny` y `routes`.
+Familias de reglas: `terminal.deny`, `terminal.ask`, `protectedPaths`, `protectedReads`,
+`patterns`, `memory.deny`, `skills.deny`, `cron.deny` y `routes`.
 
 ### Por qué `rule add` y no editar el JSON
 
@@ -62,7 +62,7 @@ python3 scripts/panel.py --once           # el mismo estado, como JSON, una vez
 | **Gate**: veredicto, modo, hora y cada señal | `.git/harness-gate.json` (lo escribe `gate.py`) y el marcador de gate pendiente |
 | **Loop autónomo**: fase, tarea, intento, firma de cada rojo, motivo de la escalada, parada pedida | `loop.stateFile`, `loop.stopFile` |
 | **Tareas**: pendientes, verdes, escaladas y la barra de avance | `loop.tasksFile` |
-| **Frenos activos**: cuántas reglas tiene cada familia | el config |
+| **Frenos activos**: cuántas reglas tiene cada familia, y **los que más mordieron** (bloqueos y escaladas por regla) | el config y el registro de eventos |
 | **Salud**: edad del veredicto de `STATUS.md`, piezas del mapa, sin clasificar, etapas sin control y si el registro está encendido | `STATUS.md`, `map.construir`, el config |
 | **Eventos en vivo**: cada `block`, `ask`, `lint`, `verify-pending`, `gate` y `loop-*` | `observability.events.file` |
 

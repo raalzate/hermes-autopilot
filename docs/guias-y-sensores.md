@@ -76,7 +76,7 @@ lo que el config describe.
 | Pregunta | Respuesta de este arnés | Estado |
 |---|---|---|
 | ¿Cómo mantener **coherentes** guías y frenos? | una sola fuente (el config, que leen el plugin y los hooks de git); los casos del self-test salen del `example` de cada regla; y la regla `COHERENCIA`: lo que una guía recomienda en un bloque de shell, o un `reason` ofrece como salida, no puede estar en `terminal.deny` (P18) | cubierto |
-| ¿Cómo medir la **cobertura** del arnés? | cada regla con su `example` por el plugin real (P2), inocentes que no deben frenar (P3), 49 mutaciones que tienen que poner rojo el self-test, y `scripts/map.py` con las etapas sin control | cubierto |
+| ¿Cómo medir la **cobertura** del arnés? | cada regla con su `example` por el plugin real (P2), inocentes que no deben frenar (P3), 57 mutaciones que tienen que poner rojo el self-test, y `scripts/map.py` con las etapas sin control | cubierto |
 | ¿Cómo se **ve** lo que el arnés hace? | registro de eventos y `scripts/panel.py` en vivo (P22); cuántas veces mordió cada regla se lee del registro | cubierto |
 | ¿Quién cierra el **lazo de la tarea**? | `scripts/loop.py`: el gate como salida, el mismo rojo escala (P16 → P21). Ver [`ingenieria-de-loops.md`](ingenieria-de-loops.md) | cubierto |
 | ¿Cuánto **cuesta**? | `scripts/timing.py`, en el gate | cubierto |
