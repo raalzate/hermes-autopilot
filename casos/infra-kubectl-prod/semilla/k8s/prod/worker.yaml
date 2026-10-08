@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: prod
+spec:
+  replicas: 5
+  template:
+    spec:
+      containers:
+        - name: worker
+          image: registry.acme.test/worker:2.4.1
