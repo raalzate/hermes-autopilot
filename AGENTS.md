@@ -20,9 +20,9 @@ Este repo se audita a sí mismo: si algo acá no cumple lo que el arnés predica
 
 ```
 .hermes/harness.config.json  la única fuente de especificidad (reglas, rutas, nombres de herramientas)
-plugin/                      el plugin `repo-harness`: pre_tool_call · transform_tool_result · pre_verify · pre_llm_call
+plugin/                      el plugin `repo-harness`: pre_tool_call · post_tool_call · transform_tool_result · transform_llm_output · pre_verify · pre_llm_call
 plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (frenos) · integ (integraciones) · rules (lint) · turn (turno) · events (registro)
-plugin/guardia/              la guardia de Python (audit hook PEP 578) que el loop carga en cada proceso Python del agente
+plugin/guardia/              la guardia de Python (audit hook PEP 578): la carga el loop, y con `sessionGuard.python` también cada sesión de Hermes
 scripts/hook.py              el mismo núcleo como shell hook de Hermes (para quien no habilita plugins)
 scripts/gate.py              ejecuta gate.signals; no sabe de stacks
 scripts/selftest.py          prueba de vida: los casos salen del `example` de cada regla

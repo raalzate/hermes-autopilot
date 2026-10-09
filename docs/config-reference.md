@@ -43,7 +43,10 @@ sin `example` es roja.
 | `taint.sources{tools[], readPaths[]}`, `askCommands[]`, `askWrites[]`, `askKinds[]`, `kindsReason`, `innocentAfter[]`, `innocentWritesAfter[]` | la **sesión contaminada**: después de leer contenido de terceros (herramientas web y de navegador de Hermes, o rutas como `tickets/`), lo que tiene efecto afuera escala a un humano —comandos (`askCommands`, también en `execute_code`), escrituras donde una instrucción quedaría permanente (`askWrites`) y guardar memoria, skills o cron (`askKinds`; limpiar no). Sólo el plugin (el shell hook no tiene memoria de la sesión) |
 | `integrations.$naming{prefix, sanitize}` | cómo nombra Hermes una herramienta MCP: `mcp__{server}__`, con `[^A-Za-z0-9_]` cambiado por `_` (verificado en `tools/mcp_tool_schema.py`) |
 | `integrations.undeclared{pattern, allow, action, reason}` | una herramienta con forma de integración (`^mcp__`) que ninguna declara: `ask` (plantilla), `deny` o pasa. `allow` es una regex de las que pasan igual |
+| `integrations.content{classes[], deny[], innocent[]}` | **lo que dice** lo que sale: cada texto de los argumentos de una llamada de clase `classes` (`send`, `write`) —en una integración por CLI, el comando— se compara con `deny` (un secreto, una plantilla sin completar). Frena aunque el destinatario esté en la lista |
 | `integrations.enabled.<id>` | una integración MATERIALIZADA del catálogo (`plantillas/integraciones/<id>.json`) por `scripts/integ.py add`. Ver la tabla de abajo |
+| `output{redact[], redactWith, innocent[], taintNotice}` | la **respuesta** del turno (`transform_llm_output`): lo que casa con `redact` se reemplaza por `redactWith` antes de mostrarse y guardarse; si la sesión leyó a un tercero, se agrega `taintNotice` al pie (`{fuente}` dice de dónde) |
+| `sessionGuard.python` | `true`: la guardia de Python también en las sesiones interactivas de Hermes (fuera del loop). El plugin pone `plugin/guardia` en el `PYTHONPATH` de Hermes y deja el spec en `.git/harness-guardia.json`; sin los intocables del loop. `HARNESS_GUARDIA_OFF=1` la apaga para un comando. Plantilla: `false` (un test que lee el `.env` a propósito se frenaría) |
 | `routes[]` | `{id, pattern, example, hint}` — pista que se suma al turno si el pedido casa |
 | `context.files`, `maxChars`, `blockedPatterns[]` | archivos de contexto de Hermes: tope y patrones del escáner |
 | `invariants[]` | `{file, mustContain[], mustNotContain[], reason}` |
@@ -102,6 +105,8 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `skills.*` | `plugin/harness/guards.py`, `plugin/harness/rules.py`, `scripts/doctor.py`, `scripts/selftest.py` |
 | `cron.*` | `plugin/harness/guards.py`, `scripts/selftest.py` |
 | `routes` | `plugin/harness/turn.py`, `scripts/selftest.py` |
+| `output` | `plugin/harness/turn.py` (`respuesta`), `plugin/__init__.py` (`on_transform_llm_output`), `scripts/selftest.py`, `scripts/hermes_e2e.py` |
+| `sessionGuard` | `plugin/__init__.py` (`_guardia_de_sesion`), `plugin/guardia/sitecustomize.py` (por el spec), `scripts/doctor.py`, `scripts/selftest.py` |
 | `context.*` | `plugin/harness/rules.py`, `scripts/lint.py`, `scripts/selftest.py` |
 | `invariants`, `incidents`, `lint` | `plugin/harness/rules.py`, `scripts/lint.py`, `scripts/selftest.py` |
 | `docs.*` | `scripts/linkcheck.py` |

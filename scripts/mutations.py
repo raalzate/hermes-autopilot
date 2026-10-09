@@ -122,6 +122,16 @@ CODIGO = {
     "integraciones: el nombre MCP sin sanear": ("plugin/harness/integ.py", "    completo = prefijo(config, integ) + sanear(crudo, config)", "    completo = prefijo(config, integ) + crudo"),
     "integraciones: el nombre largo sin cortar": ("plugin/harness/integ.py", "    if tope and len(completo) > tope:", "    if False:"),
     "integ_run: la sonda no compara": ("scripts/integ_run.py", '    errores = [f"el manifiesto declara `{t}` y el servidor no la publica (¿cambió la versión?)" for t in sorted(declaradas - hay)]', "    errores = []"),
+    # Los huecos 25-28 (docs/huecos.md): lo que se cerró después de las integraciones.
+    "lo aprobado no gasta presupuesto": ("plugin/__init__.py", "        _registrar_uso(config, root, clave, tool_name, aprobada=True)", "        pass"),
+    "una aprobación negada gasta presupuesto": ("plugin/__init__.py", '    if not clave or status == "blocked":', "    if not clave:"),
+    "el contenido saliente no se mira": ("plugin/harness/integ.py", '    for texto in textos:\n        regla = first_match(spec_c.get("deny"), texto)', '    for texto in []:\n        regla = first_match(spec_c.get("deny"), texto)'),
+    "la respuesta no tapa secretos": ("plugin/harness/turn.py", '    for regla in spec.get("redact") or []:', "    for regla in []:"),
+    "la respuesta contaminada sin aviso": ("plugin/harness/turn.py", "    if contaminada and isinstance(aviso, str)", "    if False and isinstance(aviso, str)"),
+    "la guardia de sesión no busca el spec": ("plugin/guardia/sitecustomize.py", "        spec = guardia.buscar_spec(os.getcwd())", "        spec = None"),
+    "el plugin no deja el spec de la guardia": ("plugin/__init__.py", "    _guardia_de_sesion(config, root)\n    sesion =", "    sesion ="),
+    "la portada no compara sus cifras": ("scripts/casos.py", "        elif any(x != v for x in hay):", "        elif False:"),
+    "la guardia de sesión lleva los intocables": ("plugin/__init__.py", "str(registro) if registro else None, trabadas=False)", "str(registro) if registro else None, trabadas=True)"),
 
 }
 

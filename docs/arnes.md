@@ -17,13 +17,16 @@ prueba. Si una fila no tiene comando, no es un freno: es una esperanza.
 | antes de `skill_manage` | `skills.deny` + `terminal.deny` heredado | freno | self-test §3 |
 | antes de `cronjob_manage` | `cron.deny`, `cron.minIntervalMinutes` | freno | self-test §3 |
 | después de escribir | lint del archivo → `transform_tool_result`; marca el gate | sensor | self-test §6 |
+| después de ejecutar | `post_tool_call`: lo que un humano aprobó y se ejecutó gasta el presupuesto de su integración | sensor | self-test §14 y el e2e con el emisor real de Hermes; 2 mutaciones |
+| un programa Python de una sesión interactiva | `sessionGuard.python`: la guardia (PEP 578) también fuera del loop, por el `PYTHONPATH` de Hermes y el spec en `.git/harness-guardia.json` | freno | self-test (procesos reales) y 3 mutaciones |
+| la respuesta del turno | `transform_llm_output` (`output`): tapa los secretos y, si la sesión leyó a un tercero, dice de qué fuente | freno | self-test, e2e por `apply_llm_output_transform` y 2 mutaciones |
 | cerrar el turno | `pre_verify` con el gate pendiente | freno | self-test §6 |
 | commit | `.githooks/pre-commit` (rutas protegidas + lint), `commit-msg` (registro) | freno | self-test §9 (funciones + git real) |
 | push | `.githooks/pre-push` (`branches.protected`: a main se entra por PR) | freno | self-test §12 (función + push real a un remoto temporal) |
 | escribir una guía | lint `COHERENCIA`: lo que `AGENTS.md`, `docs/` o una skill recomiendan en un bloque de shell no puede estar en `terminal.deny` | sensor | self-test §12 (cada `example` de `terminal.deny` recomendado en una guía) |
 | escribir un perfil | lint `PERFIL`: un perfil de stack no trae reglas (`profiles.forbiddenKeys`) | sensor | self-test §12 y §11 (los perfiles reales) |
 | entregar | `scripts/gate.py` | freno | es el gate; CI lo corre igual |
-| el self-test mismo | `scripts/mutations.py` — 97 mutaciones (frenos, config, cada hallazgo de la revisión, cada pieza traída de agent-harness, la autonomía y las integraciones) | sensor | señal del gate: cada una tiene que poner rojo el self-test |
+| el self-test mismo | `scripts/mutations.py` — 106 mutaciones (frenos, config, cada hallazgo de la revisión, cada pieza traída de agent-harness, la autonomía, las integraciones, los huecos 25-28 y las cifras de la portada) | sensor | señal del gate: cada una tiene que poner rojo el self-test |
 | el arnés entero | `scripts/map.py` — cada pieza con dirección (guía · freno · sensor), tipo y etapa desde `taxonomy` | sensor | señal del gate: una pieza sin clasificar es rojo |
 | el costo | `scripts/timing.py` — la mediana de cada callback del plugin contra `observability.budgetMs` | sensor | señal del gate; self-test §12 (con presupuesto 0 tiene que salir rojo) |
 | continuo (semanal) | `scripts/drift.py` por `.github/workflows/drift.yml`: `STATUS.md` vencido = rojo, regla que nunca cazó nada = aviso | sensor | self-test §12 (que el `runner` invoque el comando, y los casos de fecha e historial) |
@@ -31,11 +34,11 @@ prueba. Si una fila no tiene comando, no es un freno: es una esperanza.
 | de punta a punta | `scripts/casos.py`: 22 casos replicables (programación, infraestructura, oficina, datos, soporte, operación) con un agente determinista cuyas acciones pasan por el plugin real | sensor | señal del gate; self-test §13 (forma del catálogo, que el runner compare, que las reglas de un caso no muerdan sus inocentes) |
 | cambiar una regla | `scripts/cli.py rule add`: la regla pasa por `guards.evaluate` con su `example`, los inocentes y el gate del repo, y el config resultante por el lint, antes de escribirse | freno | self-test §13 (cada rechazo) y 2 mutaciones |
 | siempre (observabilidad) | registro de eventos (`plugin/harness/events.py`) y `scripts/panel.py` en vivo por SSE, sólo en 127.0.0.1 (P22) | sensor | self-test §13 (registra lo que frena y no lo que deja pasar, rota, el panel responde y empuja) y 3 mutaciones |
-| el revisor inferencial | `scripts/revision.py` — recall y precisión de `harness-review` (o del revisor de `review.command`) contra diffs etiquetados de los casos, con umbrales | sensor | señal del gate (OMITIDA sin modelo) y `hermes-nocturno.yml` con el modelo; self-test (un revisor perfecto, uno que aprueba todo, uno sin modelo) y 2 mutaciones |
+| el revisor inferencial | `scripts/revision.py` — recall y precisión de `harness-review` (o del revisor de `review.command`) contra diffs etiquetados de los casos, con umbrales. Medido con un modelo real: recall 100 %, precisión 91 % (`evals/mediciones/`) | sensor | señal del gate (OMITIDA sin modelo) y `hermes-nocturno.yml` con el modelo; self-test (un revisor perfecto, uno que aprueba todo, uno sin modelo) y 2 mutaciones |
 | lo que el agente hace afuera | `plugin/harness/integ.py` sobre `integrations` (catálogo en `plantillas/integraciones/`, ADR 0010): clase por nombre, perfil, destinatarios, URLs, archivos, presupuesto, contaminación, alcance por tarea, MCP sin declarar; `scripts/integ_run.py` arranca cada servidor con sus secretos y límites | freno | señal del gate `integ.py check`; self-test §14; 25 mutaciones; 5 casos replicables |
 | esta máquina | `scripts/doctor.py` | sensor | a mano / skill `harness-audit` |
 | el Hermes real: carga | `hermes plugins doctor plugin --ci` | sensor | señal del gate (OMITIDA sin Hermes); corre en CI en el job `hermes-real` (`scripts/hermes_fuente.py`) |
-| el Hermes real: contrato | `scripts/hermes_e2e.py` — cada `example` por `get_pre_tool_call_directive`, `pre_verify`, `pre_llm_call`, `transform_tool_result` y la sección del prompt, dentro de Hermes | sensor | señal del gate (OMITIDA sin Hermes) |
+| el Hermes real: contrato | `scripts/hermes_e2e.py` — cada `example` por `get_pre_tool_call_directive`, `pre_verify`, `pre_llm_call`, `transform_tool_result`, `post_tool_call`, `apply_llm_output_transform` y la sección del prompt, dentro de Hermes | sensor | señal del gate (OMITIDA sin Hermes) |
 
 ## Por qué el self-test no necesita Hermes
 

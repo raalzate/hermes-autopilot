@@ -1,8 +1,9 @@
 """
-Instala la guardia del arnés (guardia.py) en este proceso Python, si `HARNESS_GUARDIA` lo pide.
+Instala la guardia del arnés (guardia.py) en este proceso Python, si `HARNESS_GUARDIA` lo pide o,
+sin esa variable, si el repo del directorio actual dejó su spec en `.git/harness-guardia.json`.
 
 Python importa `sitecustomize` solo, al arrancar, si está en el `PYTHONPATH`: el loop lo pone ahí
-para el agente. Nada de esto puede romper el arranque de Python: cualquier error, y la guardia no
+para el agente, y el plugin en el proceso de Hermes (sesiones interactivas, `sessionGuard.python`). Nada de esto puede romper el arranque de Python: cualquier error, y la guardia no
 se instala (el agente sigue frenado por el plugin, el worktree y los intocables).
 """
 import json
@@ -11,9 +12,15 @@ import sys
 
 
 def _instalar():
-    spec = json.loads(os.environ["HARNESS_GUARDIA"])
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import guardia
+
+    if os.environ.get("HARNESS_GUARDIA"):
+        spec = json.loads(os.environ["HARNESS_GUARDIA"])
+    else:
+        spec = guardia.buscar_spec(os.getcwd())
+        if not spec:
+            return
 
     raiz = spec.get("raiz") or os.getcwd()
     dentro = [False]
@@ -61,7 +68,7 @@ def _instalar():
     sys.addaudithook(hook)
 
 
-if os.environ.get("HARNESS_GUARDIA"):
+if not os.environ.get("HARNESS_GUARDIA_OFF"):
     try:
         _instalar()
     except Exception:  # noqa: BLE001 — una guardia rota no puede romper Python

@@ -72,7 +72,10 @@ def llamadas(plugin, config: dict) -> dict:
         # Una herramienta de integración: recorre `integrations.enabled` y `undeclared` en cada llamada.
         "pre_tool_call (integración)": lambda: plugin.on_pre_tool_call(tool_name=probe.get("integrationTool", "mcp__x__get_item"),
                                                                        args={"id": "1"}),
+        "post_tool_call": lambda: plugin.on_post_tool_call(tool_name=shell, args={"command": probe.get("command", "git status")}, status="ok"),
         "transform_tool_result": lambda: plugin.on_transform_tool_result(tool_name=write, args=escribir, result="ok"),
+        # La respuesta del turno: cada regla de `output.redact` sobre un texto largo.
+        "transform_llm_output": lambda: plugin.on_transform_llm_output(response_text=probe.get("prompt", "listo") * 200),
         "pre_verify": lambda: plugin.on_pre_verify(),
         "pre_llm_call": lambda: plugin.on_pre_llm_call(user_message=probe.get("prompt", "¿cómo está el arnés?")),
         "sección de estado": lambda: plugin._seccion_estado({}),

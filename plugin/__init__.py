@@ -13,7 +13,11 @@ Contrato con Hermes (verificado en `hermes_cli/plugins.py` y `model_tools.py`):
     Por eso todo callback pasa por `_seguro`: un arnés roto deja pasar, nunca bloquea al humano (P5);
   - `pre_verify` → `{"action": "continue", "message": ...}` sigue el turno (sólo si hubo ediciones);
   - `transform_tool_result` → un `str` reemplaza el resultado; `None` lo deja igual;
-  - `pre_llm_call` → `{"context": ...}` se suma al mensaje del usuario (no al system prompt).
+  - `pre_llm_call` → `{"context": ...}` se suma al mensaje del usuario (no al system prompt);
+  - `post_tool_call` → observador: corre DESPUÉS de ejecutar, con `status="blocked"` si el freno o
+    el humano dijeron que no (`model_tools.handle_function_call`, aa74e184);
+  - `transform_llm_output` → un `str` reemplaza la respuesta final del turno, antes de mostrarla y
+    de guardarla (`agent/turn_finalizer.py::apply_llm_output_transform`).
 """
 from __future__ import annotations
 
@@ -80,6 +84,12 @@ _CONTAMINADAS: dict[str, str] = {}
 # de eventos. Con registro se cuenta de ahí: vale entre procesos (el loop, cron y el gateway).
 _USOS: dict[str, list[float]] = {}
 _HORA = 3600.0
+# Llamadas con presupuesto que el freno mandó a aprobar: {id de la llamada: "<integración>:<clase>"}.
+# `pre_tool_call` no sabe si el humano dijo que sí; `post_tool_call` sí (status ≠ "blocked").
+_APROBANDO: dict[str, str] = {}
+_MAX_APROBANDO = 256  # una llamada sin `post_tool_call` (un Hermes que revienta) no puede acumular memoria
+# Repos a los que ya se les dejó el spec de la guardia de sesión en este proceso: {raíz: spec}.
+_GUARDIAS: dict[str, str] = {}
 
 
 def _integraciones_de_la_tarea():
@@ -100,22 +110,58 @@ def _uso(config, root, clave: str) -> int:
     return sum(1 for t in _USOS.get(clave, []) if t >= desde)
 
 
-def _registrar_uso(config, root, clave: str, tool: str) -> None:
+def _id_llamada(tool: str, args, sesion: str, tool_call_id: str = "") -> str:
+    if tool_call_id:
+        return tool_call_id
+    import json
+    try:
+        return f"{sesion}:{tool}:{json.dumps(args, sort_keys=True, default=str)}"
+    except (TypeError, ValueError):
+        return f"{sesion}:{tool}"
+
+
+def _registrar_uso(config, root, clave: str, tool: str, aprobada: bool = False) -> None:
     import time
     if events.spec(config) and not os.environ.get("HARNESS_NO_EVENTS"):
-        events.record(config, root, "integ-uso", key=clave, tool=tool)
+        events.record(config, root, "integ-uso", key=clave, tool=tool, **({"approved": True} if aprobada else {}))
     else:
         ahora = time.time()
         _USOS[clave] = [t for t in _USOS.get(clave, []) if t >= ahora - _HORA] + [ahora]
 
 
+def _guardia_de_sesion(config, root) -> None:
+    """`sessionGuard.python`: deja en el gitdir el spec de la guardia de Python para que la cargue cada
+    proceso Python que lance esta sesión de Hermes (el plugin puso `plugin/guardia` en su
+    `PYTHONPATH` al registrarse). Una vez por repo y por proceso; dentro del loop no hace falta:
+    el loop pasa su propio spec en `HARNESS_GUARDIA`."""
+    if not ((config.get("sessionGuard") or {}).get("python")) or os.environ.get("HARNESS_GUARDIA"):
+        return
+    import json
+    from .guardia import guardia as g
+    registro = events.path(config, root)
+    spec = json.dumps(g.spec_de(config, str(root.resolve()), str(registro) if registro else None, trabadas=False),
+                      ensure_ascii=False)
+    if _GUARDIAS.get(str(root)) == spec:
+        return
+    gd = core.git_dir(root)
+    if gd is None:
+        return
+    try:
+        (gd / g.ARCHIVO).write_text(spec, encoding="utf-8")
+        _GUARDIAS[str(root)] = spec
+    except OSError:
+        pass
+
+
 @_seguro
-def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_id: str = "", **_):
+def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_id: str = "",
+                     tool_call_id: str = "", **_):
     args = args if isinstance(args, dict) else {}
     cwd = _cwd_de(args, task_id)
     root, config = _contexto(cwd or None)
     if not config:
         return None
+    _guardia_de_sesion(config, root)
     sesion = session_id or task_id or "default"
     # Sólo las llamadas con presupuesto leen el registro: el resto no paga I/O (timing.py lo mide).
     cuenta = integ.contable(config, tool_name, args)
@@ -126,6 +172,11 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
     d = guards.evaluate(ev, config, root)
     if clave and not (d.block or d.approve):
         _registrar_uso(config, root, clave, tool_name)
+    elif clave and d.approve:
+        # Lo que el humano apruebe también gasta el presupuesto: lo cuenta `post_tool_call`.
+        if len(_APROBANDO) >= _MAX_APROBANDO:
+            _APROBANDO.pop(next(iter(_APROBANDO)))
+        _APROBANDO[_id_llamada(tool_name, args, sesion, tool_call_id)] = clave
     if not (d.block or d.approve):
         fuente = guards.fuente_externa(ev, config, root)
         if fuente and sesion not in _CONTAMINADAS:
@@ -136,6 +187,35 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
         events.record(config, root, "block" if d.block else "ask", rule=(d.rule or {}).get("id", "?"),
                       tool=tool_name, session=session_id)
     return d.to_hermes()
+
+
+@_seguro
+def on_post_tool_call(tool_name: str = "", args=None, status: str = "", session_id: str = "", task_id: str = "",
+                      tool_call_id: str = "", **_):
+    """Una llamada que el freno mandó a aprobar y que se EJECUTÓ (el humano dijo que sí) cuenta en el
+    presupuesto. Sin esto, con aprobaciones seguidas el tope por hora dejaba de cortar."""
+    if not _APROBANDO:
+        return None
+    args = args if isinstance(args, dict) else {}
+    clave = _APROBANDO.pop(_id_llamada(tool_name, args, session_id or task_id or "default", tool_call_id), "")
+    if not clave or status == "blocked":
+        return None
+    root, config = _contexto(_cwd_de(args, task_id) or None)
+    if config:
+        _registrar_uso(config, root, clave, tool_name, aprobada=True)
+    return None
+
+
+@_seguro
+def on_transform_llm_output(response_text: str = "", session_id: str = "", task_id: str = "", **_):
+    root, config = _contexto(_cwd_de_sesion(task_id) or None)
+    if not config:
+        return None
+    nuevo = turn.respuesta(config, response_text, _CONTAMINADAS.get(session_id or task_id or "default", ""))
+    if nuevo is not None:
+        events.record(config, root, "respuesta", session=session_id,
+                      tapado=nuevo.count((config.get("output") or {}).get("redactWith") or "[tapado por el arnés]"))
+    return nuevo
 
 
 @_seguro
@@ -210,11 +290,27 @@ def cmd_harness(raw_args: str = ""):
     return "\n".join(lineas)
 
 
+def _guardia_en_pythonpath() -> None:
+    """Cada proceso Python que lance Hermes (la terminal y `execute_code`, que deja pasar `PYTHONPATH`)
+    importa `plugin/guardia/sitecustomize.py`. Sin spec en el repo (`sessionGuard.python` apagado),
+    no hace nada."""
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "guardia")
+    actual = os.environ.get("PYTHONPATH", "")
+    if os.path.isfile(os.path.join(d, "sitecustomize.py")) and d not in actual.split(os.pathsep):
+        os.environ["PYTHONPATH"] = os.pathsep.join([d] + ([actual] if actual else []))
+
+
 def register(ctx) -> None:
     ctx.register_hook("pre_tool_call", on_pre_tool_call)
+    ctx.register_hook("post_tool_call", on_post_tool_call)
     ctx.register_hook("transform_tool_result", on_transform_tool_result)
+    ctx.register_hook("transform_llm_output", on_transform_llm_output)
     ctx.register_hook("pre_verify", on_pre_verify)
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
+    try:
+        _guardia_en_pythonpath()
+    except Exception:  # noqa: BLE001 — sin guardia de sesión, el resto del arnés sigue
+        logger.warning("repo-harness: sin guardia de sesión", exc_info=True)
     # Estado al abrir la sesión: sección del system prompt, congelada por sesión (cache-safe).
     try:
         ctx.register_system_prompt_section("repo-harness.status", _seccion_estado, max_chars=4000)

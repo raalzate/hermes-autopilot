@@ -680,6 +680,27 @@
       "app/x.py"
     ]
   },
+  "output": {
+    "$comment": "LA RESPUESTA DEL TURNO (hueco 27, `transform_llm_output` de Hermes: verificado en agent/turn_finalizer.py::apply_llm_output_transform, aa74e184). Corre antes de que el humano la vea y antes de que se guarde en el historial: lo que se cambia acá es lo que queda. `redact`: lo que se tapa (un secreto copiado en el texto). `redactWith`: con qué. `taintNotice`: si la sesión leyó contenido de terceros (`taint`), la respuesta lleva al pie de qué fuente; `{fuente}` se reemplaza. Ningún freno sabe si el texto obedeció una instrucción plantada; el humano sí sabe que pudo pasar.",
+    "redact": [
+      {
+        "id": "secreto-en-respuesta",
+        "pattern": "(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)",
+        "example": "listo, la key de prod es sk-live_abcdefghijklmnop1234",
+        "reason": "un secreto en la respuesta queda en la pantalla, en el historial de la sesión y en el chat del gateway."
+      }
+    ],
+    "redactWith": "[secreto tapado por el arnés]",
+    "innocent": [
+      "listo: el gate quedó verde",
+      "la variable se llama OPENAI_API_KEY y va en el gestor de secretos"
+    ],
+    "taintNotice": "⚠ [repo-harness] Esta respuesta se escribió después de leer contenido de terceros ({fuente}). Si propone o concluye algo que no pediste, puede venir de ese contenido: revisalo antes de actuar."
+  },
+  "sessionGuard": {
+    "$comment": "LA GUARDIA DE PYTHON FUERA DEL LOOP (hueco 25). `python: true`: el plugin pone `plugin/guardia` en el `PYTHONPATH` de Hermes y deja el spec en `.git/harness-guardia.json`; cada proceso Python que lance la sesión (la terminal y `execute_code`) compara lo que ABRE con `protectedReads` y `protectedPaths`, aunque la ruta se arme por partes. Sin los intocables del loop. Ojo: un test o una app que lee el `.env` a propósito también se frena en una sesión con la guardia; `HARNESS_GUARDIA_OFF=1` la apaga para un comando. Lo que no es Python (un binario) sigue sin verse: ver docs/huecos.md.",
+    "python": true
+  },
   "integrations": {
     "$comment": "INTEGRACIONES (docs/integraciones.md): lo que el agente hace AFUERA del repo. Hermes trae los conectores (MCP, gateway, navegador); el arnés los gobierna. Cada una se habilita con `python3 scripts/integ.py add <id> --perfil <p>` desde el catálogo (`plantillas/integraciones/`), que la MATERIALIZA en `enabled.<id>` después de pasar sus `examples` por el plugin. `undeclared`: qué hacer con una herramienta con forma de integración que ninguna declara (nadie decidió qué clase de acción es). `$naming`: cómo nombra Hermes las herramientas de un MCP.",
     "$naming": {
@@ -695,7 +716,34 @@
       "action": "ask",
       "reason": "una herramienta de un servidor MCP que ninguna integración del repo declara: nadie decidió si lee, escribe o manda. Declarala con `python3 scripts/integ.py add <id>` (o sumala a `integrations.undeclared.allow` si es inocua)."
     },
-    "enabled": {}
+    "enabled": {},
+    "content": {
+      "$comment": "LO QUE DICE lo que sale (hueco 26, docs/huecos.md). Cada texto de los argumentos de una llamada de clase `classes` de una integración (en una por CLI, el comando entero) se compara con `deny`: un secreto o una plantilla sin completar en un mensaje que SÍ se permite mandar no vuelve una vez mandado. Si el texto es correcto, a quién nombra o qué promete sigue siendo del humano: eso no lo decide un regex. `innocent`: textos que tienen que pasar.",
+      "classes": [
+        "send",
+        "write"
+      ],
+      "deny": [
+        {
+          "id": "secreto-saliente",
+          "pattern": "(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)",
+          "example": "hola Ana, la clave del servidor es sk-live_abcdefghijklmnop1234",
+          "reason": "un secreto en un mensaje sale del repo para siempre: lo guarda el destinatario, su servidor de correo y cada reenvío. Mandá el pedido sin la clave; las credenciales se comparten por el gestor de secretos."
+        },
+        {
+          "id": "plantilla-sin-completar",
+          "pattern": "\\{\\{\\s*[\\w.]+\\s*\\}\\}|\\[\\s*(NOMBRE|CLIENTE|FECHA|MONTO|COMPLETAR|TODO)[^\\]]*\\]|<\\s*(nombre|cliente|completar)\\s*>",
+          "example": "Hola {{nombre}}, tu pedido salió hoy",
+          "reason": "un mensaje con un hueco de plantilla le llega así al cliente (\"Hola {{nombre}}\") y no se puede deshacer. Completá cada campo con el dato real, o mandalo como borrador para que lo complete un humano."
+        }
+      ],
+      "innocent": [
+        "Hola Ana, tu pedido salió hoy",
+        "el token se renueva el lunes",
+        "en Python se escribe f'{nombre}' con una sola llave",
+        "[enviado por un agente]"
+      ]
+    }
   },
   "routes": [
     {
@@ -1005,6 +1053,14 @@
       "pre_verify": {
         "direction": "sensor",
         "stage": "fin del turno"
+      },
+      "post_tool_call": {
+        "direction": "sensor",
+        "stage": "herramienta ejecutada"
+      },
+      "transform_llm_output": {
+        "direction": "freno",
+        "stage": "fin del turno"
       }
     },
     "gitHooksDir": ".githooks",
@@ -1100,6 +1156,11 @@
         "file": "scripts/integ.py",
         "direction": "sensor",
         "stage": "integración"
+      },
+      "guardia de Python en la sesión (plugin/guardia)": {
+        "file": "plugin/guardia/sitecustomize.py",
+        "direction": "freno",
+        "stage": "acción decidida"
       }
     },
     "pipelines": {

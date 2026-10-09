@@ -9,6 +9,7 @@ punta a punta por el loop autónomo, en un repo temporal con el arnés instalado
     python3 scripts/casos.py preparar <id> <dir> [--hermes]   un sandbox para replicarlo a mano
     python3 scripts/casos.py readme [<id>…]     regenera el README de cada caso desde caso.json + agente.py
     python3 scripts/casos.py pagina             regenera la consola de la portada (docs/index.html) con corridas reales
+    python3 scripts/casos.py cifras             copia a la portada los números de STATUS.md, huecos, constitución y casos
 
 Cada caso vive en `casos/<id>/`:
     caso.json    historia, tarea, reglas que agrega (y sus inocentes), intocables y CORRIDAS esperadas
@@ -415,10 +416,68 @@ def pagina(casos: list[dict]) -> int:
     if n != 1:
         print('casos: docs/index.html no tiene <script id="datos-casos" type="application/json">.')
         return 1
-    (HOME / "docs" / "index.html").write_text(nuevo, encoding="utf-8")
+    (HOME / "docs" / "index.html").write_text(pintar_cifras(nuevo, cifras(casos)), encoding="utf-8")
     print(f"  ✓ docs/index.html — {len(datos['casos'])} casos, {sum(len(c['corridas']) for c in datos['casos'])} corridas, "
           f"{len(datos['frenos'])} frenos sueltos")
     return 0
+
+
+def cifras(casos: list[dict]) -> dict[str, str]:
+    """Cada número de la portada y de dónde sale: el catálogo de casos, lo verificado con un comando
+    (`STATUS.md`), la auditoría de huecos y la constitución. La portada no inventa números: los copia
+    `casos.py cifras`, y el gate es rojo si quedaron viejos."""
+    import re
+
+    def leer(rel):
+        f = HOME / rel
+        return f.read_text(encoding="utf-8") if f.is_file() else ""
+
+    def uno(rx, texto):
+        m = re.search(rx, texto)
+        return m.group(1) if m else None
+
+    status, huecos, constitucion = leer("STATUS.md"), leer("docs/huecos.md"), leer("CONSTITUTION.md")
+    validos = [c for c in casos if not c.get("_error")]
+    revisor = next((l for l in status.splitlines() if l.startswith("| revisor inferencial")), "")
+    mut = uno(r"\| mutaciones \| (\d+)/(?:\d+)", status)
+    out = {
+        "casos": str(len(validos)),
+        "corridas": str(sum(len(c.get("corridas") or []) for c in validos)),
+        "mutaciones": mut,
+        "verificaciones": uno(r"\| self-test \| verde — (\d+) verificaciones", status),
+        "hermes": uno(r"`scripts/hermes_e2e\.py` \| (\d+) verificaciones", status),
+        "senales": uno(r"(\d+) señales", status),
+        "huecos-cerrados": uno(r"\*\*(\d+) cerrados", huecos),
+        "huecos-abiertos": uno(r"cerrados · (\d+) abiertos", huecos),
+        "principios": str(len(re.findall(r"(?m)^## P\d+ ", constitucion))),
+        "revisor-recall": uno(r"recall (\d+ ?%)", revisor),
+        "revisor-precision": uno(r"precisión (\d+ ?%)", revisor),
+    }
+    return {k: v for k, v in out.items() if v}
+
+
+_CIFRA = r'(<(\w+)[^>]*\bdata-cifra="{k}"[^>]*>)([^<]*)(</\2>)'
+
+
+def pintar_cifras(html: str, valores: dict[str, str]) -> str:
+    import re
+    for k, v in valores.items():
+        html = re.sub(_CIFRA.replace("{k}", re.escape(k)), lambda m: m.group(1) + v + m.group(4), html)
+    return html
+
+
+def problemas_de_cifras(casos: list[dict], html: str | None = None) -> list[tuple[str, str]]:
+    import re
+    if html is None:
+        html = (HOME / "docs" / "index.html").read_text(encoding="utf-8") if (HOME / "docs" / "index.html").is_file() else ""
+    out = []
+    for k, v in cifras(casos).items():
+        hay = [m.group(3) for m in re.finditer(_CIFRA.replace("{k}", re.escape(k)), html)]
+        if not hay:
+            out.append(("portada", f"docs/index.html no muestra la cifra `{k}` ({v})"))
+        elif any(x != v for x in hay):
+            out.append(("portada", f"docs/index.html dice `{k}` = {sorted(set(hay))} y la fuente dice {v}: corré `python3 scripts/casos.py cifras`"))
+    return out
 
 
 def problemas_de_pagina(casos: list[dict]) -> list[tuple[str, str]]:
@@ -475,6 +534,13 @@ def main(argv: list[str]) -> int:
   {'' if '--hermes' in argv else 'JUGUETE=<modo> '}python3 .hermes/harness/scripts/cli.py loop --apply""")
         return 1 if problemas else 0
 
+    if argv[:1] == ["cifras"]:
+        f = HOME / "docs" / "index.html"
+        valores = cifras(casos)
+        f.write_text(pintar_cifras(f.read_text(encoding="utf-8"), valores), encoding="utf-8")
+        print("  ✓ docs/index.html — " + " · ".join(f"{k} {v}" for k, v in valores.items()))
+        return 0
+
     elegidos = [c for c in casos if not argv or c.get("id") in argv]
     if argv and len(elegidos) != len(argv):
         print(f"casos: no existe {sorted(set(argv) - {c.get('id') for c in elegidos})}. Mirá --list.")
@@ -483,7 +549,7 @@ def main(argv: list[str]) -> int:
     indice = (CASOS / "README.md").read_text(encoding="utf-8") if (CASOS / "README.md").is_file() else ""
     forma += [(c.get("id"), "casos/README.md (el catálogo) no lo nombra") for c in elegidos if f"[`{c.get('id')}`]" not in indice]
     if not argv:
-        forma += problemas_de_pagina(elegidos)
+        forma += problemas_de_pagina(elegidos) + problemas_de_cifras(elegidos)
     for cid, p in forma:
         print(f"  ✗ {cid}: {p}")
     trabajos = [(c, r) for c in elegidos if not problemas_de_forma(c) for r in c["corridas"]]

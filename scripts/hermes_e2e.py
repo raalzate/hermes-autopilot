@@ -168,8 +168,44 @@ def adentro() -> int:
                     a, _ = directiva(e.tool, e.args, f"e2e-integ-{n_ej}")
                     check((a or "allow") == ej["expect"], f"integración {iid} ({perfil}): `{ej.get('tool') or ej.get('command')}` "
                                                           f"dentro de Hermes da {a!r}, se esperaba {ej['expect']}")
+        # Lo aprobado gasta presupuesto: la escalada queda pendiente y el `post_tool_call` que emite
+        # Hermes después de ejecutar (el emisor real, no `invoke_hook` a mano) la cuenta.
+        men = ig.materializar(ig.catalogo(repo / "plantillas" / "integraciones")["mensajeria"], "asistente",
+                              [("policy.allowRecipients", ["^whatsapp:\\+57300"])])
+        (repo / ".hermes" / "harness.config.json").write_text(json.dumps(ig.con(config, "mensajeria", men)), encoding="utf-8")
+        registro = repo / ((config.get("observability") or {}).get("events") or {}).get("file", ".git/harness-events.jsonl")
+        envio = {"command": "hermes send --to whatsapp:+15550001 'aviso'"}
+        check(directiva(tools["shell"][0], envio, "e2e-aprob")[0] == "approve", "Hermes no escala un envío fuera de la lista")
+        try:
+            from model_tools import _emit_post_tool_call_hook  # type: ignore
+            _emit_post_tool_call_hook(function_name=tools["shell"][0], function_args=envio, result='{"output": "ok"}',
+                                      session_id="e2e-aprob", status="ok")
+            usos = [json.loads(x) for x in registro.read_text(encoding="utf-8").splitlines()] if registro.is_file() else []
+            check(any(e.get("kind") == "integ-uso" and e.get("approved") for e in usos),
+                  "el post_tool_call de Hermes no contó en el presupuesto un envío aprobado y ejecutado")
+        except ImportError:
+            check(False, "Hermes no tiene model_tools._emit_post_tool_call_hook: cambió cómo emite post_tool_call")
         (repo / ".hermes" / "harness.config.json").write_text(json.dumps(con_integ), encoding="utf-8")
         check(directiva("mcp__sin_declarar__hacer", {})[0] == "approve", "Hermes no escala un MCP sin declarar")
+
+        # La respuesta del turno por la costura real de Hermes (`apply_llm_output_transform`): lo que
+        # devuelve es lo que se muestra y lo que se guarda en el historial.
+        try:
+            from agent.turn_finalizer import apply_llm_output_transform  # type: ignore
+
+            class _Agente:
+                session_id, model, platform = "e2e-llm", "e2e", "cli"
+
+            salida = config.get("output") or {}
+            for i, regla in enumerate(salida.get("redact") or []):
+                final, cambio, _ = apply_llm_output_transform(_Agente(), regla["example"], turn_id=f"e2e-{i}")
+                check(cambio and salida.get("redactWith", "") in final and not re.search(regla["pattern"], final),
+                      f"Hermes muestra la respuesta con el secreto de output.redact[{regla['id']}]")
+            for i, texto in enumerate(salida.get("innocent") or []):
+                final, cambio, _ = apply_llm_output_transform(_Agente(), texto, turn_id=f"e2e-i{i}")
+                check(not cambio and final == texto, f"Hermes cambió una respuesta inocente: `{texto}`")
+        except ImportError:
+            check(False, "Hermes no tiene agent.turn_finalizer.apply_llm_output_transform: cambió la costura de la respuesta")
 
         # Hermes arrancado FUERA del repo (gateway, cron) con la sesión ADENTRO: el plugin tiene
         # que seguir el cwd que Hermes resuelve para sus herramientas, no el del proceso.

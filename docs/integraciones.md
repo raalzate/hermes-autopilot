@@ -79,10 +79,15 @@ en el registro.
    - esquema: sólo `http(s)`; `file:` lee el disco y `javascript:` ejecuta código;
    - redes internas y de metadatos (`169.254.169.254`, `localhost`, `10.x`…): siempre frenadas;
    - `policy.allowDomains`: si la lista no está vacía, lo de afuera escala.
-6. **Presupuesto** (`budget.maxPerHour` por clase): un error no se repite cien veces.
-7. **Sesión contaminada:** si la sesión ya leyó contenido de terceros (`thirdParty`: un correo,
+6. **Lo que dice** (`integrations.content`): un secreto o una plantilla sin completar
+   (`Hola {{nombre}}`) en el texto que sale frena aunque todo lo demás esté bien. El texto
+   correcto no lo decide un regex; el que nunca puede salir, sí.
+7. **Presupuesto** (`budget.maxPerHour` por clase): un error no se repite cien veces. Lo que un
+   humano aprueba también cuenta: el plugin lo descuenta en `post_tool_call`, cuando Hermes ya lo
+   ejecutó (una aprobación negada no gasta).
+8. **Sesión contaminada:** si la sesión ya leyó contenido de terceros (`thirdParty`: un correo,
    una web, un issue), mandar o mutar escala aunque el destinatario esté en la lista.
-8. Por último, la acción del perfil.
+9. Por último, la acción del perfil.
 
 Un `mcp__*` que ninguna integración declara escala (`undeclared`). Una integración con un manifiesto
 roto deja pasar (P5): lo caza `integ.py check` en el gate, no el turno del usuario.
@@ -175,8 +180,8 @@ roto deja pasar (P5): lo caza `integ.py check` en el gate, no el turno del usuar
 
 Está en [huecos](huecos.md):
 
-- el **texto** de un mensaje permitido: a quién y cuánto se controla; qué dice, no;
-- una acción que un humano aprueba no se descuenta del presupuesto.
+- el **texto** de un mensaje permitido: a quién, cuánto, y que no lleve un secreto ni un hueco de
+  plantilla se controla; si lo que dice es correcto (un dato de otro cliente, una promesa), no.
 
 Los casos que lo muestran de punta a punta:
 
