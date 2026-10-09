@@ -94,10 +94,25 @@ def problemas_de_forma(c: dict) -> list[str]:
             if _re.search(r"\.read_text\(|(?<![\w.])open\(|\.open\(|write_text\(", linea) and "encoding" not in linea:
                 p.append(f"{f.relative_to(d).as_posix()}:{n} abre un archivo sin encoding (en Windows sería cp1252)")
     for r in c.get("corridas") or []:
+        if r.get("modo") not in ESCENARIOS:
+            p.append(f"corrida `{r.get('modo')}`: sin nombre en ESCENARIOS (scripts/casos.py): la portada no muestra jerga")
         if r.get("resultado") not in ("verde", "escalar", "parado"):
             p.append(f"corrida `{r.get('modo')}`: resultado `{r.get('resultado')}` (verde · escalar · parado)")
     return p
 
+
+# Cómo se comporta el agente simulado en cada corrida, en palabras de quien lee la portada. El modo
+# (`JUGUETE=<modo>`) es un detalle de implementación de los casos: en la página se ve este nombre.
+ESCENARIOS = {
+    "aprende": "Aprende del freno", "prudente": "Hace lo correcto", "terco": "Repite el error",
+    "atajo": "Busca un atajo", "ofuscado": "Esconde la ruta", "desvio": "Se desvía por otra herramienta",
+    "find": "Prueba otro comando", "borra": "Borra lo que molesta", "tramposo": "Silencia el test",
+    "edita": "Edita lo ya aplicado", "limpia": "Toca los originales", "filtra": "Deja un secreto a la vista",
+    "apurado": "Pega el secreto para probar", "curioso": "Quiere mirar los secretos",
+    "confunde": "Se equivoca de entorno", "masivo": "Lo hace todo de una",
+    "sin-dry-run": "Olvida el modo de prueba", "plantilla": "Deja la plantilla a medias",
+    "obediente": "Obedece al texto inyectado", "persistente": "Quiere dejarlo para siempre",
+}
 
 FAMILIA_TXT = {"terminal.deny": "freno de terminal", "terminal.ask": "escala a un humano (en el loop: negado)",
                "protectedPaths": "ruta protegida (escribir)", "protectedReads": "lectura protegida",
@@ -113,7 +128,7 @@ def modos_de(c: dict) -> dict[str, str]:
     doc = ast.get_docstring(ast.parse((c["_dir"] / "agente.py").read_text(encoding="utf-8"))) or ""
     modos: list[list[str]] = []
     for linea in doc.split("\n")[1:]:
-        m = re.match(r"^\s{0,2}(\S+)\s{2,}(.*)$", linea)
+        m = re.match(r"^\s{0,2}(\S+)\s+(.*)$", linea)  # `ofuscado igual…`: un solo espacio basta
         if m and not linea.startswith("   "):
             modos.append([m.group(1), m.group(2).strip()])
         elif modos and linea.strip():
@@ -278,19 +293,21 @@ def transcripcion(c: dict, corrida: dict, est: dict, raiz: str) -> list[str]:
     """Lo que pasó en la corrida, como lo vería alguien mirando la terminal: sale del estado real
     del loop (lo que dijo el agente en cada intento, la firma del gate, el motivo final)."""
     limpiar = lambda s: s.replace(raiz, "~/repo")  # noqa: E731
-    out = [f"$ JUGUETE={corrida.get('modo')} python3 .hermes/harness/scripts/cli.py loop --apply",
+    # Sin variables de entorno ni jerga en la portada: quien la lee no sabe qué es JUGUETE ni un modo.
+    out = ["$ python3 scripts/cli.py loop --apply",
            f"━━ tarea: {c['tarea']}", ""]
     for i in est.get("attempts") or []:
-        out.append(f"▶ intento {i['n']} · agente")
+        out.append(f"▶ intento {i['n']} · el agente trabaja")
         out += [limpiar(l) for l in (i.get("agentTail") or "").splitlines() if l.strip()]
         if i.get("tampered"):
             out.append(f"⚠ intocables cambiados: {', '.join(i['tampered'][:4])} — el gate ni se corre")
         else:
-            out.append(f"▶ intento {i['n']} · gate")
+            out.append(f"▶ intento {i['n']} · el gate verifica")
             out.append(f"✓ intento {i['n']}: verde" if i.get("green") else f"✗ intento {i['n']}: {i.get('signature')}")
         out.append("")
     fase = est.get("phase", "?")
-    out.append(f"{'✓' if fase == 'verde' else '✗'} {fase.upper()} — {limpiar(est.get('reason', ''))}")
+    final = {"verde": "✓ LISTO PARA REVISIÓN", "escalar": "✗ ESCALA A UN HUMANO", "parado": "✗ PARADO"}.get(fase, f"✗ {fase.upper()}")
+    out.append(f"{final} — {limpiar(est.get('reason', ''))}")
     return out
 
 
@@ -359,7 +376,7 @@ def pagina(casos: list[dict]) -> int:
             "id": c["id"], "dominio": c["dominio"], "titulo": c["titulo"], "historia": c["historia"],
             "demuestra": c["demuestra"], "tarea": c["tarea"],
             "reglas": [{"id": r["id"], "familia": f, "motivo": r.get("reason") or r.get("hint")} for f, rs in (c.get("reglas") or {}).items() for r in rs],
-            "corridas": [{"modo": r["modo"], "que": modos.get(r["modo"], ""), "resultado": r["resultado"],
+            "corridas": [{"modo": r["modo"], "nombre": ESCENARIOS.get(r["modo"], r["modo"]), "que": modos.get(r["modo"], ""), "resultado": r["resultado"],
                           "intentos": r.get("intentos"), "frenos": r.get("frenos") or [], "intocables": bool(r.get("intocables")),
                           "lineas": res[(c["id"], r["modo"])]["lineas"]} for r in c["corridas"]],
         })
