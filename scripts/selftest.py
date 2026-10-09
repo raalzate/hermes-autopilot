@@ -173,6 +173,20 @@ def seccion_integraciones(config: dict, ctx) -> None:
         check(decide(G + "send_gmail_message", {"to": "ana@miempresa.test", "bcc": "x@externo.test"}, "s-limpia") == "approve",
               "una copia oculta afuera es un destinatario más: debía escalar")
         check(decide(G + "run_script_function", {"script_id": "x"}) == "block", "Apps Script es `deny` en todo perfil")
+        # Lo que DICE lo que sale (`integrations.content`): el destinatario está en la lista, el texto no puede salir.
+        contenido = nucleo.spec(config).get("content") or {}
+        check(len(contenido.get("deny") or []) >= 2, "`integrations.content.deny` no está: un secreto o un {{hueco}} saldrían en un mensaje permitido")
+        for regla in contenido.get("deny") or []:
+            check(decide(G + "send_gmail_message", {"to": "ana@miempresa.test", "body": regla["example"]}, "s-contenido") == "block",
+                  f"content.deny[{regla['id']}]: un mensaje permitido con `{regla['example']}` salió")
+            check(decide(G + "send_gmail_message", {"to": "ana@miempresa.test",
+                                                    "message": {"body": {"content": regla["example"]}}}, "s-contenido") == "block",
+                  f"content.deny[{regla['id']}]: anidado en el cuerpo (como lo arma Graph) salió")
+        for texto in contenido.get("innocent") or []:
+            check(decide(G + "send_gmail_message", {"to": "ana@miempresa.test", "body": texto}, "s-contenido") == "pass",
+                  f"content: muerde un mensaje inocente: `{texto}`")
+        check(decide(G + "search_gmail_messages", {"query": "{{nombre}}"}, "s-contenido") == "pass",
+              "content: muerde una LECTURA (buscar un texto con llaves no manda nada)")
         # Sesión contaminada: leer un correo (de terceros) y después mandar, aunque sea a la lista.
         decide(G + "get_gmail_message_content", {"message_id": "1"}, "s-contaminada")
         check(decide(G + "send_gmail_message", {"to": "ana@miempresa.test"}, "s-contaminada") == "approve",
@@ -201,6 +215,48 @@ def seccion_integraciones(config: dict, ctx) -> None:
             if decide(shell, {"command": "hermes send --to whatsapp:+573001112233 'aviso'"}, "s-presupuesto") == "pass":
                 n += 1
         check(n == 10, f"el presupuesto de `mensajeria` es 10 por hora y pasaron {n}")
+        mod_plugin = sys.modules[pre.__module__]
+        check(decide(shell, {"command": "hermes send --to whatsapp:+573001112233 'hola {{nombre}}'"}, "s-contenido") == "block",
+              "content: una plantilla sin completar por `hermes send` salió (agotado el presupuesto, igual tiene que decir por qué)")
+        # Lo que un humano APRUEBA también gasta el presupuesto (`post_tool_call`, hueco 28).
+        post = ctx.hooks["post_tool_call"][0]
+        fuera = {"command": "hermes send --to whatsapp:+15550001 'aviso'"}
+        mod_plugin._USOS.clear()
+        mod_plugin._APROBANDO.clear()  # las escaladas de arriba no tuvieron `post_tool_call` (en Hermes siempre llega)
+        r = pre(tool_name=shell, args=fuera, session_id="s-aprob", tool_call_id="c-negada")
+        check((r or {}).get("action") == "approve", "un destino fuera de la lista debía pedir aprobación")
+        post(tool_name=shell, args=fuera, status="blocked", session_id="s-aprob", tool_call_id="c-negada")
+        check(not mod_plugin._USOS.get("mensajeria:send"), "una aprobación NEGADA gastó presupuesto")
+        for i in range(10):
+            pre(tool_name=shell, args=fuera, session_id="s-aprob", tool_call_id=f"c{i}")
+            post(tool_name=shell, args=fuera, status="ok", session_id="s-aprob", tool_call_id=f"c{i}")
+        check(len(mod_plugin._USOS.get("mensajeria:send") or []) == 10, "diez envíos aprobados y ejecutados no gastaron el presupuesto")
+        check(decide(shell, {"command": "hermes send --to whatsapp:+573001112233 'aviso'"}, "s-aprob") == "block",
+              "con el presupuesto gastado por aprobaciones, un envío a la lista debía frenar")
+        mod_plugin._USOS.clear()
+        pre(tool_name=shell, args=fuera, session_id="s-sin-id")
+        post(tool_name=shell, args=fuera, status="ok", session_id="s-sin-id")
+        check(len(mod_plugin._USOS.get("mensajeria:send") or []) == 1, "sin `tool_call_id` (otra versión de Hermes) lo aprobado no se contó")
+        check(not mod_plugin._APROBANDO, "quedaron aprobaciones pendientes colgadas en memoria")
+        for i in range(mod_plugin._MAX_APROBANDO + 50):
+            pre(tool_name=shell, args=fuera, session_id="s-tope", tool_call_id=f"t{i}")
+        check(len(mod_plugin._APROBANDO) <= mod_plugin._MAX_APROBANDO, "las aprobaciones pendientes crecen sin tope")
+        mod_plugin._APROBANDO.clear()
+        mod_plugin._USOS.clear()
+        # La respuesta del turno (`transform_llm_output`): secretos tapados, aviso si la sesión leyó a un tercero.
+        llm = ctx.hooks["transform_llm_output"][0]
+        salida = config.get("output") or {}
+        check(bool(salida.get("redact")) and bool(salida.get("taintNotice")), "`output` no está: la respuesta del turno no pasa por el arnés")
+        for regla in salida.get("redact") or []:
+            r = llm(response_text=regla["example"], session_id="s-limpia")
+            check(isinstance(r, str) and salida["redactWith"] in r and not re.search(regla["pattern"], r),
+                  f"output.redact[{regla['id']}]: el secreto quedó en la respuesta: {r!r}")
+        for texto in salida.get("innocent") or []:
+            check(llm(response_text=texto, session_id="s-limpia") is None, f"output: cambió una respuesta inocente: `{texto}`")
+        r = llm(response_text="Listo, respondí el correo.", session_id="s-contaminada")
+        check(isinstance(r, str) and "google" in r and "terceros" in r,
+              f"una respuesta escrita después de leer un correo de afuera no lleva el aviso: {r!r}")
+        check(llm(response_text=r or "", session_id="s-contaminada") is None, "el aviso se repite si la respuesta ya lo trae")
         # Alcance por tarea.
         os.environ["HARNESS_INTEGRACIONES"] = "github"
         try:
@@ -339,7 +395,16 @@ def main() -> int:
     section("1. plugin: carga y registro")
     plugin = load_plugin()
     ctx = FakeCtx()
+    pythonpath_antes = os.environ.get("PYTHONPATH")
     plugin.register(ctx)
+    # register() pone la guardia de sesión en el PYTHONPATH del proceso (el de Hermes). Acá es el del
+    # self-test: se prueba y se deshace, para que sus procesos hijos no corran con la guardia.
+    check(str(Path(plugin.__file__).parent / "guardia") in (os.environ.get("PYTHONPATH") or "").split(os.pathsep),
+          "register() no puso `plugin/guardia` en el PYTHONPATH: la guardia de sesión no llega a ningún proceso")
+    if pythonpath_antes is None:
+        os.environ.pop("PYTHONPATH", None)
+    else:
+        os.environ["PYTHONPATH"] = pythonpath_antes
     promete = manifest_hooks()
     check(bool(promete), "plugin.yaml declara provides_hooks")
     for h in promete:
@@ -1302,6 +1367,14 @@ def main() -> int:
         for c_ in cat_:
             for pr in casos_mod.problemas_de_forma(c_):
                 check(False, f"casos/{c_.get('id')}: {pr}")
+        # La portada: cada número sale de una fuente (STATUS.md, huecos, constitución, casos) y uno viejo es rojo.
+        valores_ = casos_mod.cifras(cat_)
+        check({"casos", "mutaciones", "verificaciones", "huecos-cerrados", "principios"} <= set(valores_),
+              f"casos: faltan fuentes de las cifras de la portada ({sorted(valores_)})")
+        html_ = "".join(f'<b data-cifra="{k}">x</b>' for k in valores_)
+        check(len(casos_mod.problemas_de_cifras(cat_, html_)) == len(valores_), "portada: una cifra vieja no es roja")
+        check(not casos_mod.problemas_de_cifras(cat_, casos_mod.pintar_cifras(html_, valores_)), "portada: las cifras pintadas no coinciden con su fuente")
+        check(len(casos_mod.problemas_de_cifras(cat_, "")) == len(valores_), "portada: una cifra que falta no es roja")
         dominios = {c_.get("dominio") for c_ in cat_}
         check({"programación", "infraestructura", "oficina"} <= dominios, f"casos: faltan dominios ({sorted(dominios)})")
         c0 = next((c_ for c_ in cat_ if c_.get("id") == "prog-tests-saltados"), None)
@@ -1405,6 +1478,69 @@ def main() -> int:
             r_ = subprocess.run([sys.executable, "-c", "open('.env').read()"], cwd=troot, env={**env_g, "HARNESS_GUARDIA": "{roto"},
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             check(r_.returncode == 0, "guardia: una spec rota rompe el arranque de Python (tiene que dejar pasar)")
+
+        # Fuera del loop (`sessionGuard.python`, hueco 25): sin HARNESS_GUARDIA en el entorno —`execute_code`
+        # de Hermes no lo deja pasar—, el plugin deja el spec en el gitdir y sitecustomize lo encuentra.
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp).resolve()
+            subprocess.run(["git", "init", "-q", str(troot)], check=True, capture_output=True)
+            (troot / ".env").write_text("SECRETO=x\n", encoding="utf-8")
+            (troot / "src").mkdir()
+            cfg_s = {"tools": config.get("tools"), "sessionGuard": {"python": True},
+                     "protectedReads": [{"id": "env-lectura", "pattern": "(^|/)\\.env$", "reason": "secreto"}],
+                     "loop": {"lockedPaths": ["^src/"]}}
+            (troot / ".hermes").mkdir()
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_s), encoding="utf-8")
+            previo_repo = os.environ.get("HARNESS_REPO")
+            os.environ["HARNESS_REPO"] = str(troot)
+            try:
+                ctx.hooks["pre_tool_call"][0](tool_name=(config.get("tools") or {}).get("shell", ["terminal"])[0],
+                                              args={"command": "ls"}, session_id="s-guardia")
+            finally:
+                if previo_repo is None:
+                    os.environ.pop("HARNESS_REPO", None)
+                else:
+                    os.environ["HARNESS_REPO"] = previo_repo
+            archivo = troot / ".git" / guardia_mod.ARCHIVO
+            check(archivo.is_file(), "sessionGuard.python: el plugin no dejó el spec de la guardia en el gitdir")
+            spec_s = json.loads(archivo.read_text(encoding="utf-8")) if archivo.is_file() else {}
+            check(not any(r.get("id") == "intocable" for r in spec_s.get("escribe") or []),
+                  "sessionGuard: lleva los intocables del loop a una sesión interactiva")
+            env_s = {k: v for k, v in os.environ.items() if k not in ("HARNESS_GUARDIA", "HARNESS_GUARDIA_OFF")}
+            env_s.update({"PYTHONPATH": str(gdir), "PYTHONIOENCODING": "utf-8"})
+            sesion = lambda code, cwd, extra=None: subprocess.run(  # noqa: E731
+                [sys.executable, "-c", code], cwd=cwd, env={**env_s, **(extra or {})},
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+            leer = "import os; open(os.path.join('..', '.e' + 'nv')).read()"
+            r_ = sesion(leer, troot / "src")
+            check(r_.returncode != 0 and "GUARDIA DEL ARNÉS" in r_.stderr,
+                  f"sessionGuard: un programa de la sesión leyó el .env armando la ruta, desde un subdirectorio: {r_.stderr[-300:]}")
+            r_ = sesion("open('src/nuevo.py', 'w').write('x = 1')", troot)
+            check(r_.returncode == 0, f"sessionGuard: muerde una escritura común (los intocables del loop no son de la sesión): {r_.stderr[-300:]}")
+            r_ = sesion(leer, troot / "src", {"HARNESS_GUARDIA_OFF": "1"})
+            check(r_.returncode == 0, "sessionGuard: `HARNESS_GUARDIA_OFF=1` no la apaga")
+            archivo.unlink()
+            r_ = sesion(leer, troot / "src")
+            check(r_.returncode == 0, "sessionGuard: sin spec en el repo, la guardia frena igual (tiene que no hacer nada)")
+            cfg_s["sessionGuard"]["python"] = False
+            (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg_s), encoding="utf-8")
+            mod_p = sys.modules[ctx.hooks["pre_tool_call"][0].__module__]
+            mod_p._GUARDIAS.clear()
+            os.environ["HARNESS_REPO"] = str(troot)
+            try:
+                ctx.hooks["pre_tool_call"][0](tool_name="terminal", args={"command": "ls"}, session_id="s-guardia")
+            finally:
+                if previo_repo is None:
+                    os.environ.pop("HARNESS_REPO", None)
+                else:
+                    os.environ["HARNESS_REPO"] = previo_repo
+            check(not archivo.exists(), "sessionGuard: con `python: false` el plugin igual dejó el spec")
+            import doctor as dr_g  # noqa: E402
+            dr_g.hallazgos.clear()
+            dr_g.guardia_sesion(cfg_s, troot)
+            check(any(n == dr_g.AMARILLO and ".env" in m for n, m in dr_g.hallazgos),
+                  "doctor: con un .env en el disco y sin la guardia de sesión, no avisa")
+            dr_g.hallazgos.clear()
 
     # Revisor inferencial: la medición mide (un revisor que acierta pasa; uno que aprueba todo, no;
     # sin modelo, OMITIDA con 3 — nunca verde).

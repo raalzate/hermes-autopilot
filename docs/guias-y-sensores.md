@@ -21,7 +21,9 @@ sólo guías, y nunca se entera de si sirvieron.
 | | `pre_llm_call` (`routes`) | una pista según el pedido |
 | **Freno** | `pre_tool_call`: `terminal_guard`, `protected_paths`, `content_patterns`, `memory_guard`, `skill_guard`, `cron_guard` | `{"action": "block"}` con un `message` que dice qué pasó, por qué importa y qué hacer |
 | | `.githooks/pre-push` | a una rama protegida se entra por PR |
+| | `transform_llm_output` (`output`) | la respuesta del turno sin secretos, y con la fuente al pie si la sesión leyó a un tercero |
 | **Sensor** | `transform_tool_result` | el lint del archivo recién escrito, en el mismo turno |
+| | `post_tool_call` | lo aprobado y ejecutado gasta el presupuesto de la integración |
 | | `pre_verify` | no deja cerrar el turno con el gate pendiente |
 | | `.githooks/pre-commit`, `commit-msg`, CI | el gate en los lugares donde el trabajo sale |
 | | skill `harness-review` | juicio sobre lo que ninguna regla ve |
@@ -42,7 +44,7 @@ markdown).
 |---|---|---|
 | sesión y pedido | ~0 | sección de estado, `pre_llm_call` |
 | acción decidida | < 1 ms (medido) | `pre_tool_call` |
-| herramienta ejecutada | < 1 ms (medido) | `transform_tool_result` |
+| herramienta ejecutada | < 2 ms (medido) | `transform_tool_result`, `post_tool_call` |
 | fin del turno | el gate | `pre_verify` pide correrlo |
 | commit / push | barato | `pre-commit`, `commit-msg`, `pre-push` |
 | integración | el gate, en limpio | CI (`.github/workflows/ci.yml`), el mismo `scripts/gate.py` |

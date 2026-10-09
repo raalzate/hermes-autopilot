@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hermes Autopilot</title>
-<meta name="description" content="Un arnés de repo para Hermes Agent: frenos, gate, self-test y skills que se hacen cumplir solos — también donde Hermes aprende y donde corre sin nadie mirando.">
+<meta name="description" content="Agentes autónomos confiables sobre Hermes Agent: frenos que deciden antes de cada acción, un gate que define «terminado», un loop que reintenta o escala y sensores que miden al propio arnés.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%234b3fb0%22/%3E%3Cpath d=%22M9 8v16M23 8v16M9 16h14%22 stroke=%22%23fff%22 stroke-width=%223.2%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
@@ -250,7 +251,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
   <div class="wrap">
     <a class="brand" href="#top">Hermes <span>Autopilot</span></a>
     <nav class="nav" aria-label="Secciones">
-      <a href="#casos-vivo">Casos</a><a href="#tesis">Tesis</a><a href="#autonomia">Autonomía</a><a href="#prueba">Prueba</a><a href="#onboarding">Onboarding</a>
+      <a href="#casos-vivo">Casos</a><a href="#tesis">Tesis</a><a href="#autonomia">Autonomía</a><a href="#prueba">Prueba</a><a href="#huecos">Huecos</a><a href="#onboarding">Onboarding</a>
       <a href="#piezas">Piezas</a><a href="#contrato">Contrato</a><a href="#aprende">Aprende</a>
       <a href="#cicatrices">Cicatrices</a><a href="#portar">Portar</a><a href="#principios">Principios</a>
       <a href="#docs">Docs</a>
@@ -263,10 +264,11 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
   <div class="wrap hero">
     <div class="hero-text">
       <h1><span class="sub">agente autónomo · Hermes Agent</span>Hermes trabaja solo. El arnés decide cuándo terminó.</h1>
-      <p class="thesis">Reglas de tu repo que se hacen cumplir solas mientras <a href="https://hermes-ai.net/">Hermes</a> trabaja en él —
-        en la CLI, en el gateway y en los cron—, incluidas las dos superficies que Claude Code no tenía:
-        <em>lo que el agente guarda para siempre</em> y <em>lo que corre sin nadie mirando</em>.
-        Encima, un loop que le da tareas, lo deja verde o lo para cuando se traba, y un panel donde lo ves trabajar.</p>
+      <p class="thesis">Un agente autónomo no es un modelo bueno: es un modelo metido en <em>lazos de control</em>
+        bien hechos. Acá ese arnés existe y se mide sobre <a href="https://hermes-ai.net/">Hermes Agent</a>: frenos que deciden
+        antes de cada acción, un gate que define «terminado» con un comando, un loop que reintenta o escala,
+        y sensores que prueban que todo eso sigue mordiendo — también donde el agente <em>aprende</em>,
+        donde <em>actúa afuera</em> y donde <em>corre sin nadie mirando</em>.</p>
       <div class="meta">
         <span class="chip">Python stdlib · 0 dependencias</span>
         <span class="chip">plugin en proceso</span>
@@ -281,9 +283,11 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       </div>
     </div>
     <div class="cifras" aria-label="El arnés, en números">
-      <div><b id="n-casos">17</b><span>casos reales replicables</span></div>
-      <div><b id="n-corridas">33</b><span>corridas, en el gate</span></div>
-      <div><b>72</b><span>mutaciones que lo ponen rojo</span></div>
+      <div><b id="n-casos" data-cifra="casos">22</b><span>casos reales replicables</span></div>
+      <div><b id="n-corridas" data-cifra="corridas">46</b><span>corridas, en el gate</span></div>
+      <div><b data-cifra="mutaciones">106</b><span>mutaciones que lo ponen rojo</span></div>
+      <div><b data-cifra="huecos-cerrados">28</b><span>huecos cerrados, con su prueba</span></div>
+      <div><b data-cifra="huecos-abiertos">4</b><span>huecos abiertos, escritos</span></div>
       <div><b>0</b><span>dependencias</span></div>
     </div>
   </div>
@@ -336,10 +340,11 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 <section id="tesis"><div class="wrap sec-inner">
   <div class="rail"><b>01</b>tesis</div>
   <div class="stack col">
-    <h2>Un agente que aprende repite sus errores con disciplina</h2>
-    <p class="lede">Hermes escribe su propia memoria, crea y parchea skills, y corre tareas programadas en Telegram, Slack o un cron. Eso lo vuelve útil, y también vuelve permanente cualquier cosa que aprenda mal.</p>
-    <p>Un secreto que Hermes guarda en <code>MEMORY.md</code> no se filtra una vez: entra al prompt de <b>cada sesión futura, en cada plataforma</b>. Una skill que enseña a usar <code>--no-verify</code> no apaga un freno hoy: lo apaga cada vez que alguien la cargue. Y en un cron no hay humano para aprobar el comando peligroso: lo que la tarea puede hacer se decide cuando se crea, o no se decide.</p>
-    <p>Este arnés pone frenos en esos lugares además de en la terminal y los archivos, y define "terminado" con un gate: no por lo que el agente dice, sino por lo que un comando imprime. Es el hermano de <a href="https://raalzate.github.io/agent-harness/">agent-harness</a> (hecho para Claude Code), rehecho sobre el modelo de extensión de Hermes y verificado contra su código, no contra su documentación.</p>
+    <h2>La autonomía se construye con lazos de control, no con un modelo mejor</h2>
+    <p class="lede">Un modelo se equivoca a veces; un agente autónomo repite ese error sin que nadie mire, y en un agente que aprende, lo vuelve permanente. Lo que lo hace confiable es lo que lo rodea.</p>
+    <p>Tres clases de control, en tres momentos: <b>guías</b> que orientan antes de decidir (<code>AGENTS.md</code>, el estado del repo al abrir, pistas por pedido), <b>frenos</b> que deciden entre la acción elegida y la ejecutada (terminal, archivos, memoria, skills, cron, integraciones, la respuesta) y <b>sensores</b> que miran después (lint, gate, loop, panel, revisor medido). El loop cierra el lazo: <b>tarea → agente → gate</b>, hasta verde o hasta escalar a un humano con el motivo.</p>
+    <p>La parte nueva respecto de un arnés para un asistente de código: Hermes escribe su propia memoria, crea skills y corre en cron y en el gateway. Un secreto en <code>MEMORY.md</code> no se filtra una vez: entra en <b>cada sesión futura</b>. Una skill que enseña <code>--no-verify</code> apaga un freno cada vez que alguien la carga. Y en un cron no hay a quién preguntar. Por eso lo aprendido y lo desatendido pasan por los mismos frenos que lo ejecutado.</p>
+    <p>La tesis se sostiene con evidencia que se puede repetir: cada freno trae un ejemplo que tiene que morder y uno que no; cada prueba tiene una mutación que la tiene que poner roja; cada caso replicable es un agente que toma un atajo real; y lo que el arnés <b>no</b> puede prometer está escrito en una lista de <a href="#huecos">huecos</a>, abiertos y cerrados. Está verificado contra el código de Hermes, no contra su documentación, y es el hermano de <a href="https://raalzate.github.io/agent-harness/">agent-harness</a> (hecho para Claude Code).</p>
   </div>
 </div></section>
 
@@ -375,19 +380,46 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <p class="lede">Y cada freno tiene una prueba de que muerde, otra de que no muerde de más, y una tercera de que la prueba misma muerde.</p>
     </div>
     <div class="grid three">
-      <div class="cell stat"><span class="lbl">señales del gate</span><b>10</b><span class="why">con Hermes real (CI, job <code>hermes-real</code>), 9 verdes y el revisor inferencial <em>omitido</em> hasta que haya un modelo — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
-      <div class="cell stat"><span class="lbl">verificaciones</span><b>981</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
-      <div class="cell stat"><span class="lbl">mutaciones</span><b>72/72</b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
-      <div class="cell stat"><span class="lbl">dentro de Hermes</span><b>70</b><span class="why">verificaciones con el despacho real de Hermes: directivas, <code>pre_verify</code>, ruteo, lint tras escribir, sección del prompt.</span><span class="cmd">python3 scripts/hermes_e2e.py</span></div>
-      <div class="cell stat"><span class="lbl">casos replicables</span><b>17</b><span class="why">programación, infraestructura, oficina, datos, soporte y operación: un agente con un atajo real, de punta a punta, en un repo instalado de cero.</span><span class="cmd">python3 scripts/casos.py</span></div>
+      <div class="cell stat"><span class="lbl">señales del gate</span><b data-cifra="senales">11</b><span class="why">con Hermes real (CI, job <code>hermes-real</code>). Sin un modelo configurado, el revisor inferencial sale <em>omitido</em> — y omitido no es verde.</span><span class="cmd">python3 scripts/gate.py</span></div>
+      <div class="cell stat"><span class="lbl">verificaciones</span><b data-cifra="verificaciones">1107</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
+      <div class="cell stat"><span class="lbl">mutaciones</span><b><span data-cifra="mutaciones">106</span>/<span data-cifra="mutaciones">106</span></b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
+      <div class="cell stat"><span class="lbl">dentro de Hermes</span><b data-cifra="hermes">179</b><span class="why">verificaciones con el despacho real de Hermes: directivas, aprobaciones contadas, la respuesta tapada, <code>pre_verify</code>, ruteo, lint tras escribir, sección del prompt.</span><span class="cmd">python3 scripts/hermes_e2e.py</span></div>
+      <div class="cell stat"><span class="lbl">casos replicables</span><b data-cifra="casos">22</b><span class="why">programación, infraestructura, oficina, datos, soporte y operación: un agente con un atajo real, de punta a punta, en un repo instalado de cero.</span><span class="cmd">python3 scripts/casos.py</span></div>
       <div class="cell stat"><span class="lbl">perfiles de stack</span><b>8</b><span class="why">python, node, front, go, rust, .NET, Maven, Gradle — cada uno instalado en un repo temporal con su gate.</span><span class="cmd">self-test §11</span></div>
+      <div class="cell stat"><span class="lbl">revisor inferencial</span><b data-cifra="revisor-recall">100 %</b><span class="why">de los atajos cazados por el revisor con un modelo real, con <span data-cifra="revisor-precision">91 %</span> de precisión, contra 16 diffs etiquetados salidos de los casos. Un sensor inferencial se mide con una tasa.</span><span class="cmd">python3 scripts/revision.py</span></div>
       <div class="cell stat"><span class="lbl">dependencias</span><b>0</b><span class="why">Python de la biblioteca estándar. Donde hay Hermes, hay todo lo que el arnés necesita.</span><span class="cmd">regla patterns[dependencia]</span></div>
     </div>
   </div>
 </div></section>
 
+<section id="huecos"><div class="wrap sec-inner">
+  <div class="rail"><b>04</b>huecos</div>
+  <div>
+    <div class="col stack">
+      <h2>Lo que el arnés no puede prometer, escrito</h2>
+      <p class="lede">Un hueco es algo que un agente puede hacer y que el arnés dice que no pasa. <b data-cifra="huecos-cerrados">28</b> se cerraron con un mecanismo y su prueba; <b data-cifra="huecos-abiertos">4</b> siguen abiertos, con su mitigación, para que nadie los dé por cubiertos.</p>
+    </div>
+    <div class="grid two">
+      <div class="cell"><span class="mark">abierto · fuera del loop</span><h3>Un programa que no es Python</h3><p>En una sesión interactiva, un binario o un script de node que lee el <code>.env</code> sin nombrarlo no lo ve ningún regex. Python ya está cerrado (la guardia de sesión), y en el loop no hay <code>.env</code> donde trabaja el agente.</p><span class="foot">mitigación: guardia de sesión · pre-commit · secretos fuera del disco</span></div>
+      <div class="cell"><span class="mark">abierto · inyección</span><h3>Si la respuesta obedeció</h3><p>Ningún freno sabe si un texto es dato o instrucción. Lo que tiene efecto afuera escala tras leer a un tercero, y la respuesta de esa sesión lleva al pie de qué fuente leyó.</p><span class="foot">mitigación: sesión contaminada · aviso en la respuesta · gate de la tarea</span></div>
+      <div class="cell"><span class="mark">abierto · medición</span><h3>El loop con un modelo de verdad</h3><p>Los casos prueban el arnés con un agente determinista. Cuánto obedece un modelo el motivo de un freno no está medido: necesita una key. El revisor inferencial sí se midió con un modelo real.</p><span class="foot">mitigación: contrato con Hermes real en cada PR · pipeline nocturno</span></div>
+      <div class="cell"><span class="mark">abierto · integraciones</span><h3>Si un mensaje permitido es correcto</h3><p>A quién, cuánto, desde qué tarea, después de leer qué, y que no lleve un secreto ni un <code>{{hueco}}</code> de plantilla: eso se decide. Si el dato es de otro cliente o la promesa es falsa, no.</p><span class="foot">mitigación: lista de destinatarios · borrador en vez de envío</span></div>
+    </div>
+    <div class="tscroll"><table>
+      <thead><tr><th>Cerrado hace poco</th><th>Mecanismo</th><th>Prueba</th></tr></thead>
+      <tbody>
+        <tr><td>un programa Python de una sesión interactiva lee el <code>.env</code> armando la ruta</td><td>guardia de sesión: <code>PYTHONPATH</code> de Hermes + spec en <code>.git/</code></td><td>procesos reales en el self-test</td></tr>
+        <tr><td>un mensaje permitido sale con un secreto o con <code>Hola {{nombre}}</code></td><td><code>integrations.content</code></td><td>self-test, anidado como lo arma Graph</td></tr>
+        <tr><td>un secreto copiado en la respuesta del turno</td><td><code>transform_llm_output</code> lo tapa antes de mostrar y guardar</td><td>e2e por la costura real de Hermes</td></tr>
+        <tr><td>con aprobaciones seguidas, el tope por hora deja de cortar</td><td><code>post_tool_call</code> cuenta lo aprobado y ejecutado</td><td>e2e con el emisor real de Hermes</td></tr>
+      </tbody>
+    </table></div>
+    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md">Auditoría completa de huecos</a></p>
+  </div>
+</div></section>
+
 <section id="onboarding"><div class="wrap sec-inner">
-  <div class="rail"><b>04</b>onboarding</div>
+  <div class="rail"><b>05</b>onboarding</div>
   <div>
     <div class="col stack">
       <h2>De cero a un agente autónomo, en ocho pasos</h2>
@@ -398,7 +430,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
         <span class="cmdline">python3 --version &amp;&amp; git --version &amp;&amp; hermes --version</span></li>
       <li><h3>Instalar Hermes</h3><p>Con el instalador oficial. Bajá el script y leelo antes de correrlo: es la misma regla que el arnés le aplica al agente.</p>
         <span class="cmdline">hermes doctor   <span class="dim"># → sin errores rojos</span></span></li>
-      <li><h3>Traer el arnés y ver el gate verde</h3><p>Tiene que terminar en <code>GATE VERDE — 9 señales</code> (o con 2 omitidas si Hermes no está en el PATH).</p>
+      <li><h3>Traer el arnés y ver el gate verde</h3><p>Tiene que terminar en <code>GATE VERDE — <span data-cifra="senales">11</span> señales</code>, con OMITIDAS donde falte con qué correrlas (Hermes en el PATH, un modelo para el revisor).</p>
         <span class="cmdline">git clone https://github.com/raalzate/hermes-autopilot.git
 cd hermes-autopilot &amp;&amp; python3 scripts/gate.py</span></li>
       <li><h3>Instalar en tu repo, primero en seco</h3><p>Sin <code>--apply</code> sólo muestra la lista. <code>+</code> es nuevo, <code>=</code> ya existía y no se toca: nunca sobreescribe.</p>
@@ -424,13 +456,13 @@ python3 .hermes/harness/scripts/cli.py loop --apply</span></li>
 </div></section>
 
 <section id="piezas"><div class="wrap sec-inner">
-  <div class="rail"><b>05</b>piezas</div>
+  <div class="rail"><b>06</b>piezas</div>
   <div>
     <div class="col stack">
       <h2>Seis piezas, cada una contra una falla concreta</h2>
     </div>
     <div class="grid two">
-      <div class="cell"><span class="mark">plugin/</span><h3>El plugin <code>repo-harness</code></h3><p>Frena en <code>pre_tool_call</code> la terminal, la escritura (incluido el patch V4A), la memoria, las skills y los cron. Corre en proceso: una llamada de función por herramienta, no un proceso.</p><span class="foot">falla: el agente hace lo que la regla en prosa decía que no</span></div>
+      <div class="cell"><span class="mark">plugin/</span><h3>El plugin <code>repo-harness</code></h3><p>Frena en <code>pre_tool_call</code> la terminal, la escritura (incluido el patch V4A), la memoria, las skills, los cron y las integraciones. Después cuenta lo aprobado (<code>post_tool_call</code>) y tapa secretos en la respuesta (<code>transform_llm_output</code>). Corre en proceso: una llamada de función, no un proceso.</p><span class="foot">falla: el agente hace lo que la regla en prosa decía que no</span></div>
       <div class="cell"><span class="mark">.hermes/harness.config.json</span><h3>Un solo archivo de reglas</h3><p>Reglas, rutas y hasta los nombres de las herramientas de Hermes. Cada regla trae su <code>example</code>: el self-test lo pasa por el plugin y es rojo si no frena.</p><span class="foot">falla: reglas cableadas en el código que nadie se anima a tocar</span></div>
       <div class="cell"><span class="mark">scripts/gate.py</span><h3>El gate</h3><p>La única definición de "terminado", declarativa, igual en CI. <code>pre_verify</code> no deja cerrar el turno con código editado y el gate pendiente.</p><span class="foot">falla: "listo" dicho por el agente, no impreso por un comando</span></div>
       <div class="cell"><span class="mark">regla CONTEXTO</span><h3>El lint que conoce el escáner de Hermes</h3><p>Si una línea de <code>AGENTS.md</code> parece inyección, Hermes descarta el archivo <b>entero</b>. El lint te dice la línea antes de que pase, y el tope de 20 000 caracteres antes de que trunque.</p><span class="foot">falla: el agente arranca sin reglas y nadie se entera</span></div>
@@ -441,7 +473,7 @@ python3 .hermes/harness/scripts/cli.py loop --apply</span></li>
 </div></section>
 
 <section id="freno"><div class="wrap sec-inner">
-  <div class="rail"><b>06</b>freno</div>
+  <div class="rail"><b>07</b>freno</div>
   <div>
     <div class="col stack">
       <h2>Editás JSON. El agente lee el motivo.</h2>
@@ -471,7 +503,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="contrato"><div class="wrap sec-inner">
-  <div class="rail"><b>07</b>contrato</div>
+  <div class="rail"><b>08</b>contrato</div>
   <div>
     <div class="col stack">
       <h2>Lo que Hermes promete, leído en su código</h2>
@@ -483,6 +515,8 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
         <tr><td>frenar una herramienta</td><td><code>pre_tool_call</code></td><td><code>{"action":"block","message"}</code> — sin mensaje, Hermes lo ignora</td></tr>
         <tr><td>pedir aprobación humana</td><td><code>pre_tool_call</code></td><td><code>{"action":"approve"}</code> → el gate de aprobación de Hermes; en cron se niega solo</td></tr>
         <tr><td>no cerrar con el gate pendiente</td><td><code>pre_verify</code></td><td><code>{"action":"continue","message"}</code>, sólo si el turno editó archivos, máx. 3</td></tr>
+        <tr><td>contar lo que un humano aprobó</td><td><code>post_tool_call</code></td><td>observador, después de ejecutar; <code>status="blocked"</code> si se negó</td></tr>
+        <tr><td>tapar un secreto en la respuesta</td><td><code>transform_llm_output</code></td><td>el primer <code>str</code> reemplaza la respuesta antes de mostrarla y guardarla</td></tr>
         <tr><td>lint del archivo recién escrito</td><td><code>transform_tool_result</code></td><td>el primer <code>str</code> reemplaza el resultado que ve el modelo</td></tr>
         <tr><td>estado del repo al abrir</td><td><code>register_system_prompt_section</code></td><td>≤ 4000 caracteres, congelada por sesión</td></tr>
         <tr><td>pistas según el pedido</td><td><code>pre_llm_call</code></td><td><code>{"context"}</code> se suma al mensaje del usuario</td></tr>
@@ -493,7 +527,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="aprende"><div class="wrap sec-inner">
-  <div class="rail"><b>08</b>aprende</div>
+  <div class="rail"><b>09</b>aprende</div>
   <div>
     <div class="col stack">
       <h2>Lo aprendido pasa por los mismos frenos que lo ejecutado</h2>
@@ -508,7 +542,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="cicatrices"><div class="wrap sec-inner">
-  <div class="rail"><b>09</b>cicatrices</div>
+  <div class="rail"><b>10</b>cicatrices</div>
   <div class="stack col">
     <h2>Lo que costó aprenderlo</h2>
     <p class="lede">Cada una terminó en un mecanismo (y en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/gotchas.md">docs/gotchas.md</a>), no en una advertencia.</p>
@@ -520,7 +554,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="portar"><div class="wrap sec-inner">
-  <div class="rail"><b>10</b>portar</div>
+  <div class="rail"><b>11</b>portar</div>
   <div>
     <div class="col stack">
       <h2>Plugin o shell hook: el mismo núcleo, dos adaptadores</h2>
@@ -552,10 +586,10 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="principios"><div class="wrap sec-inner">
-  <div class="rail"><b>11</b>principios</div>
+  <div class="rail"><b>12</b>principios</div>
   <div>
     <div class="col stack">
-      <h2>Veinticinco principios, cada uno con su comando</h2>
+      <h2><span data-cifra="principios">26</span> principios, cada uno con su comando</h2>
       <p class="lede">Un principio que dice BLOCKING nombra el comando que falla. Los nuevos respecto de agent-harness están marcados.</p>
     </div>
     <ol class="laws">
@@ -590,7 +624,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="docs"><div class="wrap sec-inner">
-  <div class="rail"><b>12</b>docs</div>
+  <div class="rail"><b>13</b>docs</div>
   <div>
     <div class="col stack"><h2>Todo lo que esta página resume, en largo</h2></div>
     <div class="grid three">
@@ -604,22 +638,10 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/loop-autonomo.md" style="text-decoration:none;color:inherit"><span class="mark">operar</span><h3>El loop autónomo</h3><p>La cola, los topes, el freno de mano y qué hacer cuando escala.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/cli-y-panel.md" style="text-decoration:none;color:inherit"><span class="mark">cli · panel</span><h3>La CLI y el panel</h3><p>Parametrizar sin editar JSON, y ver el arnés en vivo.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workshop/README.md" style="text-decoration:none;color:inherit"><span class="mark">workshop</span><h3>Workshop de agentes autónomos</h3><p>Seis módulos prácticos, con un agente de juguete y sin API key.</p></a>
-      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/README.md" style="text-decoration:none;color:inherit"><span class="mark">casos</span><h3>22 casos replicables</h3><p>Programación, infraestructura, oficina, datos, soporte y operación: el atajo del agente y cómo lo para el arnés.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/README.md" style="text-decoration:none;color:inherit"><span class="mark">casos</span><h3><span data-cifra="casos">22</span> casos replicables</h3><p>Programación, infraestructura, oficina, datos, soporte y operación: el atajo del agente y cómo lo para el arnés.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/integraciones.md" style="text-decoration:none;color:inherit"><span class="mark">integraciones</span><h3>Integraciones</h3><p>Correo, WhatsApp, navegador headless, Google, Microsoft, GitHub y bases: perfiles, destinatarios, secretos, recursos y dependencias con lock.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md" style="text-decoration:none;color:inherit"><span class="mark">huecos</span><h3>Auditoría de huecos</h3><p>Lo que se cerró, con su prueba, y lo que sigue abierto.</p></a>
     </div>
-  </div>
-</div></section>
-
-<section id="limites"><div class="wrap sec-inner">
-  <div class="rail"><b>13</b>límites</div>
-  <div class="stack col">
-    <h2>Lo que este arnés todavía no hace</h2>
-    <p>Los patrones del escáner de inyección de Hermes están copiados a mano en el config: si Hermes suma uno, el lint no lo sabe hasta que alguien lo copie.</p>
-    <p>En una sesión interactiva, fuera del loop, lo que un programa hace por dentro sigue sin verse: el loop lo cierra (worktree aislado y guardia de Python), afuera quedan el pre-commit y no dejar secretos en el disco. La lista completa, con lo cerrado y lo abierto, en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md">docs/huecos.md</a>.</p>
-    <p>El revisor inferencial ya tiene su tasa de acierto (<code>scripts/revision.py</code>), pero medirla con un modelo de verdad necesita una key: hasta que el dueño cargue el secreto <code>HERMES_ENV</code>, sale omitido.</p>
-    <p>La inyección de prompt no se detecta: se corta su daño. Lo que el agente escribe en un texto (una copia en una respuesta) depende del gate de cada tarea.</p>
-    <p>El loop es tan bueno como el gate que lo cierra: si las pruebas del repo no prueban nada, el verde no significa nada.</p>
   </div>
 </div></section>
 

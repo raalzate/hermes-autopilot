@@ -8,7 +8,8 @@ dispara un *audit event* (PEP 578) con la ruta real. `sitecustomize.py` instala 
 proceso Python que lanza el agente, y esta función decide.
 
 Se enciende con `loop.guardiaPython` (el loop pone `HARNESS_GUARDIA` y `PYTHONPATH` en el entorno
-del agente). Mira sólo reglas del REPO: las de fuera (`~/.hermes/.env`) no, porque el mismo Hermes,
+del agente) y, fuera del loop, con `sessionGuard.python`: el plugin pone este directorio en el
+`PYTHONPATH` de Hermes y deja el spec en `.git/harness-guardia.json` (ver `ARCHIVO`). Mira sólo reglas del REPO: las de fuera (`~/.hermes/.env`) no, porque el mismo Hermes,
 si corre con este entorno, tiene que poder leer sus credenciales.
 
 Sólo Python: un binario (`git`, `cp`) no pasa por acá. Para eso están los frenos de terminal, el
@@ -71,13 +72,53 @@ def _casa(regla: dict, rel: str) -> bool:
         return False
 
 
-def spec_de(config: dict, raiz: str, registro: str | None = None) -> dict:
-    """Lo que viaja en HARNESS_GUARDIA: reglas del repo (no las de fuera), la raíz y el registro."""
+# Fuera del loop no hay a quién pasarle `HARNESS_GUARDIA`: `execute_code` de Hermes arma el entorno
+# de su proceso con una lista blanca (sólo pasa `PYTHONPATH`, verificado en
+# tools/code_execution_env.py de aa74e184). El spec viaja entonces en un archivo del gitdir del repo.
+ARCHIVO = "harness-guardia.json"
+
+
+def buscar_spec(desde: str) -> dict | None:
+    """El spec de sesión del repo que contiene `desde`: el primer `.git` hacia arriba (un directorio,
+    o el archivo `gitdir:` de un worktree) y su `harness-guardia.json`. None si no hay."""
+    d = os.path.realpath(desde)
+    for _ in range(64):
+        g = os.path.join(d, ".git")
+        if os.path.isdir(g) or os.path.isfile(g):
+            if os.path.isfile(g):
+                try:
+                    with open(g, encoding="utf-8") as f:
+                        linea = f.read().strip()
+                except OSError:
+                    return None
+                if not linea.startswith("gitdir:"):
+                    return None
+                g = os.path.join(d, linea[len("gitdir:"):].strip())
+            try:
+                import json
+                with open(os.path.join(g, ARCHIVO), encoding="utf-8") as f:
+                    spec = json.load(f)
+            except (OSError, ValueError):
+                return None
+            if isinstance(spec, dict):
+                spec.setdefault("raiz", d)
+                return spec
+            return None
+        padre = os.path.dirname(d)
+        if padre == d:
+            return None
+        d = padre
+    return None
+
+
+def spec_de(config: dict, raiz: str, registro: str | None = None, trabadas: bool = True) -> dict:
+    """Lo que viaja en HARNESS_GUARDIA: reglas del repo (no las de fuera), la raíz y el registro.
+    `trabadas`: los intocables del loop (`loop.lockedPaths`); en una sesión interactiva, no."""
     def reglas(lista):
         return [{"id": r.get("id", "?"), "pattern": r["pattern"], "reason": r.get("reason", "")}
                 for r in lista or [] if isinstance(r, dict) and r.get("pattern") and not r.get("outsideRepo")]
 
     trabadas = [{"id": "intocable", "pattern": p, "reason": "durante una tarea del loop esto no se cambia (loop.lockedPaths)."}
-                for p in ((config.get("loop") or {}).get("lockedPaths") or [])]
+                for p in ((config.get("loop") or {}).get("lockedPaths") or [])] if trabadas else []
     return {"raiz": raiz, "registro": registro, "lee": reglas(config.get("protectedReads")),
             "escribe": reglas(config.get("protectedPaths")) + trabadas}

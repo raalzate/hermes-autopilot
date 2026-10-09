@@ -119,6 +119,19 @@ def secretos_en_passthrough(texto: str) -> list[str]:
     return [n for n in yaml_lista(texto, "terminal", "env_passthrough") if SECRETO_EN_NOMBRE.search(n)]
 
 
+def guardia_sesion(config: dict | None, root: Path) -> None:
+    sg = (config or {}).get("sessionGuard")
+    if not isinstance(sg, dict):
+        return
+    reglas = [r for r in (config or {}).get("protectedReads") or [] if isinstance(r, dict) and not r.get("outsideRepo")]
+    en_disco = sorted({p.name for p in root.iterdir() if p.is_file() and first_match(reglas, p.name)}) if root.is_dir() else []
+    if sg.get("python"):
+        nota(VERDE, "guardia de Python en las sesiones interactivas (`sessionGuard.python`): lo que un programa del agente abre se compara con las reglas del repo")
+    elif en_disco:
+        nota(AMARILLO, f"hay secretos en el disco ({', '.join(en_disco[:3])}) y la guardia de Python sólo corre en el loop: "
+                       "en una sesión interactiva, un script del agente los lee sin nombrarlos. `sessionGuard.python: true` lo cierra para Python")
+
+
 def main() -> int:
     config = load_config(REPO_ROOT)
     home = hermes_home()
@@ -209,6 +222,10 @@ def main() -> int:
         integraciones(config, texto)
     except (OSError, ValueError, ImportError) as e:
         nota(AMARILLO, f"no pude revisar las integraciones: {e}")
+
+    # 8. Guardia de Python fuera del loop: con secretos en el disco y sin ella, un programa del agente
+    #    en una sesión interactiva los lee sin nombrarlos (docs/huecos.md).
+    guardia_sesion(config, REPO_ROOT)
 
     for nivel, msg in hallazgos:
         print(f"  {nivel} {msg}")

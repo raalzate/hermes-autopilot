@@ -12,14 +12,19 @@ se enteran primero.
 | frenar una herramienta antes de que corra | hook de plugin `pre_tool_call` | `plugin/__init__.py` → `plugin/harness/guards.py` | devolver `{"action": "block", "message"}`. **Sin `message` Hermes lo ignora.** El mensaje llega al modelo como resultado de la herramienta (`error_type: plugin_block`) |
 | pedir aprobación humana para un patrón propio | `pre_tool_call` → `{"action": "approve", "message", "rule_key"}` | `terminal.ask` | escala al gate de aprobación de Hermes; en cron/gateway sin humano, se niega. Hermes **no** tiene una clave de config para sumar patrones de "preguntar" (sólo `approvals.deny`, que prohíbe) |
 | lint del archivo recién escrito | hook `transform_tool_result` | `turn.after_write` | el primer `str` devuelto reemplaza el resultado que ve el modelo; `None` lo deja igual |
+| contar en el presupuesto lo que un humano aprobó | hook `post_tool_call` | `plugin.on_post_tool_call` | observador: corre **después** de ejecutar, con `status="blocked"` si el freno o el humano dijeron que no. Así se sabe que una escalada se aprobó: `pre_tool_call` sólo ve la decisión del arnés |
+| tapar secretos y avisar de dónde leyó, en la respuesta | hook `transform_llm_output` | `turn.respuesta` | `kwargs` `response_text`, `session_id`, `model`, `platform`, `turn_id`; el primer `str` reemplaza la respuesta final **antes** de mostrarla y de guardarla en el historial (una vez por turno) |
+| la guardia de Python fuera del loop | `PYTHONPATH` del proceso de Hermes + `.git/harness-guardia.json` | `plugin._guardia_en_pythonpath`, `plugin/guardia` | `execute_code` arma el entorno de su proceso con una **lista blanca** (pasa `PYTHONPATH`, no una variable propia); la terminal, con una lista negra de secretos |
 | no cerrar el turno con el gate pendiente | hook `pre_verify` | `turn.verify` | `{"action": "continue", "message"}` suma un turno sintético. **Sólo se dispara si el turno editó archivos**, y como mucho `agent.max_verify_nudges` (3) veces |
 | estado verificado al abrir la sesión | `ctx.register_system_prompt_section` | `turn.session_status` | ≤ 4000 caracteres (Hermes **rechaza**, no trunca), se congela por sesión |
 | pistas según lo que pide el humano | hook `pre_llm_call` | `turn.route` | `{"context": str}` se suma al mensaje del usuario, nunca al system prompt |
 | `/harness` | `ctx.register_command` | `plugin.cmd_harness` | `handler(raw_args) -> str` |
 
 Fuentes: `hermes_cli/plugins.py` (`register_hook`, `register_system_prompt_section`,
-`_get_pre_tool_call_directive_details`, `get_pre_verify_continue_message`), `model_tools.py`
-(`_apply_transform_tool_result_hook`), `agent/turn_stop_gates.py` (`_pre_verify_nudge`),
+`_get_pre_tool_call_directive_details`, `_resolve_block_from_details`, `get_pre_verify_continue_message`), `model_tools.py`
+(`handle_function_call`, `_emit_post_tool_call_hook`, `_apply_transform_tool_result_hook`),
+`agent/turn_finalizer.py` (`apply_llm_output_transform`), `tools/code_execution_env.py`
+(`_SAFE_ENV_PREFIXES`), `agent/turn_stop_gates.py` (`_pre_verify_nudge`),
 `hermes_cli/plugins_dispatch.py` (topes de secciones).
 
 ## La diferencia que más importa: `pre_tool_call` falla CERRADO

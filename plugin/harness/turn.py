@@ -5,6 +5,7 @@ Lo que el arnés hace alrededor del turno, no de una herramienta:
     route            pistas según lo que pide el humano        (pre_llm_call)
     after_write      marcar el gate + lint del archivo tocado  (post_tool_call / transform_tool_result)
     verify           no cerrar con el gate pendiente           (pre_verify)
+    respuesta        tapar secretos y avisar de dónde leyó     (transform_llm_output)
 
 Todo sin lanzar procesos: la rama se lee de `.git/HEAD` y el `core.hooksPath` de `.git/config`.
 El original para Claude Code lanzaba `git` al abrir cada sesión; acá la sección del prompt se
@@ -135,3 +136,27 @@ def verify(config: dict, root: Path) -> str | None:
         'Si el trabajo no es entregable todavía, decilo explícitamente: reportar "listo" sin gate '
         "verde es una violación, no un descuido."
     )
+
+
+def respuesta(config: dict, texto: str, contaminada: str = "") -> str | None:
+    """La respuesta final del turno, corregida, o None si queda igual (`output` del config).
+
+    Lo que queda EN EL TEXTO no lo frena ningún `pre_tool_call`: no es una herramienta. Dos cosas sí
+    son mecánicas: un secreto copiado en la respuesta se tapa antes de que llegue a la pantalla, al
+    historial y al gateway (`redact`), y una respuesta escrita después de leer a un tercero lleva al
+    pie de dónde (`taintNotice`). Si obedeció una instrucción plantada no lo sabe el arnés; el
+    humano sí sabe que pudo pasar, y de qué fuente."""
+    spec = (config or {}).get("output") or {}
+    if not isinstance(texto, str) or not texto or not spec:
+        return None
+    nuevo = texto
+    tapa = spec.get("redactWith") or "[tapado por el arnés]"
+    for regla in spec.get("redact") or []:
+        try:
+            nuevo = re.sub(regla["pattern"], tapa, nuevo, flags=re.I)
+        except (re.error, KeyError, TypeError):
+            continue
+    aviso = spec.get("taintNotice")
+    if contaminada and isinstance(aviso, str) and aviso and aviso.split("{")[0] not in nuevo:
+        nuevo = nuevo.rstrip() + "\n\n" + aviso.replace("{fuente}", contaminada)
+    return nuevo if nuevo != texto else None

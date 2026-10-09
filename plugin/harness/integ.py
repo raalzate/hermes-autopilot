@@ -222,7 +222,7 @@ def evaluar(ev, config: dict, root, lectura, escritura) -> Decision | None:
     return _decidir(ev, config, root, iid, integ, crudo, c, lectura, escritura,
                     destinos=_valores(ev.args, integ.get("recipientKeys") or ""),
                     archivos=_valores(ev.args, integ.get("fileKeys") or ""),
-                    urls=_valores(ev.args, integ.get("urlKeys") or ""))
+                    urls=_valores(ev.args, integ.get("urlKeys") or ""), textos=_textos(ev.args))
 
 
 def evaluar_cli(ev, config: dict, root, lectura=None, escritura=None) -> Decision | None:
@@ -237,11 +237,39 @@ def evaluar_cli(ev, config: dict, root, lectura=None, escritura=None) -> Decisio
     d = _decidir(ev, config, root, iid, integ, cmd.strip()[:80], c, lectura, escritura,
                  destinos=_grupos(cmd, integ.get("recipientPattern")),
                  archivos=_grupos(cmd, integ.get("filePattern")),
-                 urls=_grupos(cmd, integ.get("urlPattern")))
+                 urls=_grupos(cmd, integ.get("urlPattern")), textos=[cmd])
     return d if (d.block or d.approve) else None
 
 
-def _decidir(ev, config, root, iid, integ, crudo, c, lectura, escritura, destinos, archivos, urls) -> Decision:
+def _textos(v) -> list[str]:
+    """Cada texto de los argumentos, a cualquier profundidad: el cuerpo de un correo puede venir en
+    `body`, en `message.body.content` o en una lista de partes."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        return [t for x in v.values() for t in _textos(x)]
+    if isinstance(v, (list, tuple)):
+        return [t for x in v for t in _textos(x)]
+    return []
+
+
+def _contenido(config, iid, crudo, c, textos) -> Decision | None:
+    """LO QUE DICE lo que sale (`integrations.content`): un secreto o una plantilla sin completar en
+    un mensaje permitido no vuelve una vez mandado. Si el texto es CORRECTO no lo decide ningún freno;
+    si trae algo que nunca puede salir, sí."""
+    spec_c = spec(config).get("content") or {}
+    if c not in (spec_c.get("classes") or ["send", "write"]):
+        return None
+    for texto in textos:
+        regla = first_match(spec_c.get("deny"), texto)
+        if regla:
+            return Decision.deny(_msg(iid, crudo, c, f"el texto que sale trae algo que no puede salir ({regla.get('id', '?')}).",
+                                      f"Motivo: {regla.get('reason', '')}\nCorregí el texto y volvé a intentarlo; no lo mandes por otro canal."),
+                                 {"id": f"integ:contenido:{regla.get('id', '?')}", "reason": regla.get("reason", "")})
+    return None
+
+
+def _decidir(ev, config, root, iid, integ, crudo, c, lectura, escritura, destinos, archivos, urls, textos=()) -> Decision:
     permitidas = getattr(ev, "integraciones", None)
     if permitidas is not None and iid not in permitidas:
         return Decision.deny(_msg(iid, crudo, c, "esta tarea no declara la integración.",
@@ -276,6 +304,9 @@ def _decidir(ev, config, root, iid, integ, crudo, c, lectura, escritura, destino
             fuera = Decision.deny if pol.get("outsideDomains") == "deny" else Decision.ask
             return fuera(_msg(iid, crudo, c, f"`{host}` no está en `policy.allowDomains`.",
                               "Navegar fuera de los dominios de la tarea lo aprueba un humano."), _regla(iid, "dominio"))
+    d = _contenido(config, iid, crudo, c, textos)
+    if d is not None:
+        return d
     tope = ((integ.get("budget") or {}).get("maxPerHour") or {}).get(c)
     usadas = (getattr(ev, "uso", None) or {}).get(f"{iid}:{c}", 0)
     if isinstance(tope, int) and usadas >= tope:
