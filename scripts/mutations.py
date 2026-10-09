@@ -97,6 +97,32 @@ CODIGO = {
     "revisión: el umbral no se mira": ("scripts/revision.py", '    if r["recall"] < min_r or r["precision"] < min_p:', "    if False:"),
     "gate: omitIfExit como verde": ("scripts/gate.py", '        elif senal.get("omitIfExit") is not None and proc.returncode == senal.get("omitIfExit"):', '        elif False:'),
     "eventos: el registro crece sin techo": ("plugin/harness/events.py", "        if p.exists() and p.stat().st_size > tope:", "        if False:"),
+    # Las integraciones (ADR 0010): cada pieza del gobierno de lo que el agente hace afuera.
+    "integraciones: evaluate no las mira": ("plugin/harness/guards.py", "    if not kind:\n        # Una herramienta de una integración", "    if False:\n        # Una herramienta de una integración"),
+    "integraciones: la clase deny no frena": ("plugin/harness/integ.py", '    if c == "deny":\n        return "deny"', '    if False:\n        return "deny"'),
+    "integraciones: los destinatarios no se miran": ("plugin/harness/integ.py", '        fuera = _fuera_de_lista(destinos, pol.get("allowRecipients"))', "        fuera = []"),
+    "integraciones: las redes internas pasan": ("plugin/harness/integ.py", '        if host and first_match([{"pattern": p} for p in pol.get("denyHosts") or []], host):', "        if False:"),
+    "integraciones: sin presupuesto": ("plugin/harness/integ.py", "    if isinstance(tope, int) and usadas >= tope:", "    if False:"),
+    "integraciones: el plugin no cuenta el uso": ("plugin/__init__.py", "    if clave and not (d.block or d.approve):\n        _registrar_uso", "    if False:\n        _registrar_uso"),
+    "integraciones: lo de terceros no contamina": ("plugin/harness/guards.py", "    de_integracion = integ.fuente(ev, config)", '    de_integracion = ""'),
+    "integraciones: la contaminada no escala": ("plugin/harness/integ.py", '    if getattr(ev, "contaminada", "") and c in _MUTAN:', "    if False:"),
+    "integraciones: el alcance de la tarea se ignora": ("plugin/harness/integ.py", "    if permitidas is not None and iid not in permitidas:", "    if False:"),
+    "integraciones: un MCP sin declarar pasa": ("plugin/harness/integ.py", '    if not _rx(u.get("pattern"), ev.tool) or _rx(u.get("allow"), ev.tool):', "    if True:"),
+    "integraciones: los archivos locales no se miran": ("plugin/harness/integ.py", "        for raw in archivos:", "        for raw in []:"),
+    "integraciones: el CLI no se clasifica": ("plugin/harness/guards.py", "    if kind == \"shell\":\n        # Una integración por CLI", "    if False:\n        # Una integración por CLI"),
+    "integraciones: un comando se lee como nombre": ("plugin/harness/integ.py", "    if any(c.isspace() for c in crudo):\n        return {crudo}", "    if False:\n        return {crudo}"),
+    "integraciones: el resultado no se recorta": ("plugin/harness/integ.py", "    if not isinstance(tope, int) or tope <= 0 or len(resultado) <= tope:\n        return None", "    if True:\n        return None"),
+    "integ.py: acepta un ejemplo que no frena": ("scripts/integ.py", '        if hizo != ej.get("expect"):', "        if False:"),
+    "integ.py: el lock no se mira": ("scripts/integ.py", '        if iid not in lock:\n            out.append', '        if False:\n            out.append'),
+    "integ.py: tools.include registra lo vedado": ("scripts/integ.py", '    return [t for t in entry.get("toolNames") or [] if nucleo.accion(entry, nucleo.clase(entry, t)) != "deny"]', '    return list(entry.get("toolNames") or [])'),
+    "integ_run: un secreto dentro del repo vale": ("scripts/integ_run.py", '            raise SinSecreto("el archivo está DENTRO del repo: un secreto ahí termina en un commit")', "            pass"),
+    "loop: la tarea no limita las integraciones": ("scripts/loop.py", '        env["HARNESS_INTEGRACIONES"] = ",".join(permitidas)', "        pass"),
+    "doctor: un MCP sin el lanzador pasa": ("scripts/doctor.py", '            elif "integ_run.py" not in bloque:', "            elif False:"),
+    "deriva: una vulnerabilidad conocida pasa": ("scripts/drift.py", '             "(probala con `integ_run.py --probe`) o deshabilitá la integración." for (o, e, p, v), ids in zip(deps, vulns) if ids]', '             "" for (o, e, p, v), ids in zip(deps, vulns) if False]'),
+    "integraciones: el nombre MCP sin sanear": ("plugin/harness/integ.py", "    completo = prefijo(config, integ) + sanear(crudo, config)", "    completo = prefijo(config, integ) + crudo"),
+    "integraciones: el nombre largo sin cortar": ("plugin/harness/integ.py", "    if tope and len(completo) > tope:", "    if False:"),
+    "integ_run: la sonda no compara": ("scripts/integ_run.py", '    errores = [f"el manifiesto declara `{t}` y el servidor no la publica (¿cambió la versión?)" for t in sorted(declaradas - hay)]', "    errores = []"),
+
 }
 
 
@@ -116,6 +142,7 @@ CONFIG = {
     "la deriva encendida y nadie que la corra": _config(lambda c: c["drift"].update(command="scripts/otro.py")),
     "una skill fuera del mapa": _config(lambda c: c["taxonomy"]["skills"].pop("lesson")),
     "un loop sin tope": _config(lambda c: c["loop"].update(sameFailureLimit=0)),
+    "un MCP sin declarar entra sin preguntar": _config(lambda c: c["integrations"]["undeclared"].update(action="allow")),
 }
 
 

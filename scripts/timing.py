@@ -69,6 +69,9 @@ def llamadas(plugin, config: dict) -> dict:
     return {
         "pre_tool_call (terminal)": lambda: plugin.on_pre_tool_call(tool_name=shell, args={"command": probe.get("command", "git status")}),
         "pre_tool_call (escritura)": lambda: plugin.on_pre_tool_call(tool_name=write, args=escribir),
+        # Una herramienta de integración: recorre `integrations.enabled` y `undeclared` en cada llamada.
+        "pre_tool_call (integración)": lambda: plugin.on_pre_tool_call(tool_name=probe.get("integrationTool", "mcp__x__get_item"),
+                                                                       args={"id": "1"}),
         "transform_tool_result": lambda: plugin.on_transform_tool_result(tool_name=write, args=escribir, result="ok"),
         "pre_verify": lambda: plugin.on_pre_verify(),
         "pre_llm_call": lambda: plugin.on_pre_llm_call(user_message=probe.get("prompt", "¿cómo está el arnés?")),

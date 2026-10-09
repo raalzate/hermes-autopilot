@@ -1,0 +1,99 @@
+{
+  "id": "postgres",
+  "titulo": "PostgreSQL por CLI (`psql`), de sólo lectura por defecto",
+  "descripcion": "`psql` contra una base. El SQL de cada comando se clasifica: un SELECT pasa; INSERT/UPDATE/DELETE, DDL y lo que lee el disco del servidor, según el perfil. La defensa de verdad es un ROL de sólo lectura en la base: esto es la segunda capa.",
+  "verificado": "2026-10-09 · psql 14+: `-c`, `-f/--file`, `\\i`, y las funciones de archivo de PostgreSQL (`pg_read_file`, `COPY … PROGRAM`, `lo_import`)",
+  "kind": "cli",
+  "command": "(^|[;&|]\\s*)psql\\b",
+  "classes": {
+    "deny": "(?i)\\b(drop\\s+(table|database|schema|role)|truncate|alter\\s+system|pg_read_file|pg_ls_dir|lo_import|lo_export)\\b|\\bcopy\\b.*\\bprogram\\b",
+    "destructive": "(?i)\\b(delete\\s+from|update\\s+\\S+\\s+set|alter\\s+table|drop\\s+(index|view)|grant|revoke)\\b",
+    "read": "(?i)^(?!.*(\\s-f\\s|--file|\\\\i\\b|\\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|vacuum)\\b)).*\\bpsql\\b"
+  },
+  "filePattern": "(?:-f|--file)[=\\s]+(\\S+)",
+  "policy": {},
+  "budget": {
+    "maxPerHour": {
+      "destructive": 3
+    }
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "destructive": "ask"
+    }
+  },
+  "perfilPorDefecto": "lectura",
+  "reasons": {
+    "deny": "borrar tablas o leer el disco del servidor desde SQL no lo hace el agente.",
+    "write": "el perfil lectura sólo consulta. Si la tarea escribe, que el humano cambie el perfil — y que el rol de la base lo permita."
+  },
+  "setup": [
+    "Un rol de sólo lectura: CREATE ROLE agente LOGIN; GRANT pg_read_all_data TO agente;",
+    "La contraseña en ~/.pgpass (fuera del repo, permisos 600), nunca en el comando."
+  ],
+  "requires": [
+    {
+      "kind": "system",
+      "command": "psql",
+      "min": "14",
+      "hint": {
+        "darwin": "brew install libpq",
+        "default": "instalá el cliente de PostgreSQL"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "command": "psql -d ventas -c 'select count(*) from pedidos'",
+      "expect": "allow",
+      "why": "un SELECT es lectura"
+    },
+    {
+      "command": "psql -d ventas -c 'DROP TABLE pedidos'",
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "borrar una tabla no es del agente"
+    },
+    {
+      "command": "psql -d ventas -c \"update pedidos set estado='x'\"",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-destructive",
+      "why": "lectura no modifica"
+    },
+    {
+      "command": "psql -d ventas -c \"insert into notas values (1)\"",
+      "perfil": "asistente",
+      "expect": "approve",
+      "regla": "pide-write",
+      "why": "en asistente, escribir lo aprueba un humano"
+    },
+    {
+      "command": "psql -d ventas -f migracion.sql",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "un archivo SQL puede hacer cualquier cosa: no es lectura"
+    },
+    {
+      "command": "psql -d ventas -c \"select pg_read_file('/etc/passwd')\"",
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "leer el disco del servidor desde SQL"
+    }
+  ]
+}

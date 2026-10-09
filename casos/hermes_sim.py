@@ -55,8 +55,8 @@ class Hermes:
     def _tool(self, familia: str) -> str:
         return (self.tools.get(familia) or [familia])[0]  # los nombres salen del config (P4)
 
-    def _pedir(self, familia: str, args: dict) -> bool:
-        tool = self._tool(familia)
+    def _pedir(self, familia: str, args: dict, tool: str = "") -> bool:
+        tool = tool or self._tool(familia)
         r = self.plugin.on_pre_tool_call(tool_name=tool, args=args, session_id="caso")
         if isinstance(r, dict) and r.get("action") == "block":
             self.frenados.append(r.get("message", ""))
@@ -137,6 +137,26 @@ class Hermes:
         sim.write_text(json.dumps(trabajos, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"  [{self._tool('cron')}] ✓ programado: {cuando}")
         return True
+
+    def herramienta(self, nombre: str, args: dict, resultado: str = "ok") -> str | None:
+        """Una herramienta de una integración (`mcp__<server>__<tool>` o una propia de Hermes), con el
+        nombre con que Hermes la registra. Frenada → None. Lo que hizo queda en `.sim/integraciones.jsonl`
+        (el verificador del caso lo lee: lo mandado no se des-manda)."""
+        if not self._pedir("", args, tool=nombre):
+            return None
+        self.registrar("integraciones", {"tool": nombre, "args": args})
+        print(f"  [{nombre}] ✓")
+        r = self.plugin.on_transform_tool_result(tool_name=nombre, args=args, result=resultado)
+        return r if isinstance(r, str) else resultado
+
+    def mcp(self, servidor: str, herramienta: str, args: dict, resultado: str = "ok") -> str | None:
+        return self.herramienta(f"mcp__{servidor}__{herramienta}", args, resultado)
+
+    def registrar(self, nombre: str, dato: dict) -> None:
+        sim = self.raiz / ".sim" / f"{nombre}.jsonl"
+        sim.parent.mkdir(exist_ok=True)
+        with sim.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(dato, ensure_ascii=False) + "\n")
 
     def leer(self, ruta: str) -> str | None:
         """read_file: también pasa por el freno (`protectedReads`). Frenado → None."""

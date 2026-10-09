@@ -86,6 +86,12 @@ Ojo: `--payload-file` son los *kwargs* del hook, así que los argumentos de la h
 bajo `args`. Un JSON con `command` suelto termina en `extra`, el hook no ve ningún comando y deja
 pasar: parece un freno roto y es un payload mal armado.
 
+## Integraciones
+
+El instalador copia el catálogo (`.hermes/harness/plantillas/integraciones/`) y la plantilla trae
+`integrations` sin ninguna habilitada, con `undeclared: ask`. Habilitarlas es un paso del humano:
+[`integraciones.md`](integraciones.md). El lock (`.hermes/integraciones.lock`) va versionado.
+
 ## Después
 
 Las reglas del repo destino se escriben con **sus** incidentes (skill `lesson`), no copiando las

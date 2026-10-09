@@ -26,10 +26,16 @@ archivos, y un gate que define qué es "terminado".
   en que pasa. Usa Server-Sent Events y escucha solo en 127.0.0.1.
 - **Workshop** ([`docs/workshop/`](docs/workshop/README.md)): 3 h 30 min prácticas en un sandbox,
   con un agente de juguete y sin API key.
-- **17 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
-  oficina, datos, soporte y operación: un agente toma un atajo y el arnés lo frena, lo escala o lo
+- **Integraciones** ([`docs/integraciones.md`](docs/integraciones.md)): navegador headless, Google
+  Workspace, Microsoft 365, WhatsApp/Telegram/Slack/correo (`hermes send`), GitHub y PostgreSQL. Hermes
+  conecta; el arnés decide qué clase de acción es cada herramienta, a quién se manda, cuánto, desde qué
+  tarea y con qué secretos arranca cada servidor. Se habilitan con un comando que prueba antes de
+  escribir (`integ.py add`), se instalan aisladas y fijadas con lock (`integ.py deps`), y Hermes registra
+  sólo lo que el perfil permite y las arranca recién cuando se usan.
+- **22 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
+  oficina, datos, soporte y operación (cinco con integraciones): un agente toma un atajo y el arnés lo frena, lo escala o lo
   deja llegar a verde. Se corre cada uno con un comando, y el gate los corre todos.
-- **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): 22 cerrados con su prueba, y lo
+- **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): 23 cerrados con su prueba, y lo
   que sigue abierto con su porqué.
 - **Defensa en capas para lo desatendido:** cada tarea del loop corre aislada en su worktree (los
   secretos no están), una guardia de Python ve lo que un programa abre, y una sesión que leyó a un
@@ -71,6 +77,10 @@ python3 .hermes/harness/scripts/githooks.py install
 python3 .hermes/harness/scripts/gate.py
 python3 .hermes/harness/scripts/doctor.py
 
+# conectarle cosas (dry-run sin --apply)
+python3 .hermes/harness/scripts/integ.py list
+python3 .hermes/harness/scripts/integ.py add navegador --apply && python3 .hermes/harness/scripts/integ.py deps navegador --apply
+
 # y dejarlo trabajar solo
 python3 .hermes/harness/scripts/cli.py task add "una tarea chica que el gate pueda verificar"
 python3 .hermes/harness/scripts/cli.py loop --apply
@@ -83,6 +93,7 @@ python3 .hermes/harness/scripts/cli.py loop --apply
 - [`docs/ingenieria-de-loops.md`](docs/ingenieria-de-loops.md) — los lazos de control del agente, y qué hace bueno a un lazo.
 - [`docs/loop-autonomo.md`](docs/loop-autonomo.md) — operar el loop.
 - [`docs/cli-y-panel.md`](docs/cli-y-panel.md) — la CLI y el panel.
+- [`docs/integraciones.md`](docs/integraciones.md) — correo, WhatsApp, navegador, Google, Microsoft, GitHub, bases: catálogo, perfiles, secretos, recursos y dependencias.
 - [`docs/hermes.md`](docs/hermes.md) — cómo se engancha a Hermes, verificado contra su código.
 - [`CONSTITUTION.md`](CONSTITUTION.md) — los principios y qué comando hace cumplir cada uno.
 - [`docs/portar.md`](docs/portar.md) — instalar en otro repo, con plugin o con shell hook.

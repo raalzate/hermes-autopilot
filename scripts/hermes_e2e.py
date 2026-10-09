@@ -106,8 +106,8 @@ def adentro() -> int:
         config = json.loads((repo / ".hermes" / "harness.config.json").read_text(encoding="utf-8"))
         tools = config["tools"]
 
-        def directiva(tool, args):
-            accion, msg = hp.get_pre_tool_call_directive(tool, args, session_id="e2e")
+        def directiva(tool, args, sesion="e2e"):
+            accion, msg = hp.get_pre_tool_call_directive(tool, args, session_id=sesion)
             return accion, msg or ""
 
         t = config.get("terminal") or {}
@@ -137,6 +137,39 @@ def adentro() -> int:
             check(directiva(tools["cron"][0], {"action": "create", "schedule": "every 2h", "prompt": r["example"]})[0] == "block",
                   f"Hermes no bloquea cron.deny[{r['id']}]")
         check(directiva("read_file", {"path": "AGENTS.md"})[0] is None, "Hermes bloquea read_file (sin familia)")
+
+        # Integraciones: el nombre con que Hermes registra una herramienta MCP es el que el arnés
+        # espera (la documentación de Hermes dice otro), y cada ejemplo del catálogo decide lo mismo
+        # por el despacho real. Los que necesitan estado (uso, sesión contaminada) los prueba el self-test.
+        sys.path.append(str(repo / "scripts"))
+        import integ as ig  # noqa: E402
+        try:
+            from tools.mcp_tool_schema import mcp_prefixed_tool_name  # type: ignore
+            largo = "get_" + "muy_" * 20 + "largo"
+            for srv, crudo in (("m365", "send-mail"), ("google", "send_gmail_message"), ("mi.servidor", largo)):
+                check(ig.nombre_hermes(config, {"kind": "mcp", "server": srv}, crudo) == mcp_prefixed_tool_name(srv, crudo),
+                      f"el nombre de `{srv}`/`{crudo}` no es el que registra Hermes (`integrations.$naming`)")
+        except ImportError:
+            check(False, "Hermes no tiene tools.mcp_tool_schema.mcp_prefixed_tool_name: cambió cómo nombra las herramientas MCP")
+        con_integ = config
+        n_ej = 0
+        for iid, m in ig.catalogo(repo / "plantillas" / "integraciones").items():
+            for perfil in m.get("perfiles") or {}:
+                cfg = ig.con(config, iid, ig.materializar(m, perfil))
+                for ej in m.get("examples") or []:
+                    if ej.get("perfil") not in (None, perfil) or ej.get("uso") or ej.get("contaminada"):
+                        continue
+                    ent = cfg["integrations"]["enabled"][iid]
+                    for ruta, valor in (ej.get("set") or {}).items():
+                        ent = ig.set_ruta(ent, ruta, valor)
+                    (repo / ".hermes" / "harness.config.json").write_text(json.dumps(ig.con(cfg, iid, ent)), encoding="utf-8")
+                    e = ig.evento(cfg, iid, ent, ej)
+                    n_ej += 1  # una sesión por ejemplo: la navegación de otro no la contamina
+                    a, _ = directiva(e.tool, e.args, f"e2e-integ-{n_ej}")
+                    check((a or "allow") == ej["expect"], f"integración {iid} ({perfil}): `{ej.get('tool') or ej.get('command')}` "
+                                                          f"dentro de Hermes da {a!r}, se esperaba {ej['expect']}")
+        (repo / ".hermes" / "harness.config.json").write_text(json.dumps(con_integ), encoding="utf-8")
+        check(directiva("mcp__sin_declarar__hacer", {})[0] == "approve", "Hermes no escala un MCP sin declarar")
 
         # Hermes arrancado FUERA del repo (gateway, cron) con la sesión ADENTRO: el plugin tiene
         # que seguir el cwd que Hermes resuelve para sus herramientas, no el del proceso.

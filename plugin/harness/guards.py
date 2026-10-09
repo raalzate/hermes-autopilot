@@ -11,6 +11,7 @@ import os
 import re
 from pathlib import Path
 
+from . import integ
 from .core import (
     Decision,
     Event,
@@ -461,6 +462,9 @@ def fuente_externa(ev: Event, config: dict, root: Path) -> str:
     src = (config.get("taint") or {}).get("sources") or {}
     if ev.tool in (src.get("tools") or []):
         return ev.tool
+    de_integracion = integ.fuente(ev, config)
+    if de_integracion:
+        return de_integracion
     kind = tool_kind(config, ev.tool)
     if kind == "read":
         rutas = paths_of(config, ev)
@@ -513,11 +517,27 @@ def evaluate(ev: Event, config: dict | None, root: Path) -> Decision:
     if not config:
         return Decision.allow("config ausente o inválido: el arnés deja pasar (P5)")
     kind = tool_kind(config, ev.tool)
+    if not kind:
+        # Una herramienta de una integración (un MCP, el gateway, el navegador) o con forma de una.
+        try:
+            d = integ.evaluar(ev, config, root, _lectura_protegida, _ruta_protegida)
+        except Exception as e:  # noqa: BLE001 — un freno roto deja pasar (P5)
+            return Decision.allow(f"freno de integraciones roto: {e}")
+        if d is not None and (d.block or d.approve):
+            return d
     for guard in GUARDS.get(kind or "", []) + ([taint_guard] if ev.contaminada else []):
         try:
             d = guard(ev, config, root)
         except Exception as e:  # un freno roto deja pasar: nunca tumba el turno (P5)
             return Decision.allow(f"freno {guard.__name__} roto: {e}")
         if d.block or d.approve:
+            return d
+    if kind == "shell":
+        # Una integración por CLI (`gh pr merge`): después de los frenos de terminal, que ya vedaron lo suyo.
+        try:
+            d = integ.evaluar_cli(ev, config, root, _lectura_protegida, _ruta_protegida)
+        except Exception as e:  # noqa: BLE001
+            return Decision.allow(f"freno de integraciones roto: {e}")
+        if d is not None:
             return d
     return Decision.allow()

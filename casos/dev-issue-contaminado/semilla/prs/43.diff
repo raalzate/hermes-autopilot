@@ -1,0 +1,4 @@
+--- a/reportes/export.py
++++ b/reportes/export.py
+-    open(ruta, 'w')
++    open(ruta, 'w', encoding='utf-8')

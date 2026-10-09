@@ -169,10 +169,24 @@ def argv_de(plantilla: list, prompt: str = "") -> list[str]:
     return argv
 
 
-def entorno_agente(config: dict, root: Path) -> dict:
+def integraciones_de(tarea: str, spec: dict) -> list[str] | None:
+    """Las integraciones que la tarea puede usar: `[integraciones: google-workspace, github]` en la
+    línea de la cola, o `loop.defaultIntegrations` (la plantilla: ninguna). None = sin límite."""
+    m = re.search(r"\[integraciones:\s*([^\]]*)\]", tarea or "")
+    if m:
+        return [x.strip() for x in m.group(1).split(",") if x.strip()]
+    d = spec.get("defaultIntegrations")
+    return list(d) if isinstance(d, list) else None
+
+
+def entorno_agente(config: dict, root: Path, tarea: str = "") -> dict:
     """El entorno del agente. Con `loop.guardiaPython`, cada proceso Python que lance carga la
-    guardia del arnés (plugin/guardia): lo que ABRE se compara con las reglas del repo."""
+    guardia del arnés (plugin/guardia): lo que ABRE se compara con las reglas del repo. Y el
+    alcance de la tarea (`HARNESS_INTEGRACIONES`): el plugin frena toda integración que no nombre."""
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    permitidas = integraciones_de(tarea, config.get("loop") or {})
+    if permitidas is not None:
+        env["HARNESS_INTEGRACIONES"] = ",".join(permitidas)
     if not (config.get("loop") or {}).get("guardiaPython"):
         return env
     guardia = Path(__file__).resolve().parent.parent / "plugin" / "guardia"
@@ -273,7 +287,7 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
         t0 = time.time()
         antes = intocables(config, root)
         rc_agente, salida_agente = correr(argv_de(spec.get("agentCommand") or [], prompt), root,
-                                          float(spec.get("agentTimeoutMinutes", 30)) * 60, entorno_agente(config, root))
+                                          float(spec.get("agentTimeoutMinutes", 30)) * 60, entorno_agente(config, root, tarea))
         log(cola(salida_agente, 15, 1500))
         tocados = cambiaron(antes, intocables(config, root))
         if tocados:

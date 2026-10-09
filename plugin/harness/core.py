@@ -116,6 +116,8 @@ class Event:
     cwd: str = ""
     session_id: str = ""
     contaminada: str = ""  # de dónde vino el contenido de terceros que esta sesión ya leyó ("" = limpia)
+    integraciones: tuple | None = None  # las que la tarea permite (`HARNESS_INTEGRACIONES`); None = todas las habilitadas
+    uso: dict = field(default_factory=dict)  # {"<integración>:<clase>": usos en la última hora}, lo cuenta el plugin
 
 
 def tool_kind(config: dict, tool: str) -> str | None:

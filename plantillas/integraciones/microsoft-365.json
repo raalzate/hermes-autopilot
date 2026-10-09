@@ -1,0 +1,404 @@
+{
+  "id": "microsoft-365",
+  "titulo": "Microsoft 365 (Outlook, OneDrive, Calendar, Excel, To Do, Planner)",
+  "descripcion": "Servidor MCP `@softeria/ms-365-mcp-server` sobre Microsoft Graph. Login por código de dispositivo, el token lo guarda MSAL en el llavero del sistema. En `lectura` arranca con `--read-only`; todo lo que manda lleva la firma `[enviado por un agente]` para que el destinatario sepa quién escribe.",
+  "verificado": "2026-10-09 · @softeria/ms-365-mcp-server 0.160.0: `tools/list` real (189 herramientas, con anotaciones), `--help` y las variables que lee",
+  "version": "0.160.0",
+  "kind": "mcp",
+  "server": "m365",
+  "toolNames": [
+    "login",
+    "logout",
+    "verify-login",
+    "list-accounts",
+    "select-account",
+    "remove-account",
+    "graph-batch",
+    "get-drive-item",
+    "move-rename-onedrive-item",
+    "delete-onedrive-file",
+    "list-folder-files",
+    "create-onedrive-folder",
+    "upload-file-content",
+    "copy-drive-item",
+    "create-drive-item-share-link",
+    "create-upload-session",
+    "get-drive-delta",
+    "share-drive-item",
+    "list-drive-item-permissions",
+    "delete-drive-item-permission",
+    "create-drive-item-preview",
+    "list-drive-item-thumbnails",
+    "list-drive-item-versions",
+    "list-excel-tables",
+    "get-excel-table",
+    "list-excel-table-rows",
+    "add-excel-table-rows",
+    "update-excel-table-row",
+    "delete-excel-table-row",
+    "list-excel-worksheets",
+    "create-excel-chart",
+    "sort-excel-range",
+    "get-excel-range",
+    "update-excel-range",
+    "clear-excel-range",
+    "delete-excel-range",
+    "get-excel-range-format",
+    "format-excel-range",
+    "format-excel-range-border",
+    "format-excel-range-fill",
+    "format-excel-range-font",
+    "insert-excel-range",
+    "merge-excel-range",
+    "unmerge-excel-range",
+    "create-excel-table",
+    "get-excel-used-range",
+    "get-drive-root-item",
+    "search-onedrive-files",
+    "get-current-user",
+    "list-my-calendar-permissions",
+    "create-my-calendar-permission",
+    "update-my-calendar-permission",
+    "delete-my-calendar-permission",
+    "list-calendars",
+    "create-calendar",
+    "update-calendar",
+    "delete-calendar",
+    "get-specific-calendar-view",
+    "list-specific-calendar-events",
+    "create-specific-calendar-event",
+    "get-specific-calendar-event",
+    "update-specific-calendar-event",
+    "delete-specific-calendar-event",
+    "list-calendar-event-instances",
+    "get-calendar-view",
+    "list-calendar-view-delta",
+    "list-contact-folders",
+    "create-contact-folder",
+    "update-contact-folder",
+    "delete-contact-folder",
+    "list-contact-folder-child-folders",
+    "create-contact-child-folder",
+    "list-contact-folder-contacts",
+    "create-contact-in-folder",
+    "list-outlook-contacts",
+    "create-outlook-contact",
+    "get-outlook-contact",
+    "update-outlook-contact",
+    "delete-outlook-contact",
+    "list-drives",
+    "list-calendar-events",
+    "create-calendar-event",
+    "get-calendar-event",
+    "update-calendar-event",
+    "delete-calendar-event",
+    "accept-calendar-event",
+    "cancel-calendar-event",
+    "decline-calendar-event",
+    "dismiss-calendar-event-reminder",
+    "forward-calendar-event",
+    "snooze-calendar-event-reminder",
+    "tentatively-accept-calendar-event",
+    "list-calendar-events-delta",
+    "get-mail-tips",
+    "list-focused-inbox-overrides",
+    "create-focused-inbox-override",
+    "update-focused-inbox-override",
+    "delete-focused-inbox-override",
+    "get-mailbox-settings",
+    "update-mailbox-settings",
+    "list-mail-folders",
+    "create-mail-folder",
+    "update-mail-folder",
+    "delete-mail-folder",
+    "list-mail-child-folders",
+    "create-mail-child-folder",
+    "list-mail-rules",
+    "create-mail-rule",
+    "update-mail-rule",
+    "delete-mail-rule",
+    "list-mail-folder-messages",
+    "list-mail-folder-messages-delta",
+    "list-mail-messages",
+    "create-draft-email",
+    "get-mail-message",
+    "update-mail-message",
+    "delete-mail-message",
+    "get-mail-message-mime",
+    "list-mail-attachments",
+    "add-mail-attachment",
+    "delete-mail-attachment",
+    "create-mail-attachment-upload-session",
+    "copy-mail-message",
+    "create-forward-draft",
+    "create-reply-draft",
+    "create-reply-all-draft",
+    "forward-mail-message",
+    "move-mail-message",
+    "reply-mail-message",
+    "reply-all-mail-message",
+    "send-draft-message",
+    "list-onenote-notebooks",
+    "create-onenote-notebook",
+    "list-onenote-notebook-sections",
+    "create-onenote-section",
+    "list-onenote-pages",
+    "create-onenote-page",
+    "delete-onenote-page",
+    "get-onenote-page-content",
+    "list-onenote-section-groups",
+    "list-all-onenote-sections",
+    "list-onenote-section-pages",
+    "create-onenote-section-page",
+    "list-outlook-categories",
+    "create-outlook-category",
+    "list-supported-languages",
+    "list-supported-time-zones",
+    "upload-my-profile-photo",
+    "list-planner-tasks",
+    "send-mail",
+    "list-todo-task-lists",
+    "create-todo-task-list",
+    "update-todo-task-list",
+    "delete-todo-task-list",
+    "list-todo-tasks",
+    "create-todo-task",
+    "get-todo-task",
+    "update-todo-task",
+    "delete-todo-task",
+    "list-todo-linked-resources",
+    "create-todo-linked-resource",
+    "delete-todo-linked-resource",
+    "create-planner-bucket",
+    "get-planner-bucket",
+    "update-planner-bucket",
+    "delete-planner-bucket",
+    "get-planner-plan",
+    "list-plan-buckets",
+    "list-plan-tasks",
+    "create-planner-task",
+    "get-planner-task",
+    "update-planner-task",
+    "get-planner-task-details",
+    "update-planner-task-details",
+    "list-subscriptions",
+    "create-subscription",
+    "get-subscription",
+    "update-subscription",
+    "delete-subscription",
+    "reauthorize-subscription",
+    "get-my-profile",
+    "list-planner-task-messages",
+    "create-planner-task-message",
+    "delete-planner-task-message",
+    "get-upload-url",
+    "parse-teams-url",
+    "download-bytes",
+    "download-bytes-to-file",
+    "get-download-url"
+  ],
+  "classes": {
+    "deny": "^(graph-batch|upload-my-profile-photo|remove-account)$",
+    "destructive": "^delete-|^(clear-excel-range|cancel-calendar-event|move-mail-message|create-mail-rule|update-mail-rule|update-mailbox-settings|create-my-calendar-permission|update-my-calendar-permission)$",
+    "send": "^(send-mail|send-draft-message|reply-mail-message|reply-all-mail-message|forward-mail-message|forward-calendar-event|share-drive-item|create-drive-item-share-link|create-planner-task-message)$",
+    "read": "^(list|get|search|verify|parse)-|^download-bytes$"
+  },
+  "thirdParty": "^(list-mail-messages|list-mail-folder-messages|get-mail-message|list-mail-attachments|get-onenote-page-content|list-planner-task-messages|download-bytes)",
+  "recipientKeys": "^(address|recipients|email)$",
+  "fileKeys": "^(outputPath|filePath|path)$",
+  "policy": {
+    "allowRecipients": []
+  },
+  "budget": {
+    "maxPerHour": {
+      "send": 20,
+      "destructive": 5
+    },
+    "maxResultChars": 40000,
+    "idleMinutes": 10,
+    "timeoutSeconds": 120,
+    "maxMemoryMB": 512,
+    "nice": 5
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "send": "allowlist",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "send": "allowlist",
+      "destructive": "ask"
+    }
+  },
+  "perfilPorDefecto": "lectura",
+  "reasons": {
+    "deny": "`graph-batch` manda cualquier pedido a Graph: es una puerta que saltea la clase de cada herramienta.",
+    "destructive": "una regla de correo puede reenviar todo afuera; borrar en Graph no tiene papelera para todo."
+  },
+  "requires": [
+    {
+      "kind": "system",
+      "command": "node",
+      "min": "20",
+      "hint": {
+        "darwin": "brew install node",
+        "win32": "winget install OpenJS.NodeJS.LTS",
+        "default": "instalá Node 20+"
+      }
+    },
+    {
+      "kind": "npm",
+      "package": "@softeria/ms-365-mcp-server",
+      "version": "0.160.0",
+      "bin": "ms-365-mcp-server"
+    }
+  ],
+  "launch": {
+    "runtime": "node",
+    "bin": {
+      "kind": "npm",
+      "name": "ms-365-mcp-server"
+    },
+    "args": [],
+    "argsPorPerfil": {
+      "lectura": [
+        "--read-only"
+      ]
+    },
+    "env": {
+      "MS365_MCP_MESSAGE_SIGNOFF_SUFFIX": "\n\n[enviado por un agente]",
+      "MS365_MCP_MAX_ITEMS": "50"
+    }
+  },
+  "setup": [
+    "Login una vez, fuera del agente: {prefix}/node_modules/.bin/ms-365-mcp-server --login",
+    "Cuenta de trabajo: MS365_MCP_CLIENT_ID con el id de TU aplicación de Entra (no es un secreto)."
+  ],
+  "examples": [
+    {
+      "tool": "list-mail-messages",
+      "args": {},
+      "expect": "allow",
+      "why": "listar correo es lectura"
+    },
+    {
+      "tool": "graph-batch",
+      "args": {
+        "body": {}
+      },
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "un batch de Graph saltea la clasificación"
+    },
+    {
+      "tool": "send-mail",
+      "args": {
+        "body": {
+          "message": {
+            "toRecipients": [
+              {
+                "emailAddress": {
+                  "address": "x@externo.test"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-send",
+      "why": "lectura no manda"
+    },
+    {
+      "tool": "send-mail",
+      "args": {
+        "body": {
+          "message": {
+            "toRecipients": [
+              {
+                "emailAddress": {
+                  "address": "x@externo.test"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "perfil": "asistente",
+      "set": {
+        "policy.allowRecipients": [
+          "@miempresa\\.test$"
+        ]
+      },
+      "expect": "approve",
+      "regla": "destinatario",
+      "why": "Graph anida el destinatario: igual se ve"
+    },
+    {
+      "tool": "send-mail",
+      "args": {
+        "body": {
+          "message": {
+            "toRecipients": [
+              {
+                "emailAddress": {
+                  "address": "ana@miempresa.test"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "perfil": "asistente",
+      "set": {
+        "policy.allowRecipients": [
+          "@miempresa\\.test$"
+        ]
+      },
+      "expect": "allow",
+      "why": "destinatario de la lista"
+    },
+    {
+      "tool": "create-mail-rule",
+      "args": {
+        "body": {
+          "actions": {
+            "forwardTo": [
+              {
+                "emailAddress": {
+                  "address": "x@externo.test"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "perfil": "asistente",
+      "expect": "block",
+      "regla": "clase-destructive",
+      "why": "una regla que reenvía es una fuga permanente"
+    },
+    {
+      "tool": "delete-mail-message",
+      "args": {
+        "messageId": "x"
+      },
+      "perfil": "autonomo",
+      "expect": "approve",
+      "regla": "pide-destructive",
+      "why": "borrar lo aprueba un humano"
+    }
+  ]
+}

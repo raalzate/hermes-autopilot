@@ -41,6 +41,9 @@ sin `example` es roja.
 | `skills.deny[]`, `skills.inheritTerminalDeny`, `skills.innocent[]` | lo que una skill escrita por el agente no puede enseñar |
 | `cron.deny[]`, `cron.minIntervalMinutes`, `cron.exampleTooFrequent`, `cron.moreTooFrequent[]`, `cron.scheduleArgs`, `cron.innocent[]` | lo que una tarea programada no puede hacer |
 | `taint.sources{tools[], readPaths[]}`, `askCommands[]`, `askWrites[]`, `askKinds[]`, `kindsReason`, `innocentAfter[]`, `innocentWritesAfter[]` | la **sesión contaminada**: después de leer contenido de terceros (herramientas web y de navegador de Hermes, o rutas como `tickets/`), lo que tiene efecto afuera escala a un humano —comandos (`askCommands`, también en `execute_code`), escrituras donde una instrucción quedaría permanente (`askWrites`) y guardar memoria, skills o cron (`askKinds`; limpiar no). Sólo el plugin (el shell hook no tiene memoria de la sesión) |
+| `integrations.$naming{prefix, sanitize}` | cómo nombra Hermes una herramienta MCP: `mcp__{server}__`, con `[^A-Za-z0-9_]` cambiado por `_` (verificado en `tools/mcp_tool_schema.py`) |
+| `integrations.undeclared{pattern, allow, action, reason}` | una herramienta con forma de integración (`^mcp__`) que ninguna declara: `ask` (plantilla), `deny` o pasa. `allow` es una regex de las que pasan igual |
+| `integrations.enabled.<id>` | una integración MATERIALIZADA del catálogo (`plantillas/integraciones/<id>.json`) por `scripts/integ.py add`. Ver la tabla de abajo |
 | `routes[]` | `{id, pattern, example, hint}` — pista que se suma al turno si el pedido casa |
 | `context.files`, `maxChars`, `blockedPatterns[]` | archivos de contexto de Hermes: tope y patrones del escáner |
 | `invariants[]` | `{file, mustContain[], mustNotContain[], reason}` |
@@ -58,10 +61,29 @@ sin `example` es roja.
 | `loop.aislar` | `true`: cada tarea corre en su `git worktree` (bajo `.git/harness-worktrees/`), donde lo ignorado por git (el `.env`) no existe. Un caso puede apagarlo (`loop` en su `caso.json`) |
 | `loop.guardiaPython` | `true`: los procesos Python del agente cargan la guardia (`plugin/guardia`, audit hook): lo que ABREN se compara con `protectedReads`, `protectedPaths` y `lockedPaths` del repo |
 | `loop.lockedPaths[]` | regex de rutas que el agente no puede cambiar DURANTE una tarea por ningún canal (su config, su cola, `.env`), aunque estén ignoradas por git. Junto con los `protectedPaths` versionados, el loop las compara antes y después de cada intento: si cambió alguna, escala aunque el gate dé verde |
+| `loop.defaultIntegrations[]` | las integraciones que una tarea puede usar si no las nombra (`[integraciones: a, b]` en su línea). `[]` = ninguna (plantilla); ausente = todas las habilitadas. El loop las pasa en `HARNESS_INTEGRACIONES` |
 | `loop.tasksFile`, `agentCommand`, `gateCommand`, `maxIterations`, `sameFailureLimit`, `maxMinutes`, `agentTimeoutMinutes`, `gateTimeoutMinutes`, `branchPrefix`, `stopFile`, `stateFile`, `prompt`, `retryPrompt`, `reason` | el loop autónomo (P21). Ver [`loop-autonomo.md`](loop-autonomo.md) |
 | `drift.statusDatePattern`, `statusMaxAgeDays`, `historyCommits`, `runner`, `command`, `reason` | el barrido de deriva (P20). `runner` es el pipeline que lo corre y `command` lo que ese pipeline tiene que invocar |
 | `review.command`, `dataset`, `minRecall`, `minPrecision`, `timeoutSeconds`, `requiresEnv`, `runner`, `runnerCommand`, `reason` | el revisor inferencial medido (`scripts/revision.py`): `command` es el revisor (`{prompt}` lleva el diff y la tarea), `dataset` los diffs etiquetados, los umbrales, y `requiresEnv` la variable que dice que hay un modelo (sin ella, OMITIDA) |
 | `taxonomy.stages`, `events`, `gitHooksDir`, `gitHooks`, `gateStages`, `skills`, `guides`, `pieces`, `pipelines` | el mapa guía/freno/sensor (P20): cada pieza con `direction`, `kind` (opcional) y `stage`. Una sin clasificar es rojo |
+
+## Una integración (`integrations.enabled.<id>` y el manifiesto del catálogo)
+
+| Clave | Qué declara |
+|---|---|
+| `kind`, `server`, `tools`, `command` | `mcp` (con `server`: el prefijo de sus herramientas), `hermes` (con `tools`: regex de herramientas propias de Hermes) o `cli` (con `command`: regex del comando de terminal) |
+| `toolNames[]` | lo que el servidor MCP publica, verificado con `integ_run.py --probe`; de acá sale `tools.include` |
+| `classes{deny, destructive, send, read}` | regex sobre el nombre crudo (o el comando). Lo que no casa es `write` |
+| `thirdParty` | lo que trae contenido de terceros: contamina la sesión |
+| `recipientKeys`, `urlKeys`, `fileKeys` | regex de CLAVES de los argumentos (a cualquier profundidad) con destinatarios, URLs y archivos locales. En una CLI: `recipientPattern`, `urlPattern`, `filePattern`, regex con grupos sobre el comando |
+| `policy{allowRecipients[], allowDomains[], outsideDomains, denyHosts[], schemes[]}` | a quién se manda, qué dominios se navegan (vacío = cualquiera), qué hacer fuera (`ask`/`deny`), qué hosts nunca, qué esquemas |
+| `perfil`, `actions{read, write, send, destructive}` | el perfil elegido y lo que hace con cada clase: `allow` · `ask` · `deny` · `allowlist` (manifiesto: `perfiles{}`, `perfilPorDefecto`) |
+| `budget{maxPerHour{clase: n}, maxResultChars, idleMinutes, timeoutSeconds, maxMemoryMB, nice}` | presupuesto por hora, recorte del resultado, apagado por inactividad y techo del proceso |
+| `launch{runtime, bin{kind, name}, command, args[], argsPorPerfil{}, env{}}` | cómo arranca el servidor el lanzador; `env` con `secret://…` para los secretos y `{prefix}` para el directorio de la instalación |
+| `requires[]` | `{kind: npm·pypi·browser·system, package, version (fija), bin, command, min, hint{}}` |
+| `hermes.mcpServer{}` | claves extra para `mcp_servers.<server>` |
+| `examples[]` | `{tool | command, args, perfil?, set?, contaminada?, uso?, expect: block·approve·allow, regla?, otroFreno?, why}`: la prueba de vida, por el plugin |
+| `reasons{clase}`, `verificado`, `ignoreAnnotations` + `$ignoreAnnotations` | el porqué que lee el agente, qué se verificó y cuándo, y por qué no se le cree a las anotaciones del servidor |
 
 ## Quién lee cada clave
 
@@ -75,6 +97,7 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `protectedPaths`, `protectedInnocent` | `plugin/harness/guards.py`, `scripts/githooks.py`, `scripts/loop.py` (intocables), `scripts/selftest.py` |
 | `protectedReads`, `protectedReadsInnocent` | `plugin/harness/guards.py` (`read_guard`, `terminal_guard`), `scripts/cli.py`, `scripts/selftest.py` |
 | `patterns` | `plugin/harness/guards.py`, `plugin/harness/rules.py`, `scripts/selftest.py` |
+| `integrations` | `plugin/harness/integ.py` (por `guards.evaluate`), `plugin/__init__.py` (presupuesto, alcance, recorte), `scripts/integ.py`, `scripts/integ_run.py`, `scripts/doctor.py`, `scripts/drift.py`, `scripts/panel.py`, `scripts/casos.py`, `scripts/selftest.py` |
 | `memory.*` | `plugin/harness/guards.py`, `scripts/doctor.py`, `scripts/selftest.py` |
 | `skills.*` | `plugin/harness/guards.py`, `plugin/harness/rules.py`, `scripts/doctor.py`, `scripts/selftest.py` |
 | `cron.*` | `plugin/harness/guards.py`, `scripts/selftest.py` |

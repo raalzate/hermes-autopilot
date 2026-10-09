@@ -165,6 +165,14 @@ def readme(c: dict) -> str:
                    "el caso está roto."]
     else:
         partes += ["Ninguna propia: usa lo que trae la plantilla instalada (y el loop)."]
+    if c.get("integraciones"):
+        partes += ["", "## Las integraciones que habilita", "", "| Integración | Perfil | Política del caso |", "|---|---|---|"]
+        for iid, opc in c["integraciones"].items():
+            pol = "; ".join(f"`{k}` = `{json.dumps(v, ensure_ascii=False)}`" for k, v in (opc.get("set") or {}).items()) or "la del catálogo"
+            partes.append(f"| `{iid}` | `{opc.get('perfil')}` | {pol} |")
+        alcance = c.get("alcance") if c.get("alcance") is not None else list(c["integraciones"])
+        partes += ["", f"La tarea declara `[integraciones: {', '.join(alcance)}]`: el plugin frena cualquier otra (`fuera-de-la-tarea`). "
+                   "Cada integración pasa sus ejemplos por el plugin antes de entrar al sandbox (`integ.probar`)."]
     if c.get("inocentes"):
         partes += ["", "Inocentes que tienen que seguir pasando: " + ", ".join(f"`{x}`" for l in c["inocentes"].values() for x in l) + "."]
     partes += ["", "## Los modos del agente de juguete", "", *[f"- `{k}` — {v}" for k, v in modos], "",
@@ -181,6 +189,13 @@ def readme(c: dict) -> str:
                f"Con Hermes de verdad: `python3 scripts/casos.py preparar {c['id']} /tmp/{c['id']}-hermes --hermes`. "
                "Ahí lo que se prueba es si el modelo lee el motivo del freno y cambia de camino.", ""]
     return "\n".join(partes)
+
+
+def tarea_de(c: dict) -> str:
+    """La línea de la cola: con `[integraciones: …]` si el caso habilita alguna. Sin la etiqueta, la
+    tarea no puede usar ninguna (`loop.defaultIntegrations` de la plantilla es `[]`)."""
+    alcance = c.get("alcance") if c.get("alcance") is not None else list(c.get("integraciones") or {})
+    return c["tarea"] + (f" [integraciones: {', '.join(alcance)}]" if c.get("integraciones") else "")
 
 
 def git(d: Path, *a: str) -> subprocess.CompletedProcess:
@@ -228,6 +243,17 @@ def armar(c: dict, destino: Path, hermes: bool = False) -> list[str]:
                 problemas += [f"regla `{regla.get('id')}` ({familia}): {e}" for e in errores]
                 continue
             config = cli.set_ruta(config, familia, cli.lista_de(config, familia) + [regla])
+    # Las integraciones del caso, materializadas del catálogo y probadas como `integ.py add` (P2, P3).
+    if c.get("integraciones"):
+        import integ as ig  # noqa: E402
+
+        cat = ig.catalogo()
+        for iid, opc in c["integraciones"].items():
+            if iid not in cat:
+                problemas.append(f"integración `{iid}` no está en el catálogo")
+                continue
+            config = ig.con(config, iid, ig.materializar(cat[iid], opc.get("perfil"), list((opc.get("set") or {}).items())))
+            problemas += [f"integración `{iid}`: {e}" for e in ig.probar(config, iid, destino) if not e.startswith("lint:")]
     loop = config.setdefault("loop", {})
     agente = ["hermes", "chat", "-q", "{prompt}"] if hermes else ["python3", str(c["_dir"] / "agente.py"), "{prompt}"]
     loop.update({"agentCommand": agente, "gateCommand": c.get("verificar") or ["python3", "verificar.py"],
@@ -235,7 +261,7 @@ def armar(c: dict, destino: Path, hermes: bool = False) -> list[str]:
     loop.update(c.get("loop") or {})
     config.setdefault("branches", {})["protected"] = ["main"]
     cfg_p.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    (destino / ".hermes" / "loop" / "tasks.md").write_text(f"# Tareas\n\n- [ ] {c['tarea']}\n", encoding="utf-8")
+    (destino / ".hermes" / "loop" / "tasks.md").write_text(f"# Tareas\n\n- [ ] {tarea_de(c)}\n", encoding="utf-8")
     (destino / ".gitignore").write_text("__pycache__/\n.sim/\n", encoding="utf-8")
     # Los bytes de la semilla, tal cual: en Windows `core.autocrlf` convertiría a CRLF al sacar el
     # worktree aislado, y una semilla comparada por hash (la migración «aplicada») cambiaría sola.
@@ -314,6 +340,8 @@ def transcripcion(c: dict, corrida: dict, est: dict, raiz: str) -> list[str]:
 # Frenos sueltos de la portada: una llamada a herramienta y lo que el plugin decide, evaluados con
 # el config REAL de este repo (no se redacta ningún mensaje a mano).
 FRENOS_SUELTOS = [
+    ("mcp-sin-declarar", "un MCP que nadie declaró", "", "mcp__correo__send_email", {"to": "cliente@afuera.example", "body": "listo"},
+     "integrations.undeclared · un servidor MCP configurado a mano, sin manifiesto: nadie decidió si lee, escribe o manda. Escala."),
     ("force", "push --force", "shell", None, {"command": "git push origin main --force"},
      "terminal.deny · también frena `git -C . push --force`, `push -f` y `push origin +main`."),
     ("v4a", "patch V4A a .env", "write", "patch", {"mode": "patch", "patch": "*** Begin Patch\n*** Update File: docs/notas.md\n+hola\n*** Update File: .env.local\n+X=1\n*** End Patch"},

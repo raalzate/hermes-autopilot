@@ -105,6 +105,29 @@ def mas_mordieron(evs: list[dict], n: int = 8) -> list[dict]:
     return sorted(cuenta.values(), key=lambda c: (-(c["block"] + c["ask"]), -c["last"]))[:n]
 
 
+def por_integracion(config: dict | None, evs: list[dict]) -> list[dict]:
+    """Cada integración habilitada con lo que pasó: usos con presupuesto, frenos, escaladas y
+    recortes. Una integración que sólo escala es candidata a otro perfil o a otra lista; una que
+    no se usa nunca, a deshabilitarla (menos superficie, menos tokens)."""
+    en = ((config or {}).get("integrations") or {}).get("enabled") or {}
+    out = {iid: {"id": iid, "perfil": e.get("perfil"), "kind": e.get("kind"), "uso": 0, "block": 0, "ask": 0, "recortes": 0, "last": 0}
+           for iid, e in en.items() if isinstance(e, dict)}
+    for e in evs:
+        iid = ""
+        if e.get("kind") in ("block", "ask") and str(e.get("rule", "")).startswith("integ:"):
+            iid = str(e["rule"]).split(":")[1]
+            campo = e["kind"]
+        elif e.get("kind") == "integ-uso":
+            iid, campo = str(e.get("key", "")).split(":")[0], "uso"
+        elif e.get("kind") == "integ-recorte":
+            iid = next((i for i, x in en.items() if isinstance(x, dict) and str(e.get("tool", "")).startswith(f"mcp__{x.get('server')}__")), "")
+            campo = "recortes"
+        if iid in out:
+            out[iid][campo] += 1
+            out[iid]["last"] = max(out[iid]["last"], e.get("at", 0))
+    return sorted(out.values(), key=lambda c: c["id"])
+
+
 def fuentes(config: dict | None, root: Path) -> list[Path]:
     """Lo que alimenta el panel: si cambia la fecha de alguno, hay estado nuevo que empujar."""
     config = config or {}
@@ -169,6 +192,7 @@ def estado(config: dict | None, root: Path, n_eventos: int = 60) -> dict:
                  "tasks": _tareas(config, root) if spec else None},
         "events": events.tail(config, root, n_eventos),
         "topRules": mas_mordieron(events.tail(config, root, 2000)),
+        "integrations": por_integracion(config, events.tail(config, root, 2000)),
         "eventsEnabled": bool(events.spec(config)),
     }
 
@@ -303,6 +327,7 @@ ul{list-style:none;margin:0;padding:0}li{padding:.28rem 0;border-top:1px solid v
   <section><h2>Loop autónomo</h2><div class="big" id="lphase">—</div><div id="ltask" class="mute"></div><div id="lreason"></div><ul id="attempts" style="margin-top:.6rem"></ul></section>
   <section><h2>Tareas</h2><div id="tasks"></div></section>
   <section><h2>Frenos activos</h2><div class="grid2" id="rules"></div><h2 style="margin-top:1rem">Los que más mordieron</h2><ul id="top"></ul></section>
+  <section><h2>Integraciones</h2><ul id="integ"></ul></section>
   <section><h2>Salud</h2><div class="grid2" id="health"></div></section>
   <section class="wide"><h2>Eventos en vivo</h2><ul id="ev"></ul></section>
 </main>
@@ -343,6 +368,7 @@ function render(s){
   +(tot?"":`<p class="empty">Sin tareas en <span class="k">${esc(T.file)}</span>.</p>`)}
  $("rules").innerHTML=Object.entries(s.rules||{}).map(([k,n])=>`<span class="k">${esc(k)}</span><b class="n">${n}</b>`).join("");
  $("top").innerHTML=(s.topRules||[]).length?s.topRules.map(r=>`<li><span class="k">${esc(r.rule)}</span><span class="mute" style="margin-left:auto">${hace(r.last)}</span><b class="n bad">${r.block}</b>${r.ask?`<b class="n warn">+${r.ask}</b>`:""}</li>`).join(""):'<li class="empty">Ninguna todavía.</li>';
+ $("integ").innerHTML=(s.integrations||[]).length?s.integrations.map(i=>`<li><span class="k">${esc(i.id)}</span><span class="mute">${esc(i.perfil)}</span><span class="mute" style="margin-left:auto">${i.last?hace(i.last):""}</span><b class="n">${i.uso}</b>${i.block?`<b class="n bad">${i.block}</b>`:""}${i.ask?`<b class="n warn">+${i.ask}</b>`:""}</li>`).join(""):'<li class="empty">Ninguna habilitada (<span class="k">cli.py integ list</span>).</li>';
  const S=s.status||{}, M=s.map;
  const age=S.ageDays==null?['<span class="bad">sin fecha</span>']:[`<span class="${S.maxAgeDays&&S.ageDays>S.maxAgeDays?"bad":"ok"}">${S.ageDays} día(s)</span>`];
  $("health").innerHTML=`<span>${esc(S.file)}: veredicto</span><b class="n">${age[0]}</b>`

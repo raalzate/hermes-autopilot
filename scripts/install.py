@@ -28,7 +28,7 @@ from pathlib import Path
 HOME = Path(__file__).resolve().parent.parent  # el repo del arnés (o una copia instalada)
 PLANT = HOME / "plantillas"
 CODE_FILES = ["gate.py", "lint.py", "linkcheck.py", "selftest.py", "hook.py", "githooks.py", "install.py", "doctor.py",
-              "drift.py", "map.py", "timing.py", "cli.py", "loop.py", "panel.py"]
+              "drift.py", "map.py", "timing.py", "cli.py", "loop.py", "panel.py", "integ.py", "integ_run.py"]
 DEST_CODE = Path(".hermes") / "harness"
 
 

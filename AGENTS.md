@@ -21,7 +21,7 @@ Este repo se audita a sí mismo: si algo acá no cumple lo que el arnés predica
 ```
 .hermes/harness.config.json  la única fuente de especificidad (reglas, rutas, nombres de herramientas)
 plugin/                      el plugin `repo-harness`: pre_tool_call · transform_tool_result · pre_verify · pre_llm_call
-plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (frenos) · rules (lint) · turn (turno) · events (registro)
+plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (frenos) · integ (integraciones) · rules (lint) · turn (turno) · events (registro)
 plugin/guardia/              la guardia de Python (audit hook PEP 578) que el loop carga en cada proceso Python del agente
 scripts/hook.py              el mismo núcleo como shell hook de Hermes (para quien no habilita plugins)
 scripts/gate.py              ejecuta gate.signals; no sabe de stacks
@@ -37,12 +37,14 @@ scripts/doctor.py            lo que el gate no ve: el Hermes de esta máquina
 scripts/loop.py              el lazo de la tarea: tarea → agente → gate; el mismo rojo escala (P21)
 scripts/cli.py               parametrizar sin editar JSON: `rule add` prueba la regla ANTES de escribirla
 scripts/panel.py             el panel en vivo (SSE, 127.0.0.1) sobre el registro de eventos (P22)
-scripts/casos.py             17 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
+scripts/integ.py             las integraciones: catálogo, `add` prueba ANTES de escribir, dependencias aisladas con lock, `check` en el gate
+scripts/integ_run.py         el lanzador de un servidor MCP: secretos `secret://` sólo en su entorno, límites, `--probe` contra el servidor real
+scripts/casos.py             22 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
 scripts/revision.py          el revisor inferencial medido: recall y precisión contra evals/revision.json (P25)
 scripts/hermes_fuente.py     Hermes desde su código fuente, en el commit verificado (CI: job hermes-real)
 .hermes/loop/tasks.md        la cola del loop autónomo
 .hermes/skills/              gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
-plantillas/                  lo que se copia al repo destino, y los perfiles de stack
+plantillas/                  lo que se copia al repo destino, los perfiles de stack y el catálogo de integraciones
 docs/                        lo que se lee
 ```
 
@@ -82,6 +84,7 @@ python3 scripts/timing.py        # ¿cuánto cuesta el arnés en cada tool call?
 python3 scripts/drift.py         # ¿algo se degradó sin que nadie lo tocara? (lo corre drift.yml)
 python3 scripts/cli.py status    # todo lo anterior en una pantalla; `cli.py panel` lo muestra en vivo
 python3 scripts/casos.py         # los casos replicables (también en el gate)
+python3 scripts/integ.py check   # las integraciones: cada manifiesto con cada perfil, por el plugin (también en el gate)
 ```
 
 - CI (`.github/workflows/ci.yml`) corre el mismo gate en Linux, macOS y Windows.
@@ -106,6 +109,7 @@ python3 scripts/casos.py         # los casos replicables (también en el gate)
 | los lazos de control del agente autónomo | `docs/ingenieria-de-loops.md` |
 | operar el loop autónomo | `docs/loop-autonomo.md` |
 | la CLI y el panel | `docs/cli-y-panel.md` |
+| integraciones: catálogo, perfiles, secretos, recursos, dependencias | `docs/integraciones.md` |
 | el workshop de agentes autónomos | `docs/workshop/README.md` |
 | casos reales replicables (programación, infra, oficina…) | `casos/README.md` |
 | huecos: los cerrados y los abiertos | `docs/huecos.md` |
