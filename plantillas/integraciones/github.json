@@ -1,0 +1,111 @@
+{
+  "id": "github",
+  "titulo": "GitHub por CLI (`gh`)",
+  "descripcion": "`gh` ya trae su autenticación (el llavero del sistema): sin servidor que mantener vivo, sin esquemas extra en el prompt. Se clasifica cada comando: leer issues y PRs, comentar, mergear, borrar.",
+  "verificado": "2026-10-09 · gh 2.x: subcomandos `pr|issue|release|repo|run|api|gist|secret` y banderas `--body-file`, `-F`, `--input`, `-X`",
+  "kind": "cli",
+  "command": "(^|[;&|]\\s*)gh\\s",
+  "classes": {
+    "deny": "\\bgh\\s+(repo\\s+delete|secret\\s+(set|delete)|auth\\s+token|ssh-key\\s+add|gpg-key\\s+add)|\\bgh\\s+api\\b.*\\s(-X|--method)\\s*DELETE",
+    "destructive": "\\bgh\\s+(pr\\s+close|issue\\s+(close|delete|transfer)|release\\s+delete|repo\\s+(archive|rename)|run\\s+cancel|cache\\s+delete|label\\s+delete)\\b|\\bgh\\s+repo\\s+edit\\b.*--visibility",
+    "send": "\\bgh\\s+((pr|issue)\\s+(comment|create|review)|release\\s+create|gist\\s+create)\\b",
+    "read": "\\bgh\\s+((pr|issue|run|release|repo|workflow)\\s+(view|list|status|diff|checks)|search|status|auth\\s+status)\\b|\\bgh\\s+api\\b(?!.*\\s(-X|--method)\\s*(POST|PUT|PATCH|DELETE))(?!.*\\s(-f|-F|--field|--raw-field|--input)\\s)"
+  },
+  "thirdParty": "\\bgh\\s+((pr|issue)\\s+view|api\\s+\\S*(issues|pulls|comments))",
+  "filePattern": "(?:--body-file|-F|--input)[=\\s]+(\\S+)",
+  "policy": {},
+  "budget": {
+    "maxPerHour": {
+      "send": 15
+    }
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "send": "ask",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "send": "allow",
+      "destructive": "ask"
+    }
+  },
+  "perfilPorDefecto": "asistente",
+  "reasons": {
+    "deny": "borrar un repo, tocar secretos o sacar el token de la sesión no lo hace el agente.",
+    "destructive": "cerrar, borrar o archivar en GitHub lo decide un humano."
+  },
+  "setup": [
+    "gh auth login   # una vez, fuera del agente"
+  ],
+  "requires": [
+    {
+      "kind": "system",
+      "command": "gh",
+      "min": "2.40",
+      "hint": {
+        "darwin": "brew install gh",
+        "win32": "winget install GitHub.cli",
+        "default": "https://cli.github.com"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "command": "gh pr list --state open",
+      "expect": "allow",
+      "why": "listar PRs es lectura"
+    },
+    {
+      "command": "gh repo delete org/repo --yes",
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "borrar un repo no es del agente"
+    },
+    {
+      "command": "gh pr merge 12 --squash",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "lectura no mergea"
+    },
+    {
+      "command": "gh pr merge 12 --squash",
+      "perfil": "asistente",
+      "expect": "approve",
+      "regla": "pide-write",
+      "why": "en asistente, mergear lo aprueba un humano"
+    },
+    {
+      "command": "gh issue create --title x --body-file .env",
+      "perfil": "autonomo",
+      "expect": "block",
+      "otroFreno": true,
+      "why": "un issue con el .env de cuerpo es publicarlo"
+    },
+    {
+      "command": "gh issue close 7",
+      "perfil": "autonomo",
+      "expect": "approve",
+      "regla": "pide-destructive",
+      "why": "cerrar lo aprueba un humano"
+    },
+    {
+      "command": "gh api repos/o/r/issues -X POST -f title=x",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "un POST por `gh api` no es lectura"
+    }
+  ]
+}

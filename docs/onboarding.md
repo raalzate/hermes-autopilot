@@ -136,6 +136,21 @@ python3 .hermes/harness/scripts/cli.py rule add terminal.deny … --apply
 Si lo editás a mano, que sea con el editor y no con un heredoc en la terminal: contiene los
 patrones que prohíbe y el freno de terminal los ve.
 
+## Paso 7b — Conectarle integraciones (opcional)
+
+```bash
+python3 .hermes/harness/scripts/integ.py list
+python3 .hermes/harness/scripts/integ.py add navegador                 # DRY-RUN: prueba los ejemplos por el plugin
+python3 .hermes/harness/scripts/integ.py add navegador --apply
+python3 .hermes/harness/scripts/integ.py deps navegador --apply        # npm + Chromium headless, aislados; escribe el lock
+python3 .hermes/harness/scripts/integ.py hermes navegador              # pegá el bloque en ~/.hermes/config.yaml
+python3 .hermes/harness/scripts/integ_run.py --probe navegador         # tiene que salir sin ✗
+python3 .hermes/harness/scripts/doctor.py                              # «integración `navegador` instalada», sin rojos
+```
+
+Lo hacés vos, no el agente: `integ … --apply` escala a un humano. Guía completa:
+[`integraciones.md`](integraciones.md).
+
 ## Paso 8 — Autonomía: la cola, el loop y el panel
 
 ```bash
@@ -199,6 +214,10 @@ Cada fila salió de un tropiezo real (los detalles, en `docs/gotchas.md`).
 | `hermes plugins doctor` no existe / falta la sección de estado al abrir la sesión | Hermes de PyPI (0.19.0) va meses atrás del que verifica el arnés | `python3 scripts/hermes_fuente.py <dir>`: Hermes desde su código fuente, en el commit verificado (ver `docs/hermes.md`) |
 | el gate dice «revisor inferencial: OMITIDA» | no hay un modelo configurado (`HARNESS_REVIEW`) | es lo esperado en local y en CI; lo mide `hermes-nocturno.yml` con el secreto `HERMES_ENV` |
 | el loop escala enseguida con el mismo rojo | el agente repite el error: es lo que tiene que pasar (P16) | leé el motivo en el panel; achicá o aclará la tarea |
+| un `mcp__…` escala cada vez («HERRAMIENTA SIN DECLARAR») | ese servidor MCP no es de ninguna integración del repo | `integ.py add <id>` si está en el catálogo; si no, escribile un manifiesto (`docs/integraciones.md`) |
+| `integ_run`: «el secreto `X` no se resolvió» | la referencia `secret://…` no está en el llavero o el archivo no existe | `integ.py show <id>` dice cómo guardarlo; `integ_run.py --secretos <id>` lo verifica sin mostrarlo |
+| el gate: `integraciones (catálogo y lock)` rojo con «no está en .hermes/integraciones.lock» | se habilitó una integración y no se instaló | `integ.py deps <id> --apply` y commiteá el lock |
+| una tarea del loop no puede usar Gmail (`fuera-de-la-tarea`) | la tarea no lo declara y `loop.defaultIntegrations` es `[]` | agregá `[integraciones: google-workspace]` a la línea de la tarea |
 | `cli.py rule add` dice «muerde de más» | la regla frena un inocente o el gate | hacé el patrón más preciso; si el inocente está mal, sacalo a conciencia |
 
 ## Qué leer después

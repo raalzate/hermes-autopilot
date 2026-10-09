@@ -20,6 +20,7 @@ Sin esa bandera, la CLI muestra qué cambiaría y no toca nada (P9).
 | `config get [ruta]` · `config set <ruta> <valor> [--apply]` | cualquier clave escalar u objeto; el valor se lee como JSON si se puede. Las listas de reglas no: van por `rule` |
 | `task add "texto"` · `task list` | la cola del loop autónomo |
 | `profile list` | los perfiles de stack del instalador |
+| `integ list` · `show` · `add <id> [--perfil p] [--set ruta=valor] [--apply]` · `set` · `rm` · `test` · `deps <id> [--apply]` · `hermes <id>` · `check` | las integraciones (`scripts/integ.py`): `add` y `set` prueban los ejemplos del manifiesto por el plugin antes de escribir. Ver [`integraciones.md`](integraciones.md) |
 | `gate` · `selftest` · `lint` · `map` · `timing` · `doctor` · `drift` · `install` · `loop` · `panel` · `mutations` · `linkcheck` · `casos` | pasamanos al script del mismo nombre, con sus argumentos |
 
 Familias de reglas: `terminal.deny`, `terminal.ask`, `protectedPaths`, `protectedReads`,

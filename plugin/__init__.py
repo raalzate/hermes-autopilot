@@ -24,7 +24,7 @@ import os
 # (`hermes_plugins.<slug>`, con `__path__` en su directorio) y lo COPIA para validarlo e
 # instalarlo: un núcleo afuera del directorio, o un `sys.path` apuntando al repo del arnés, se
 # rompe exactamente ahí (docs/gotchas.md).
-from .harness import core, events, guards, turn
+from .harness import core, events, guards, integ, turn
 
 logger = logging.getLogger("repo-harness")
 
@@ -76,6 +76,37 @@ def _cwd_de(args, task_id: str = "") -> str:
 # Sesiones que ya leyeron contenido de terceros: {sesión: de dónde}. Vive en el proceso de Hermes
 # (el plugin se carga una vez); los frenos siguen siendo funciones puras: reciben el dato en el Event.
 _CONTAMINADAS: dict[str, str] = {}
+# Usos de una clase con presupuesto ({"<integración>:<clase>": [instantes]}) cuando no hay registro
+# de eventos. Con registro se cuenta de ahí: vale entre procesos (el loop, cron y el gateway).
+_USOS: dict[str, list[float]] = {}
+_HORA = 3600.0
+
+
+def _integraciones_de_la_tarea():
+    """`HARNESS_INTEGRACIONES` (la pone el loop desde la cola): las integraciones que la tarea
+    permite. Ausente = todas las habilitadas; vacía = ninguna."""
+    v = os.environ.get("HARNESS_INTEGRACIONES")
+    if v is None:
+        return None
+    return tuple(x.strip() for x in v.split(",") if x.strip())
+
+
+def _uso(config, root, clave: str) -> int:
+    import time
+    desde = time.time() - _HORA
+    if events.spec(config) and not os.environ.get("HARNESS_NO_EVENTS"):
+        return sum(1 for e in events.tail(config, root, 2000)
+                   if e.get("kind") == "integ-uso" and e.get("key") == clave and (e.get("at") or 0) >= desde)
+    return sum(1 for t in _USOS.get(clave, []) if t >= desde)
+
+
+def _registrar_uso(config, root, clave: str, tool: str) -> None:
+    import time
+    if events.spec(config) and not os.environ.get("HARNESS_NO_EVENTS"):
+        events.record(config, root, "integ-uso", key=clave, tool=tool)
+    else:
+        ahora = time.time()
+        _USOS[clave] = [t for t in _USOS.get(clave, []) if t >= ahora - _HORA] + [ahora]
 
 
 @_seguro
@@ -86,9 +117,15 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
     if not config:
         return None
     sesion = session_id or task_id or "default"
+    # Sólo las llamadas con presupuesto leen el registro: el resto no paga I/O (timing.py lo mide).
+    cuenta = integ.contable(config, tool_name, args)
+    clave = f"{cuenta[0]}:{cuenta[1]}" if cuenta else ""
     ev = core.Event(tool=tool_name, args=args, cwd=cwd, session_id=session_id,
-                    contaminada=_CONTAMINADAS.get(sesion, ""))
+                    contaminada=_CONTAMINADAS.get(sesion, ""), integraciones=_integraciones_de_la_tarea(),
+                    uso={clave: _uso(config, root, clave)} if clave else {})
     d = guards.evaluate(ev, config, root)
+    if clave and not (d.block or d.approve):
+        _registrar_uso(config, root, clave, tool_name)
     if not (d.block or d.approve):
         fuente = guards.fuente_externa(ev, config, root)
         if fuente and sesion not in _CONTAMINADAS:
@@ -110,6 +147,10 @@ def on_transform_tool_result(tool_name: str = "", args=None, result=None, status
     root, config = _contexto(cwd or None)
     if not config:
         return None
+    recortado = integ.recortar(config, tool_name, result)
+    if recortado is not None:
+        events.record(config, root, "integ-recorte", tool=tool_name, chars=len(result))
+        return recortado
     hallazgos = turn.after_write(core.Event(tool=tool_name, args=args, cwd=cwd), config, root)
     if not hallazgos:
         return None

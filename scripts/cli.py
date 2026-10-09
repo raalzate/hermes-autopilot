@@ -12,6 +12,7 @@
     python3 scripts/cli.py signal list | signal add "nombre" --why "…" [--apply] -- cmd args… | signal rm "nombre" [--apply]
     python3 scripts/cli.py profile list
     python3 scripts/cli.py task add "texto" | task list           la cola del loop autónomo
+    python3 scripts/cli.py integ list|show|add|set|rm|test|deps|hermes|check   las integraciones (scripts/integ.py)
     python3 scripts/cli.py gate|selftest|lint|map|timing|doctor|drift|install|loop|panel|casos [args…]
 
 Familias: terminal.deny · terminal.ask · protectedPaths · protectedReads · patterns · memory.deny ·
@@ -53,7 +54,7 @@ FAMILIAS: dict[str, tuple[str | None, str, str | None]] = {
     "routes": (None, "hint", None),
 }
 PASAMANOS = ("gate", "selftest", "lint", "map", "timing", "doctor", "drift", "install", "loop", "panel", "mutations", "linkcheck",
-             "casos")
+             "casos", "integ")
 
 
 # ── rutas con puntos sobre el config ─────────────────────────────────────────
@@ -246,6 +247,8 @@ def cmd_status(args: list[str]) -> int:
     st = s["status"]
     print(f"  {st['file']:<9} veredicto de hace {st['ageDays']} día(s)" if st.get("ageDays") is not None else f"  {st['file']}: sin fecha")
     print("  frenos    " + " · ".join(f"{k} {v}" for k, v in s["rules"].items() if v))
+    integ = s.get("integrations") or []
+    print("  integ.    " + (" · ".join(f"{i['id']} ({i['perfil']})" for i in integ) if integ else "ninguna habilitada (`cli.py integ list`)"))
     lp = s["loop"]
     if lp["configured"]:
         e = lp["state"] or {}

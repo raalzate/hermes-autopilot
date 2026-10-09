@@ -1,0 +1,393 @@
+{
+  "id": "google-workspace",
+  "titulo": "Google Workspace (Gmail, Drive, Calendar, Docs, Sheets)",
+  "descripcion": "Servidor MCP `workspace-mcp`: Gmail, Drive, Calendar, Docs, Sheets, Chat, Forms, Tasks y Contacts con OAuth propio. En el perfil `lectura` arranca con `--read-only`: pide a Google SÓLO scopes de lectura, así ni un freno roto manda un correo.",
+  "verificado": "2026-10-09 · workspace-mcp 2.0.1 (PyPI): `tools/list` real (120 herramientas, con anotaciones), `--help` y las variables que lee",
+  "version": "2.0.1",
+  "kind": "mcp",
+  "server": "google",
+  "toolNames": [
+    "start_google_auth",
+    "search_gmail_messages",
+    "get_gmail_message_content",
+    "get_gmail_messages_content_batch",
+    "get_gmail_attachment_content",
+    "send_gmail_message",
+    "draft_gmail_message",
+    "get_gmail_thread_content",
+    "get_gmail_threads_content_batch",
+    "list_gmail_labels",
+    "manage_gmail_label",
+    "list_gmail_filters",
+    "manage_gmail_filter",
+    "modify_gmail_message_labels",
+    "batch_modify_gmail_message_labels",
+    "search_drive_files",
+    "get_drive_file_content",
+    "get_drive_file_download_url",
+    "list_drive_items",
+    "create_drive_folder",
+    "create_drive_file",
+    "import_to_google_doc",
+    "import_to_google_slides",
+    "import_to_google_sheets",
+    "get_drive_file_permissions",
+    "check_drive_file_public_access",
+    "update_drive_file",
+    "get_drive_shareable_link",
+    "manage_drive_access",
+    "copy_drive_file",
+    "set_drive_file_permissions",
+    "list_calendars",
+    "get_events",
+    "manage_event",
+    "manage_out_of_office",
+    "manage_focus_time",
+    "query_freebusy",
+    "create_calendar",
+    "search_docs",
+    "get_doc_content",
+    "list_docs_in_folder",
+    "create_doc",
+    "modify_doc_text",
+    "find_and_replace_doc",
+    "insert_doc_elements",
+    "insert_doc_image",
+    "update_doc_headers_footers",
+    "batch_update_doc",
+    "inspect_doc_structure",
+    "debug_docs_runtime_info",
+    "create_table_with_data",
+    "debug_table_structure",
+    "export_doc_to_pdf",
+    "update_paragraph_style",
+    "get_doc_as_markdown",
+    "manage_doc_tab",
+    "list_document_comments",
+    "manage_document_comment",
+    "list_spreadsheets",
+    "get_spreadsheet_info",
+    "read_sheet_values",
+    "modify_sheet_values",
+    "format_sheet_range",
+    "manage_conditional_formatting",
+    "create_spreadsheet",
+    "create_sheet",
+    "list_sheet_tables",
+    "append_table_rows",
+    "manage_sheet_tab",
+    "resize_sheet_dimensions",
+    "move_sheet_rows",
+    "manage_named_range",
+    "list_spreadsheet_comments",
+    "manage_spreadsheet_comment",
+    "list_spaces",
+    "get_messages",
+    "send_message",
+    "search_messages",
+    "create_reaction",
+    "download_chat_attachment",
+    "create_form",
+    "get_form",
+    "set_publish_settings",
+    "get_form_response",
+    "list_form_responses",
+    "batch_update_form",
+    "create_presentation",
+    "get_presentation",
+    "batch_update_presentation",
+    "get_page",
+    "get_page_thumbnail",
+    "list_presentation_comments",
+    "manage_presentation_comment",
+    "list_task_lists",
+    "get_task_list",
+    "manage_task_list",
+    "list_tasks",
+    "get_task",
+    "manage_task",
+    "list_contacts",
+    "get_contact",
+    "search_contacts",
+    "manage_contact",
+    "list_contact_groups",
+    "get_contact_group",
+    "manage_contacts_batch",
+    "manage_contact_group",
+    "search_custom",
+    "get_search_engine_info",
+    "get_script_project",
+    "manage_script_content",
+    "run_script_function",
+    "manage_deployment",
+    "list_script_deployments",
+    "manage_script_project",
+    "manage_script_version",
+    "get_script_version",
+    "get_script_activity",
+    "generate_trigger_code",
+    "manage_script_trigger"
+  ],
+  "classes": {
+    "deny": "^(run_script_function|manage_script_content|manage_script_project|manage_deployment|manage_script_version|set_publish_settings)$",
+    "destructive": "^(set_drive_file_permissions|manage_gmail_filter|manage_out_of_office|batch_modify_gmail_message_labels|manage_contacts_batch|manage_gmail_label)$",
+    "send": "^(send_gmail_message|send_message|manage_drive_access|create_reaction)$",
+    "read": "^(search|get|list|read|query|check|inspect|debug)_|^generate_trigger_code$"
+  },
+  "thirdParty": "^(search_gmail_messages|get_gmail_|get_messages|search_messages|get_doc_content|get_doc_as_markdown|list_document_comments|get_drive_file_content|read_sheet_values|list_form_responses|get_form_response|list_spreadsheet_comments|list_presentation_comments)",
+  "recipientKeys": "^(to|cc|bcc|share_with|recipients|attendees|new_owner_email)$",
+  "fileKeys": "^(file_path|path)$",
+  "urlKeys": "^(fileUrl|file_url)$",
+  "policy": {
+    "allowRecipients": [],
+    "denyHosts": [
+      "^(localhost|::1|0\\.0\\.0\\.0|metadata\\.google\\.internal)$",
+      "^(127|10)\\.",
+      "^192\\.168\\.",
+      "^172\\.(1[6-9]|2\\d|3[01])\\.",
+      "^169\\.254\\."
+    ],
+    "schemes": [
+      "https"
+    ]
+  },
+  "budget": {
+    "maxPerHour": {
+      "send": 20,
+      "destructive": 5
+    },
+    "maxResultChars": 40000,
+    "idleMinutes": 10,
+    "timeoutSeconds": 120,
+    "maxMemoryMB": 768,
+    "nice": 5
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "send": "allowlist",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "send": "allowlist",
+      "destructive": "ask"
+    }
+  },
+  "perfilPorDefecto": "lectura",
+  "reasons": {
+    "deny": "Apps Script ejecuta código con los permisos de la cuenta, y publicar un formulario lo abre a cualquiera.",
+    "destructive": "un filtro de Gmail puede reenviar todo el correo afuera para siempre; un permiso de Drive abre un archivo a cualquiera."
+  },
+  "requires": [
+    {
+      "kind": "system",
+      "command": "python3",
+      "min": "3.10",
+      "hint": {
+        "darwin": "brew install python@3.12",
+        "default": "instalá Python 3.10+"
+      }
+    },
+    {
+      "kind": "pypi",
+      "package": "workspace-mcp",
+      "version": "2.0.1",
+      "bin": "workspace-mcp"
+    }
+  ],
+  "launch": {
+    "runtime": "python",
+    "bin": {
+      "kind": "pypi",
+      "name": "workspace-mcp"
+    },
+    "args": [
+      "--transport",
+      "stdio",
+      "--single-user",
+      "--tools",
+      "gmail",
+      "drive",
+      "calendar",
+      "docs",
+      "sheets"
+    ],
+    "argsPorPerfil": {
+      "lectura": [
+        "--read-only"
+      ]
+    },
+    "env": {
+      "GOOGLE_OAUTH_CLIENT_ID": "secret://keyring/hermes-google/client-id",
+      "GOOGLE_OAUTH_CLIENT_SECRET": "secret://keyring/hermes-google/client-secret",
+      "GOOGLE_MCP_CREDENTIALS_DIR": "{prefix}/credenciales"
+    }
+  },
+  "setup": [
+    "Creá un cliente OAuth «Desktop app» en Google Cloud Console y guardalo en el llavero:",
+    "  macOS: security add-generic-password -s hermes-google -a client-id -w   (y -a client-secret)",
+    "  Linux: secret-tool store --label hermes-google service hermes-google account client-id",
+    "La primera llamada abre el navegador para autorizar; el token queda en {prefix}/credenciales, fuera del repo."
+  ],
+  "examples": [
+    {
+      "tool": "search_gmail_messages",
+      "args": {
+        "query": "factura septiembre"
+      },
+      "expect": "allow",
+      "why": "buscar correo es lectura"
+    },
+    {
+      "tool": "send_gmail_message",
+      "args": {
+        "to": "cliente@externo.test",
+        "subject": "x",
+        "body": "y"
+      },
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-send",
+      "why": "lectura no manda correo"
+    },
+    {
+      "tool": "send_gmail_message",
+      "args": {
+        "to": "cliente@externo.test",
+        "subject": "x",
+        "body": "y"
+      },
+      "perfil": "asistente",
+      "set": {
+        "policy.allowRecipients": [
+          "@miempresa\\.test$"
+        ]
+      },
+      "expect": "approve",
+      "regla": "destinatario",
+      "why": "fuera de la lista de destinatarios, decide un humano"
+    },
+    {
+      "tool": "send_gmail_message",
+      "args": {
+        "to": "ana@miempresa.test",
+        "subject": "x",
+        "body": "y"
+      },
+      "perfil": "asistente",
+      "set": {
+        "policy.allowRecipients": [
+          "@miempresa\\.test$"
+        ]
+      },
+      "expect": "allow",
+      "why": "un destinatario de la lista pasa"
+    },
+    {
+      "tool": "send_gmail_message",
+      "args": {
+        "to": "ana@miempresa.test",
+        "cc": "fuga@externo.test",
+        "body": "y"
+      },
+      "perfil": "autonomo",
+      "set": {
+        "policy.allowRecipients": [
+          "@miempresa\\.test$"
+        ]
+      },
+      "expect": "approve",
+      "regla": "destinatario",
+      "why": "una copia afuera es un destinatario más"
+    },
+    {
+      "tool": "send_gmail_message",
+      "args": {
+        "to": "ana@miempresa.test",
+        "body": "y"
+      },
+      "perfil": "autonomo",
+      "set": {
+        "policy.allowRecipients": [
+          "@miempresa\\.test$"
+        ]
+      },
+      "contaminada": true,
+      "expect": "approve",
+      "regla": "contaminada",
+      "why": "después de leer un correo de afuera, mandar escala aunque el destinatario esté en la lista"
+    },
+    {
+      "tool": "send_gmail_message",
+      "args": {
+        "to": "ana@miempresa.test",
+        "body": "y"
+      },
+      "perfil": "autonomo",
+      "set": {
+        "policy.allowRecipients": [
+          "@miempresa\\.test$"
+        ]
+      },
+      "uso": {
+        "send": 20
+      },
+      "expect": "block",
+      "regla": "presupuesto-send",
+      "why": "el tope por hora corta un error repetido"
+    },
+    {
+      "tool": "manage_gmail_filter",
+      "args": {
+        "action": "create",
+        "forward": "x@externo.test"
+      },
+      "perfil": "autonomo",
+      "expect": "approve",
+      "regla": "pide-destructive",
+      "why": "un filtro reenvía correo para siempre"
+    },
+    {
+      "tool": "run_script_function",
+      "args": {
+        "script_id": "x",
+        "function_name": "main"
+      },
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "Apps Script es código con los permisos de la cuenta"
+    },
+    {
+      "tool": "create_drive_file",
+      "args": {
+        "file_name": "x",
+        "fileUrl": "http://169.254.169.254/latest/meta-data/"
+      },
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "esquema",
+      "why": "crear un archivo desde una URL interna es un SSRF"
+    },
+    {
+      "tool": "update_drive_file",
+      "args": {
+        "file_id": "x",
+        "file_path": ".env"
+      },
+      "perfil": "autonomo",
+      "expect": "block",
+      "otroFreno": true,
+      "why": "subir el .env a Drive es leerlo"
+    }
+  ]
+}

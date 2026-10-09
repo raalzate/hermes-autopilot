@@ -55,6 +55,62 @@ def yaml_int(texto: str, clave: str, defecto: int) -> int:
     return int(m.group(1)) if m else defecto
 
 
+def mcp_servidores(texto: str) -> dict[str, str]:
+    """{servidor: su bloque} de `mcp_servers:` en el config de Hermes (las claves a dos espacios)."""
+    m = re.search(r"^mcp_servers:\s*\n((?:[ \t]+.*\n?|\s*\n)*)", texto, re.M)
+    if not m:
+        return {}
+    out, actual = {}, None
+    for linea in m.group(1).splitlines():
+        k = re.match(r"^ {2}([A-Za-z0-9_.-]+):", linea)
+        if k:
+            actual = k.group(1)
+            out[actual] = ""
+        elif actual:
+            out[actual] += linea + "\n"
+    return out
+
+
+def integraciones(config: dict | None, texto: str) -> None:
+    """Las integraciones habilitadas, en ESTA máquina: instaladas, enganchadas a Hermes por el
+    lanzador, y quién le puede hablar al agente por el gateway. Nunca resuelve un secreto: eso
+    puede abrir el llavero (`integ_run.py --secretos <id>` lo hace a pedido)."""
+    sys.path.append(str(Path(__file__).resolve().parent))
+    import integ as ig  # noqa: E402
+    from harness import integ as nucleo  # noqa: E402
+
+    en = nucleo.habilitadas(config)
+    servidores = mcp_servidores(texto)
+    propios = set()
+    for iid, entry in en.items():
+        faltan = [p["que"] for p in ig.pasos(iid, entry) if not p["listo"]]
+        if faltan:
+            nota(ROJO, f"integración `{iid}`: falta instalar {', '.join(faltan)} → `python3 scripts/integ.py deps {iid} --apply`")
+        else:
+            nota(VERDE, f"integración `{iid}` ({entry.get('perfil')}) instalada")
+        if entry.get("kind") == "mcp":
+            srv = str(entry.get("server"))
+            propios.add(srv)
+            bloque = servidores.get(srv)
+            if bloque is None:
+                nota(ROJO, f"integración `{iid}`: Hermes no tiene `mcp_servers.{srv}` → `python3 scripts/integ.py hermes {iid}`")
+            elif "integ_run.py" not in bloque:
+                nota(ROJO, f"`mcp_servers.{srv}` arranca el servidor directo, sin el lanzador: los secretos y los límites "
+                           f"del arnés no aplican → `python3 scripts/integ.py hermes {iid}`")
+            elif "include" not in bloque:
+                nota(AMARILLO, f"`mcp_servers.{srv}` sin `tools.include`: Hermes registra también lo que el perfil veda (más tokens por turno)")
+    for srv in sorted(set(servidores) - propios):
+        nota(AMARILLO, f"`mcp_servers.{srv}` no es de ninguna integración del repo: cada herramienta suya escala (`integrations.undeclared`)")
+    # Quién le habla al agente por el gateway (gateway/authz_mixin.py): «todos» es cualquiera con el número.
+    if re.search(r"^\s*allow_all_users:\s*true\b", texto, re.M):
+        nota(ROJO, "gateway con `allow_all_users: true`: cualquiera que escriba al bot le da órdenes al agente. "
+                   "Usá <PLATAFORMA>_ALLOWED_USERS o el emparejamiento (`hermes pairing`)")
+    abiertos = sorted(k for k in os.environ if re.fullmatch(r"[A-Z_]+_ALLOW_ALL_USERS", k)
+                      and os.environ[k].strip().lower() in ("1", "true", "yes"))
+    for k in abiertos:
+        nota(ROJO, f"`{k}` encendida en el entorno: esa plataforma acepta órdenes de cualquiera")
+
+
 SECRETO_EN_NOMBRE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE)", re.I)
 
 
@@ -147,6 +203,12 @@ def main() -> int:
     if "scripts/hook.py" in texto and not allow.is_file():
         nota(AMARILLO, "hay shell hooks del arnés en config.yaml y ningún consentimiento guardado: "
                        "en gateway/cron se saltean sin `hooks_auto_accept` o HERMES_ACCEPT_HOOKS=1")
+
+    # 7. Integraciones: instaladas, enganchadas por el lanzador, y quién le habla al agente
+    try:
+        integraciones(config, texto)
+    except (OSError, ValueError, ImportError) as e:
+        nota(AMARILLO, f"no pude revisar las integraciones: {e}")
 
     for nivel, msg in hallazgos:
         print(f"  {nivel} {msg}")

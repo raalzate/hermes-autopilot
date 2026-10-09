@@ -71,8 +71,23 @@ y Desktop arrancan el proceso en otro lado. El plugin le pide ese cwd a Hermes
 busca el config del repo desde ahí. El shell hook, que corre en otro proceso, sólo tiene
 `workdir`, `TERMINAL_CWD` y el cwd del proceso: por eso el plugin es el camino recomendado.
 
-Las herramientas de un MCP llegan como `mcp_<servidor>_<herramienta>`: si una escribe archivos,
-se suma a `tools.write` y los frenos de rutas la ven sin tocar código.
+Las herramientas de un MCP llegan como `mcp__<servidor>__<herramienta>`: doble guion bajo, y lo que
+no es `[A-Za-z0-9_]` cambiado por `_` (`tools/mcp_tool_schema.py::mcp_prefixed_tool_name`; la
+documentación de Hermes dice `mcp_<server>_<tool>` y se equivoca). Las gobierna `integrations` (ver
+abajo); una que ninguna integración declara escala (`integrations.undeclared`).
+
+## Integraciones: lo que Hermes trae y lo que suma el arnés
+
+Verificado en hermes-agent `aa74e184`. Detalle en [`integraciones.md`](integraciones.md).
+
+| Hermes trae | El arnés suma |
+|---|---|
+| cliente MCP con `lazy`, `idle_timeout_seconds`, `timeout` y `tools.include` en `mcp_servers.<server>` | `integ.py hermes <id>` los llena desde el manifiesto: arranca al primer uso, se apaga solo y registra sólo lo que el perfil permite |
+| entorno filtrado para cada servidor MCP (`_build_safe_env`: `PATH`, `HOME`… y su `env`) | el lanzador (`integ_run.py`) resuelve `secret://…` y lo pone sólo en el entorno del servidor |
+| gateway: WhatsApp (bridge o Cloud API), Telegram, Slack, Teams, correo…; `<PLATAFORMA>_ALLOWED_USERS` decide quién le habla al agente | `doctor.py` marca rojo un gateway abierto a todos |
+| `hermes send --to plataforma:destino` (el modelo NO tiene `send_message`: `tools/send_message_tool.py:24`) | la integración `mensajeria`: destinatarios, presupuesto, adjuntos |
+| navegador propio y `security.website_blocklist` (lista negra) | lista blanca, redes internas, esquemas y clase por perfil (`navegador-hermes`) |
+| resultados MCP de más de 50k guardados aparte (`tool_budget.mcp_result_size_chars`) | `budget.maxResultChars` por integración |
 
 ## Contexto: qué archivo carga Hermes de verdad
 

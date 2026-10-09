@@ -1,6 +1,6 @@
 # Constitución — Hermes Autopilot
 
-**Versión 1.5.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
+**Versión 1.6.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
 viven en `AGENTS.md`; el arnés que los hace cumplir, en `docs/arnes.md`.
 
 Cada principio dice su **fuerza**:
@@ -252,6 +252,21 @@ verde— y la corre un pipeline que sí lo tiene.
 *Mecanismo:* `scripts/revision.py` (recall y precisión contra `evals/revision.json`, umbrales en
 `review`), señal del gate con `omitIfExit` y `hermes-nocturno.yml`.
 
+## P26 — Lo que el agente hace afuera tiene clase, destinatario y tope · BLOCKING
+
+Un mensaje mandado no se des-manda, un archivo compartido ya lo vio alguien y un filtro de correo
+reenvía durante meses: afuera del repo no hay `git revert`. Cada herramienta de una integración
+(un MCP, el gateway, el navegador, una CLI como `gh` o `psql`) tiene una CLASE declarada —leer,
+escribir, mandar, destruir, vedada— y el perfil decide qué hace con cada una. Lo que no se declaró
+muta. Se manda sólo a quien está en la lista, hasta un tope por hora, desde una tarea que la nombra,
+y nunca después de leer a un tercero sin un humano. Los secretos de un servidor no pasan por el
+repo ni por el modelo, y lo que el perfil veda ni siquiera se le muestra al modelo.
+
+*Mecanismo:* `integrations` en el config, materializado desde el catálogo por `scripts/integ.py add`
+(que prueba los ejemplos por el plugin antes de escribir); `plugin/harness/integ.py` en
+`pre_tool_call`; el lanzador `scripts/integ_run.py`; `integ.py check` en el gate, self-test §14,
+mutaciones y cinco casos replicables (ADR 0010).
+
 ## Precedencia — cuando dos BLOCKING chocan · REVIEW
 
 Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el resto en orden.
@@ -268,3 +283,4 @@ Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el 
 | 1.3.0 | 2026-10-07 | Auditoría de huecos con casos replicables: P8 también veda **leer** secretos (`protectedReads`); P21 suma los intocables (el agente no ablanda su criterio de salida) y el candado; P23 (lo que el arnés promete se reproduce de punta a punta: `scripts/casos.py` en el gate). |
 | 1.4.0 | 2026-10-08 | Herramientas verificadas contra el código de Hermes: P8 suma `code_guard` (`execute_code` no pasaba por ningún freno) y el código en línea; P21 suma el paralelo por worktrees. |
 | 1.5.0 | 2026-10-08 | Cierre de huecos: P8 suma la guardia de Python; P21, el loop aislado en worktree; P24 (lo que entra de un tercero no sale solo: sesión contaminada); P25 (un sensor inferencial se mide con una tasa: `revision.py`). |
+| 1.6.0 | 2026-10-09 | Integraciones: P26 (lo que el agente hace afuera tiene clase, destinatario y tope). Hermes conecta, el arnés gobierna: catálogo de manifiestos, perfiles, lanzador con secretos por referencia, dependencias aisladas con lock (ADR 0010). |

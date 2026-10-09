@@ -41,6 +41,17 @@ Una tarea buena para el loop:
   necesita un criterio, escribilo en la tarea;
 - **tiene su prueba antes.** El mejor gate para una tarea nueva es un test que hoy falla.
 
+**Las integraciones de una tarea.** Una tarea usa sólo las integraciones que nombra:
+
+```markdown
+- [ ] Prepará las respuestas del buzón de soporte [integraciones: google-workspace]
+- [ ] Avisá a los clientes demorados [integraciones: mensajeria]
+```
+
+Sin etiqueta vale `loop.defaultIntegrations` (la plantilla: `[]`, ninguna). El loop la pasa al agente
+en `HARNESS_INTEGRACIONES` y el plugin frena el resto (`integ:<id>:fuera-de-la-tarea`). Lo desatendido
+se decide al crearlo (P13): una tarea de documentación no necesita poder mandar un WhatsApp.
+
 ## Qué hace en cada intento
 
 1. Si la rama actual está en `branches.protected`, abre `loop/<slug-de-la-tarea>` (el loop no

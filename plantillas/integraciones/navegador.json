@@ -1,0 +1,244 @@
+{
+  "id": "navegador",
+  "titulo": "Navegador headless (Playwright MCP)",
+  "descripcion": "Chromium headless sin interfaz, manejado por el servidor MCP oficial de Playwright: navegar, leer la página por su árbol de accesibilidad (barato: texto, no imágenes), completar formularios. Instancia aislada (`--isolated`), sin perfil persistente.",
+  "verificado": "2026-10-09 · @playwright/mcp 0.0.83: `tools/list` real (25 herramientas, con anotaciones), `--help`, y una navegación real por el lanzador con `chrome-for-testing` headless",
+  "version": "0.0.83",
+  "kind": "mcp",
+  "server": "playwright",
+  "toolNames": [
+    "browser_close",
+    "browser_resize",
+    "browser_console_messages",
+    "browser_handle_dialog",
+    "browser_emulate_media",
+    "browser_evaluate",
+    "browser_file_upload",
+    "browser_drop",
+    "browser_find",
+    "browser_fill_form",
+    "browser_press_key",
+    "browser_type",
+    "browser_navigate",
+    "browser_navigate_back",
+    "browser_network_requests",
+    "browser_network_request",
+    "browser_run_code_unsafe",
+    "browser_take_screenshot",
+    "browser_snapshot",
+    "browser_click",
+    "browser_drag",
+    "browser_hover",
+    "browser_select_option",
+    "browser_tabs",
+    "browser_wait_for"
+  ],
+  "classes": {
+    "deny": "^browser_(run_code_unsafe|evaluate)$",
+    "send": "^browser_(file_upload|drop)$",
+    "read": "^browser_(navigate|navigate_back|tabs|snapshot|take_screenshot|console_messages|network_requests?|find|wait_for|resize|close)$"
+  },
+  "thirdParty": "^browser_(navigate|navigate_back|snapshot|take_screenshot|console_messages|network_requests?|find)$",
+  "urlKeys": "^url$",
+  "fileKeys": "^(paths|filename)$",
+  "policy": {
+    "allowDomains": [],
+    "outsideDomains": "ask",
+    "denyHosts": [
+      "^(localhost|::1|0\\.0\\.0\\.0|metadata\\.google\\.internal)$",
+      "^(127|10)\\.",
+      "^192\\.168\\.",
+      "^172\\.(1[6-9]|2\\d|3[01])\\.",
+      "^169\\.254\\."
+    ],
+    "schemes": [
+      "http",
+      "https"
+    ]
+  },
+  "budget": {
+    "idleMinutes": 10,
+    "timeoutSeconds": 120,
+    "maxMemoryMB": 1024,
+    "nice": 5
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "send": "ask",
+      "destructive": "deny"
+    }
+  },
+  "perfilPorDefecto": "lectura",
+  "reasons": {
+    "deny": "ejecutar JavaScript arbitrario en la página es código sin freno: lee cookies, tokens y lo que haya en el DOM.",
+    "write": "hacer clic o escribir en un formulario tiene efecto afuera (comprar, publicar, borrar). El perfil `lectura` sólo mira."
+  },
+  "requires": [
+    {
+      "kind": "system",
+      "command": "node",
+      "min": "18",
+      "hint": {
+        "darwin": "brew install node",
+        "linux": "instalá Node 18+ (nodesource o el gestor de tu distro)",
+        "win32": "winget install OpenJS.NodeJS.LTS",
+        "default": "instalá Node 18+"
+      }
+    },
+    {
+      "kind": "npm",
+      "package": "@playwright/mcp",
+      "version": "0.0.83",
+      "bin": "playwright-mcp"
+    },
+    {
+      "kind": "browser",
+      "engine": "chrome-for-testing",
+      "bin": "playwright-mcp",
+      "args": [
+        "install-browser"
+      ]
+    }
+  ],
+  "launch": {
+    "runtime": "node",
+    "bin": {
+      "kind": "npm",
+      "name": "playwright-mcp"
+    },
+    "args": [
+      "--headless",
+      "--isolated",
+      "--image-responses",
+      "omit",
+      "--output-dir",
+      "{prefix}/salida"
+    ],
+    "env": {
+      "PLAYWRIGHT_BROWSERS_PATH": "{prefix}/browsers"
+    }
+  },
+  "examples": [
+    {
+      "tool": "browser_navigate",
+      "args": {
+        "url": "https://example.com/precios"
+      },
+      "expect": "allow",
+      "why": "navegar una web pública es lo que hace el perfil lectura",
+      "set": {
+        "policy.allowDomains": []
+      }
+    },
+    {
+      "tool": "browser_snapshot",
+      "args": {},
+      "expect": "allow",
+      "why": "leer la página por su árbol de accesibilidad"
+    },
+    {
+      "tool": "browser_navigate",
+      "args": {
+        "url": "http://169.254.169.254/latest/meta-data/iam/"
+      },
+      "expect": "block",
+      "regla": "red-interna",
+      "why": "el servicio de metadatos de la nube entrega credenciales a quien lo pida"
+    },
+    {
+      "tool": "browser_navigate",
+      "args": {
+        "url": "file:///etc/passwd"
+      },
+      "expect": "block",
+      "regla": "esquema",
+      "why": "`file:` lee el disco por el navegador"
+    },
+    {
+      "tool": "browser_evaluate",
+      "args": {
+        "function": "() => document.cookie"
+      },
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "JavaScript arbitrario: cookies y tokens"
+    },
+    {
+      "tool": "browser_click",
+      "args": {
+        "element": "Comprar",
+        "target": "e12"
+      },
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "el perfil lectura no hace clic"
+    },
+    {
+      "tool": "browser_click",
+      "args": {
+        "element": "Comprar",
+        "target": "e12"
+      },
+      "perfil": "asistente",
+      "expect": "approve",
+      "regla": "pide-write",
+      "why": "en asistente, un clic lo aprueba un humano"
+    },
+    {
+      "tool": "browser_file_upload",
+      "args": {
+        "paths": [
+          ".env"
+        ]
+      },
+      "perfil": "autonomo",
+      "expect": "block",
+      "otroFreno": true,
+      "why": "subir el .env por el navegador es leerlo: lo frena protectedReads"
+    },
+    {
+      "tool": "browser_navigate",
+      "args": {
+        "url": "https://otro-sitio.example.net/"
+      },
+      "set": {
+        "policy.allowDomains": [
+          "example.com"
+        ]
+      },
+      "expect": "approve",
+      "regla": "dominio",
+      "why": "fuera de los dominios de la tarea, decide un humano"
+    },
+    {
+      "tool": "browser_navigate",
+      "args": {
+        "url": "https://docs.example.com/"
+      },
+      "set": {
+        "policy.allowDomains": [
+          "example.com"
+        ]
+      },
+      "expect": "allow",
+      "why": "un subdominio de un dominio permitido pasa"
+    }
+  ],
+  "ignoreAnnotations": "^browser_",
+  "$ignoreAnnotations": "Playwright anota como destructiva toda herramienta que no es de sólo lectura, navegar incluido. Acá la clase la decide el manifiesto: navegar y mirar es `read` (lo acotan los dominios y las redes internas), hacer clic o escribir es `write`."
+}

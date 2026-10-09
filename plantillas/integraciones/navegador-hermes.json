@@ -1,0 +1,113 @@
+{
+  "id": "navegador-hermes",
+  "titulo": "Navegador propio de Hermes (agent-browser)",
+  "descripcion": "Las herramientas `browser_*` que trae Hermes (agent-browser + Chromium que instala `hermes pm`). Hermes tiene una lista NEGRA de sitios (`security.website_blocklist`); esto suma la lista BLANCA, las redes internas, los esquemas y qué clase de acción permite cada perfil.",
+  "verificado": "2026-10-09 · hermes-agent aa74e184: tools/browser_tool.py (nombres y `url`), tools/browser_vault_tool.py, tools/website_policy.py",
+  "kind": "hermes",
+  "tools": "^browser_",
+  "classes": {
+    "deny": "^browser_(cdp|exec|dialog|vault_unlock)$",
+    "send": "^browser_vault_(fill|save_login|enter_code)$",
+    "read": "^browser_(navigate|snapshot|scroll|back|get_images|vision|console|vault_list)$"
+  },
+  "thirdParty": "^browser_(navigate|snapshot|get_images|vision|console)$",
+  "urlKeys": "^url$",
+  "policy": {
+    "allowDomains": [],
+    "outsideDomains": "ask",
+    "denyHosts": [
+      "^(localhost|::1|0\\.0\\.0\\.0|metadata\\.google\\.internal)$",
+      "^(127|10)\\.",
+      "^192\\.168\\.",
+      "^172\\.(1[6-9]|2\\d|3[01])\\.",
+      "^169\\.254\\."
+    ],
+    "schemes": [
+      "http",
+      "https"
+    ]
+  },
+  "budget": {},
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "send": "ask",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "send": "ask",
+      "destructive": "deny"
+    }
+  },
+  "perfilPorDefecto": "lectura",
+  "reasons": {
+    "deny": "CDP crudo, ejecución de código y el desbloqueo de la bóveda de contraseñas saltean cualquier clasificación.",
+    "send": "llenar una contraseña de la bóveda en un sitio es entregarla: que el sitio sea el correcto lo decide un humano."
+  },
+  "setup": [
+    "hermes pm install agent-browser   # lo instala Hermes, no el arnés",
+    "security.website_blocklist en ~/.hermes/config.yaml sigue valiendo: es la lista negra; ésta es la blanca"
+  ],
+  "requires": [],
+  "examples": [
+    {
+      "tool": "browser_navigate",
+      "args": {
+        "url": "https://example.com"
+      },
+      "expect": "allow",
+      "why": "navegar una web pública",
+      "set": {
+        "policy.allowDomains": []
+      }
+    },
+    {
+      "tool": "browser_navigate",
+      "args": {
+        "url": "http://localhost:8080/admin"
+      },
+      "expect": "block",
+      "regla": "red-interna",
+      "why": "un servicio local sin autenticación"
+    },
+    {
+      "tool": "browser_cdp",
+      "args": {
+        "method": "Network.getAllCookies"
+      },
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "CDP crudo lee todas las cookies"
+    },
+    {
+      "tool": "browser_type",
+      "args": {
+        "ref": "@e3",
+        "text": "hola"
+      },
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "lectura no escribe en formularios"
+    },
+    {
+      "tool": "browser_vault_fill",
+      "args": {
+        "ref": "@e4"
+      },
+      "perfil": "autonomo",
+      "expect": "approve",
+      "regla": "pide-send",
+      "why": "entregar una contraseña lo aprueba un humano"
+    }
+  ]
+}
