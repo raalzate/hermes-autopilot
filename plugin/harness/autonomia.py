@@ -31,7 +31,7 @@ from .core import git_dir
 NIVELES = ("L0", "L1", "L2", "L3")
 # Las familias de `tools` que guardan lo aprendido (se gobiernan juntas con `aprender`).
 APRENDER = frozenset({"memory", "skill", "cron"})
-_CACHE: dict[str, tuple[tuple, dict]] = {}
+_CACHE: dict[str, tuple[bytes, dict]] = {}
 
 
 def spec(config: dict | None) -> dict:
@@ -61,7 +61,7 @@ def ruta(config: dict | None, root: Path) -> Path | None:
 
 
 def leer(config: dict | None, root: Path) -> dict:
-    """{nivel, historial, desde, error}. Cacheado por mtime: lo lee el freno en cada tool call."""
+    """{nivel, historial, desde, error}. Lo lee el freno en cada tool call: unos bytes, parseados una vez."""
     s = spec(config)
     inicial = s.get("inicial") if s.get("inicial") in NIVELES else "L0"
     prueba = os.environ.get("HARNESS_NIVEL_PRUEBA")
@@ -71,25 +71,30 @@ def leer(config: dict | None, root: Path) -> dict:
         return {"nivel": prueba, "historial": [], "desde": 0.0, "error": "", "inicial": False, "prueba": True}
     p = ruta(config, root)
     try:
-        st = p.stat() if p is not None else None
-    except OSError:
-        st = None
-    if st is None:
+        crudo = p.read_bytes() if p is not None else None
+    except FileNotFoundError:
+        crudo = None
+    except OSError as e:
+        return {"nivel": "L0", "historial": [], "desde": 0.0, "inicial": False,
+                "error": f"el estado de autonomía no se puede leer ({e}): vale L0 hasta que un humano lo arregle"}
+    if crudo is None:
         return {"nivel": inicial, "historial": [], "desde": 0.0, "error": "", "inicial": True}
+    # Caché por CONTENIDO, no por (mtime, tamaño): en Windows el mtime es grueso y `L2`→`L3` no
+    # cambia el tamaño, así que un nivel recién firmado se leía viejo (lo cazó la matriz de CI).
     clave = str(p)
-    huella = (st.st_mtime_ns, st.st_size)
     hit = _CACHE.get(clave)
-    if hit and hit[0] == huella:
+    if hit and hit[0] == crudo:
         return hit[1]
+    huella = crudo
     try:
-        dato = json.loads(p.read_text(encoding="utf-8"))
+        dato = json.loads(crudo.decode("utf-8"))
         nivel = dato.get("nivel")
         historial = dato.get("historial") if isinstance(dato.get("historial"), list) else []
         if nivel not in NIVELES:
             raise ValueError(f"nivel inválido: {nivel!r}")
         out = {"nivel": nivel, "historial": historial, "error": "", "inicial": False,
                "desde": max([float(h.get("at") or 0) for h in historial if isinstance(h, dict)] or [0.0])}
-    except (OSError, ValueError, TypeError, AttributeError) as e:
+    except (ValueError, TypeError, AttributeError) as e:
         out = {"nivel": "L0", "historial": [], "desde": 0.0, "inicial": False,
                "error": f"el estado de autonomía no se puede leer ({e}): vale L0 hasta que un humano lo arregle"}
     _CACHE[clave] = (huella, out)
