@@ -57,6 +57,17 @@ CODIGO = {
     # Lo traído de agent-harness: cada pieza nueva tiene que poder romperse sólo con el self-test en rojo.
     "COHERENCIA no mira los bloques de shell": ("plugin/harness/rules.py", "            en_bloque = not en_bloque and m.group(1).lower() in vallas", "            en_bloque = False"),
     "COHERENCIA no mira los reason del config": ("plugin/harness/rules.py", '                        for comando in re.findall(r"`([^`]+)`", v):', "                        for comando in []:"),
+    # P27–P29: la autonomía se gana con evidencia. Cada pieza del nivel, rota, tiene que ser rojo.
+    "el freno de nivel deja pasar todo": ("plugin/harness/guards.py", "    act = autonomia.accion(config, n, kind, ctx)\n    if act == \"allow\":", "    act = \"allow\"\n    if act == \"allow\":"),
+    "un «pedir aprobación» del nivel le gana a un deny del repo": ("plugin/harness/guards.py", "    if dn.block:\n        return dn\n    d = _evaluar_frenos", "    if dn.block or dn.approve:\n        return dn\n    d = _evaluar_frenos"),
+    "se sube de nivel sin evidencia": ("plugin/harness/autonomia.py", '    return (bool(siguiente(n)) and bool(filas) and all(f["ok"] for f in filas)), filas', "    return bool(siguiente(n)), filas"),
+    "un estado de autonomía roto regala L3": ("plugin/harness/autonomia.py", '        out = {"nivel": "L0", "historial": [], "desde": 0.0, "inicial": False,', '        out = {"nivel": "L3", "historial": [], "desde": 0.0, "inicial": False,'),
+    "el descenso automático no se dispara": ("plugin/harness/autonomia.py", "        return bajar(config, root, motivo) if motivo else None", "        return None"),
+    "la ventana de evidencia no se reinicia al cambiar de nivel": ("plugin/harness/autonomia.py", '    evs = [e for e in evs if float(e.get("at") or 0) >= desde]\n    vistas', "    vistas"),
+    "el loop corre en cualquier nivel": ("scripts/loop.py", '    if r.get("loop"):\n        return True, ""', '    if True:\n        return True, ""'),
+    "lectura en L0 con un subcomando colado": ("plugin/harness/autonomia.py", "    return bool(partes) and all(_casa(patrones, p) for p in partes)", "    return bool(partes) and _casa(patrones, partes[0])"),
+    "lo que el humano decide en una aprobación no es evidencia": ("plugin/__init__.py", '    events.record(config, root, "aprobacion",', '    (lambda *a, **k: None)(config, root, "aprobacion",'),
+    "la plantilla arranca en L3": ("plantillas/harness.config.json", '"inicial": "L0",', '"inicial": "L3",'),
     "PERFIL deja pasar las reglas": ("plugin/harness/rules.py", 'for k in spec.get("forbiddenKeys") or [] if not vacio', "for k in [] if not vacio"),
     "pre-push deja empujar a la rama protegida": ("scripts/githooks.py", "            if rama in protegidas and rama not in chocan:", "            if False:"),
     "deriva: un veredicto vencido pasa": ("scripts/drift.py", "    if dias > maximo:", "    if False:"),
@@ -124,7 +135,7 @@ CODIGO = {
     "integ_run: la sonda no compara": ("scripts/integ_run.py", '    errores = [f"el manifiesto declara `{t}` y el servidor no la publica (¿cambió la versión?)" for t in sorted(declaradas - hay)]', "    errores = []"),
     # Los huecos 25-28 (docs/huecos.md): lo que se cerró después de las integraciones.
     "lo aprobado no gasta presupuesto": ("plugin/__init__.py", "        _registrar_uso(config, root, clave, tool_name, aprobada=True)", "        pass"),
-    "una aprobación negada gasta presupuesto": ("plugin/__init__.py", '    if not clave or status == "blocked":', "    if not clave:"),
+    "una aprobación negada gasta presupuesto": ("plugin/__init__.py", "    if clave and aprobada:\n        _registrar_uso", "    if clave:\n        _registrar_uso"),
     "el contenido saliente no se mira": ("plugin/harness/integ.py", '    for texto in textos:\n        regla = first_match(spec_c.get("deny"), texto)', '    for texto in []:\n        regla = first_match(spec_c.get("deny"), texto)'),
     "la respuesta no tapa secretos": ("plugin/harness/turn.py", '    for regla in spec.get("redact") or []:', "    for regla in []:"),
     "la respuesta contaminada sin aviso": ("plugin/harness/turn.py", "    if contaminada and isinstance(aviso, str)", "    if False and isinstance(aviso, str)"),
@@ -153,6 +164,7 @@ CONFIG = {
     "una skill fuera del mapa": _config(lambda c: c["taxonomy"]["skills"].pop("lesson")),
     "un loop sin tope": _config(lambda c: c["loop"].update(sameFailureLimit=0)),
     "un MCP sin declarar entra sin preguntar": _config(lambda c: c["integrations"]["undeclared"].update(action="allow")),
+    "un nivel sin ejemplos": _config(lambda c: c["autonomia"]["niveles"]["L1"].pop("ejemplos")),
 }
 
 

@@ -292,6 +292,15 @@
           "git stash drop"
         ],
         "reason": "descarta trabajo sin commitear que puede no ser tuyo (el humano deja cambios a medias). Mirá `git status` y `git diff`, y si estorban, `git stash` (recuperable) o preguntá."
+      },
+      {
+        "id": "nivel-prueba",
+        "pattern": "HARNESS_NIVEL_PRUEBA",
+        "example": "HARNESS_NIVEL_PRUEBA=L3 python3 scripts/loop.py --apply",
+        "moreExamples": [
+          "export HARNESS_NIVEL_PRUEBA=L3"
+        ],
+        "reason": "esa variable fija el nivel de autonomía para el self-test; usarla en un comando es darse un nivel que no se ganó (P27). El nivel se sube con evidencia y la firma de un humano."
       }
     ],
     "ask": [
@@ -326,6 +335,15 @@
           "python3 .hermes/harness/scripts/integ.py deps navegador --apply"
         ],
         "reason": "habilitar una integración, cambiar su perfil o su lista de destinatarios, o instalar lo que corre con tus credenciales es darle al agente un permiso nuevo para actuar afuera: lo decide un humano. Sin --apply (el plan) pasa."
+      },
+      {
+        "id": "nivel-firma",
+        "pattern": "cli\\.py\\s+(nivel\\s+(subir|bajar|declarar)|recomendacion\\s+(aceptar|rechazar))\\b",
+        "example": "python3 scripts/cli.py nivel subir --firma Ana",
+        "moreExamples": [
+          "python3 .hermes/harness/scripts/cli.py recomendacion aceptar .hermes/recomendaciones/001.md"
+        ],
+        "reason": "subir de nivel o juzgar una recomendación es evidencia que firma un humano: el agente no se la da a sí mismo (P28). Corré el comando vos, desde tu terminal."
       }
     ],
     "innocent": [
@@ -877,11 +895,12 @@
       ".github/",
       "casos/"
     ],
-    "$externalPaths": "`.hermes/harness/` es dónde vive el código en un repo DESTINO (lo nombran las skills y docs/portar.md): acá no existe y no es un puntero roto. `.hermes/integraciones.lock` existe recién cuando se instala una integración (`integ.py deps --apply`): en este repo no hay ninguna habilitada.",
+    "$externalPaths": "`.hermes/harness/` es dónde vive el código en un repo DESTINO (lo nombran las skills y docs/portar.md): acá no existe y no es un puntero roto. `.hermes/integraciones.lock` existe recién cuando se instala una integración (`integ.py deps --apply`): en este repo no hay ninguna habilitada. `.hermes/recomendaciones/` es donde el agente deja sus propuestas en L1 (docs/autonomia.md): existe en un repo destino recién cuando el agente propone algo; este repo trabaja en L3.",
     "externalPaths": [
       "~/",
       ".hermes/harness/",
-      ".hermes/integraciones.lock"
+      ".hermes/integraciones.lock",
+      ".hermes/recomendaciones"
     ],
     "ignoreFiles": []
   },
@@ -1024,6 +1043,232 @@
       "{prompt}"
     ]
   },
+  "autonomia": {
+    "$comment": "LA AUTONOMÍA SE GANA CON EVIDENCIA (P27–P29, docs/autonomia.md, ADR 0012). Lo leen el freno de nivel (`plugin/harness/guards.py::nivel_guard`, corre ANTES que los otros frenos), el loop (no arranca por debajo de un nivel con `loop: true`), el panel (sección «Salud del agente») y `cli.py nivel`. `estado`: dónde vive el nivel firmado (`.git/` = el gitdir común, lo ven los worktrees); sin archivo vale `inicial`, y un archivo roto vale L0. Por nivel: qué hace cada familia de herramienta (`allow` · `ask` · `deny`), lo que se permite aunque la familia no (`escribirPermitido`: rutas relativas; `terminalPermitida`: cada subcomando tiene que casar, sin `$(…)` ni redirecciones), y `ejemplos` que el self-test pasa por el plugin (P2). `ascenso`: el umbral de cada paso, medido en el registro de eventos desde la última transición (métricas en docs/autonomia.md). `descenso`: lo que baja un nivel solo, sin firma.",
+    "$inicial": "ESTE repo es el producto: se trabaja en L3 desde antes de que existieran los niveles. `inicial: L3` es una DECLARACIÓN, no evidencia, y el panel la muestra como alerta (ADR 0012). Un repo destino arranca en L0 (la plantilla).",
+    "inicial": "L3",
+    "estado": ".git/harness-autonomia.json",
+    "comando": "python3 scripts/cli.py nivel",
+    "niveles": {
+      "L0": {
+        "nombre": "Observador",
+        "puede": "leer el repo, correr comandos de sólo lectura (git status/diff/log, ls, cat, grep) y reportar en la respuesta.",
+        "noPuede": "escribir archivos, correr tests ni comandos que cambien algo, ejecutar código, guardar memoria, usar integraciones que no sean de lectura.",
+        "escribir": "deny",
+        "terminal": "deny",
+        "codigo": "deny",
+        "aprender": "deny",
+        "integraciones": "deny",
+        "terminalPermitida": [
+          "^git\\s+(status|diff|log|show|branch|blame|ls-files|grep|rev-parse)\\b",
+          "^(ls|cat|head|tail|wc|grep|rg|tree|pwd|which|file|stat|echo)\\b",
+          "^find\\b(?!.*\\s-(exec|execdir|delete|ok)\\b)"
+        ],
+        "loop": false,
+        "ejemplos": {
+          "bloquea": [
+            {
+              "familia": "write",
+              "args": {
+                "path": "src/app.py",
+                "content": "x = 1\n"
+              }
+            },
+            {
+              "familia": "shell",
+              "args": {
+                "command": "python3 -m unittest"
+              }
+            },
+            {
+              "familia": "shell",
+              "args": {
+                "command": "git status; touch x"
+              }
+            }
+          ],
+          "deja": [
+            {
+              "familia": "read",
+              "args": {
+                "path": "README.md"
+              }
+            },
+            {
+              "familia": "shell",
+              "args": {
+                "command": "git log --oneline -5"
+              }
+            }
+          ]
+        }
+      },
+      "L1": {
+        "nombre": "Recomendar",
+        "puede": "todo lo de L0, correr el gate y los tests, y escribir propuestas en `.hermes/recomendaciones/` para que un humano las acepte o rechace.",
+        "noPuede": "cambiar código, configuración ni nada fuera de `.hermes/recomendaciones/`.",
+        "escribir": "deny",
+        "terminal": "deny",
+        "codigo": "deny",
+        "aprender": "deny",
+        "integraciones": "deny",
+        "escribirPermitido": [
+          "^\\.hermes/recomendaciones/[^/]+\\.md$"
+        ],
+        "terminalPermitida": [
+          "^git\\s+(status|diff|log|show|branch|blame|ls-files|grep|rev-parse)\\b",
+          "^(ls|cat|head|tail|wc|grep|rg|tree|pwd|which|file|stat|echo)\\b",
+          "^find\\b(?!.*\\s-(exec|execdir|delete|ok)\\b)",
+          "^python3?\\s+scripts/gate\\.py\\b",
+          "^python3?\\s+-m\\s+(unittest|pytest)\\b",
+          "^(pytest|npm\\s+test|go\\s+test|cargo\\s+test|dotnet\\s+test)\\b"
+        ],
+        "loop": false,
+        "ejemplos": {
+          "bloquea": [
+            {
+              "familia": "write",
+              "args": {
+                "path": "src/app.py",
+                "content": "x = 1\n"
+              }
+            },
+            {
+              "familia": "write",
+              "args": {
+                "path": ".hermes/recomendaciones/../../src/app.py",
+                "content": "x"
+              }
+            }
+          ],
+          "deja": [
+            {
+              "familia": "write",
+              "args": {
+                "path": ".hermes/recomendaciones/001-corregir-total.md",
+                "content": "# Propuesta\n"
+              }
+            },
+            {
+              "familia": "shell",
+              "args": {
+                "command": "python3 scripts/gate.py --fast"
+              }
+            }
+          ]
+        }
+      },
+      "L2": {
+        "nombre": "Con aprobación",
+        "puede": "cambiar el repo, pero cada escritura, comando que cambia algo o código ejecutado lo aprueba un humano antes.",
+        "noPuede": "trabajar desatendido: sin humano que apruebe, la aprobación se niega (cron, gateway, loop).",
+        "escribir": "ask",
+        "terminal": "ask",
+        "codigo": "ask",
+        "aprender": "ask",
+        "integraciones": "ask",
+        "escribirPermitido": [
+          "^\\.hermes/recomendaciones/[^/]+\\.md$"
+        ],
+        "terminalPermitida": [
+          "^git\\s+(status|diff|log|show|branch|blame|ls-files|grep|rev-parse)\\b",
+          "^(ls|cat|head|tail|wc|grep|rg|tree|pwd|which|file|stat|echo)\\b",
+          "^find\\b(?!.*\\s-(exec|execdir|delete|ok)\\b)",
+          "^python3?\\s+scripts/gate\\.py\\b",
+          "^python3?\\s+-m\\s+(unittest|pytest)\\b",
+          "^(pytest|npm\\s+test|go\\s+test|cargo\\s+test|dotnet\\s+test)\\b"
+        ],
+        "loop": false,
+        "ejemplos": {
+          "pregunta": [
+            {
+              "familia": "write",
+              "args": {
+                "path": "src/app.py",
+                "content": "x = 1\n"
+              }
+            },
+            {
+              "familia": "shell",
+              "args": {
+                "command": "git commit -m 'arreglo'"
+              }
+            }
+          ],
+          "deja": [
+            {
+              "familia": "shell",
+              "args": {
+                "command": "python3 -m unittest -v"
+              }
+            }
+          ]
+        }
+      },
+      "L3": {
+        "nombre": "Autonomía",
+        "puede": "trabajar solo, también desatendido en el loop; los frenos del repo siguen mordiendo como siempre.",
+        "noPuede": "lo que vedan los frenos del repo, y nada que lo baje de nivel (ver `descenso`).",
+        "escribir": "allow",
+        "terminal": "allow",
+        "codigo": "allow",
+        "aprender": "allow",
+        "integraciones": "allow",
+        "loop": true,
+        "ejemplos": {
+          "deja": [
+            {
+              "familia": "write",
+              "args": {
+                "path": "src/app.py",
+                "content": "x = 1\n"
+              }
+            },
+            {
+              "familia": "shell",
+              "args": {
+                "command": "git commit -m 'arreglo'"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ascenso": {
+      "$comment": "Por paso, cada métrica con su umbral. `…Min`/conteos = al menos; `intentosFueraDeNivel`, `denegadosMax`, `tamperings` = como mucho. Una métrica que el arnés no sabe medir NO se da por cumplida.",
+      "L0->L1": {
+        "sesionesLimpias": 3
+      },
+      "L1->L2": {
+        "recomendaciones": 5,
+        "aceptadasMin": 0.8,
+        "sesionesLimpias": 3
+      },
+      "L2->L3": {
+        "cambiosAprobados": 10,
+        "denegadosMax": 0.1,
+        "gatesMin": 3,
+        "gateVerdeMin": 0.9,
+        "tamperings": 0
+      }
+    },
+    "descenso": {
+      "$comment": "Lo que baja UN nivel solo (P28), medido desde la última transición: tocar intocables en el loop, intentar algo que veda una regla crítica, N aprobaciones denegadas seguidas, N tareas escaladas seguidas.",
+      "tampering": true,
+      "reglasCriticas": [
+        "no-verify",
+        "force-push",
+        "desarmar-arnes",
+        "yolo",
+        "env",
+        "hermes-secretos",
+        "clave-privada",
+        "cola-del-loop"
+      ],
+      "denegadasSeguidas": 3,
+      "escaladasSeguidas": 3
+    }
+  },
   "taxonomy": {
     "$comment": "EL ARNÉS COMO SISTEMA DE CONTROL (docs/guias-y-sensores.md). Lo lee `scripts/map.py`, señal del gate. Cada pieza tiene dirección (guía: antes de decidir · freno: decidido y no ejecutado · sensor: después), tipo (computacional · inferencial) y etapa. La dirección de un hook del plugin la pone el HOOK de Hermes. Una pieza sin clasificar es rojo; una etapa vacía es un hueco que se informa.",
     "stages": [
@@ -1161,6 +1406,19 @@
         "file": "plugin/guardia/sitecustomize.py",
         "direction": "freno",
         "stage": "acción decidida"
+      },
+      "nivel de autonomía · freno (plugin/harness/autonomia.py)": {
+        "file": "plugin/harness/autonomia.py",
+        "direction": "freno",
+        "stage": "acción decidida"
+      },
+      "nivel de autonomía · evidencia y descenso (plugin/harness/autonomia.py)": {
+        "file": "plugin/harness/autonomia.py",
+        "direction": "sensor",
+        "stage": [
+          "herramienta ejecutada",
+          "continuo"
+        ]
       }
     },
     "pipelines": {

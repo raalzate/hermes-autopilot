@@ -180,7 +180,9 @@ Siguiente (lo hace el humano — el instalador no toca el config de Hermes):
      python3 .hermes/harness/scripts/cli.py rule add terminal.deny --id … --pattern … --example … --reason …
   6. Panel en vivo y loop autónomo:
      python3 .hermes/harness/scripts/cli.py panel
-     python3 .hermes/harness/scripts/cli.py task add "…" && python3 .hermes/harness/scripts/cli.py loop""")
+     python3 .hermes/harness/scripts/cli.py task add "…" && python3 .hermes/harness/scripts/cli.py loop
+  7. El agente arranca en L0 (observa): la autonomía se gana con evidencia (P27, docs/autonomia.md).
+     python3 .hermes/harness/scripts/cli.py nivel     # qué puede hoy y qué evidencia le falta""")
     return 0
 
 

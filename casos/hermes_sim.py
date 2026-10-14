@@ -6,7 +6,9 @@ que hacen pasa por el mismo camino que una herramienta de Hermes:
 
     pre_tool_call (el plugin del sandbox, con SUS reglas) — escribir, leer, terminal, memoria, cron
         → block   : la herramienta no corre; el agente recibe el `message` (y lo imprime)
-        → approve : en el loop no hay humano que apruebe → se niega (como en cron o el gateway)
+        → approve : en el loop no hay humano que apruebe → se niega (como en cron o el gateway);
+                    con un `aprobador` (el workshop de autonomía), decide él, como el humano en Hermes
+    post_tool_call (después de una escalada): lo que se decidió, con `status="blocked"` si fue que no
         → None    : la herramienta corre
     transform_tool_result (después de escribir): el lint del archivo, pegado al resultado
 
@@ -29,8 +31,12 @@ from pathlib import Path
 
 
 class Hermes:
-    def __init__(self, raiz: Path | None = None):
+    def __init__(self, raiz: Path | None = None, sesion: str = "caso", aprobador=None):
+        """`aprobador(mensaje) -> bool`: quién contesta una escalada. Sin él, nadie: se niega."""
         self.raiz = (raiz or Path.cwd()).resolve()
+        self.sesion = sesion
+        self.aprobador = aprobador
+        self._n = 0
         self.config = json.loads((self.raiz / ".hermes" / "harness.config.json").read_text(encoding="utf-8"))
         self.tools = self.config.get("tools") or {}
         self.plugin = self._cargar_plugin()
@@ -55,16 +61,29 @@ class Hermes:
     def _tool(self, familia: str) -> str:
         return (self.tools.get(familia) or [familia])[0]  # los nombres salen del config (P4)
 
+    def turno(self, mensaje: str) -> None:
+        """Un mensaje del usuario: Hermes llama `pre_llm_call` (el plugin anota la sesión)."""
+        self.plugin.on_pre_llm_call(user_message=mensaje, session_id=self.sesion, task_id=self.sesion)
+
     def _pedir(self, familia: str, args: dict, tool: str = "") -> bool:
         tool = tool or self._tool(familia)
-        r = self.plugin.on_pre_tool_call(tool_name=tool, args=args, session_id="caso")
+        self._n += 1
+        cid = f"{self.sesion}-{self._n}"
+        r = self.plugin.on_pre_tool_call(tool_name=tool, args=args, session_id=self.sesion, tool_call_id=cid)
         if isinstance(r, dict) and r.get("action") == "block":
             self.frenados.append(r.get("message", ""))
             print(f"  [{tool}] ✗ FRENADO\n    " + r.get("message", "").replace("\n", "\n    "))
             return False
         if isinstance(r, dict) and r.get("action") == "approve":
+            si = bool(self.aprobador and self.aprobador(f"[{tool}] {r.get('message', '')}"))
+            self.plugin.on_post_tool_call(tool_name=tool, args=args, status="ok" if si else "blocked",
+                                          session_id=self.sesion, tool_call_id=cid)
+            if si:
+                print(f"  [{tool}] ✓ aprobado por el humano")
+                return True
             self.frenados.append(r.get("message", ""))
-            print(f"  [{tool}] ✗ pide aprobación humana y en el loop no hay humano: NEGADA\n    {r.get('message', '')}")
+            print(f"  [{tool}] ✗ pide aprobación humana y " + ("el humano dijo que no" if self.aprobador else "en el loop no hay humano")
+                  + f": NEGADA\n    {r.get('message', '')}")
             return False
         return True
 

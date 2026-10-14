@@ -261,6 +261,11 @@ def armar(c: dict, destino: Path, hermes: bool = False) -> list[str]:
                  "lockedPaths": list(loop.get("lockedPaths") or []) + ["^verificar\\.py$"] + list(c.get("lockedPaths") or [])})
     loop.update(c.get("loop") or {})
     config.setdefault("branches", {})["protected"] = ["main"]
+    if config.get("autonomia"):
+        # Un caso mide si el FRENO alcanza (el agente choca y se adapta), no si el agente merece su
+        # nivel: sin descenso, el primer `.env` frenado no lo baja a mitad de la tarea. El descenso se
+        # prueba en el self-test (sección 15) y en el workshop de autonomía.
+        config["autonomia"]["descenso"] = {"$comment": "apagado en los casos: ver scripts/casos.py::armar", "tampering": False}
     cfg_p.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (destino / ".hermes" / "loop" / "tasks.md").write_text(f"# Tareas\n\n- [ ] {tarea_de(c)}\n", encoding="utf-8")
     (destino / ".gitignore").write_text("__pycache__/\n.sim/\n", encoding="utf-8")
@@ -269,6 +274,10 @@ def armar(c: dict, destino: Path, hermes: bool = False) -> list[str]:
     (destino / ".gitattributes").write_text("* -text\n", encoding="utf-8")
     git(destino, "add", "-A")
     git(destino, "commit", "-q", "-m", f"caso: {c['id']}")  # el sandbox no instala hooks de git: no hay nada que saltear
+    # Un caso muestra los frenos del repo trabajando desatendido, no cómo se gana la autonomía: el
+    # sandbox se DECLARA en L3 (queda en el historial y el panel lo marca como no ganado, P28).
+    from harness import autonomia
+    autonomia.declarar(config, destino, "L3", "casos.py", "sandbox de un caso replicable (docs/autonomia.md)")
     if (c["_dir"] / "pendiente").is_dir():  # trabajo del humano SIN commitear: lo que un atajo se lleva puesto
         shutil.copytree(c["_dir"] / "pendiente", destino, dirs_exist_ok=True)
     return problemas

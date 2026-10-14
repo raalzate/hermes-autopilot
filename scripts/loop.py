@@ -53,7 +53,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugin"))
-from harness import events  # noqa: E402
+from harness import autonomia, events  # noqa: E402
 from harness.core import CONFIG_PATH, REPO_ROOT, git_dir  # noqa: E402
 from harness.turn import branch_of  # noqa: E402
 
@@ -96,6 +96,22 @@ def decidir(intentos: list[dict], spec: dict, transcurrido_s: float, parar: bool
     if transcurrido_s > minutos * 60:
         return "escalar", f"pasaron más de {minutos:g} minutos (`loop.maxMinutes`)"
     return "seguir", ""
+
+
+def nivel_permite_loop(config: dict, root: Path) -> tuple[bool, str]:
+    """¿El nivel de autonomía deja trabajar desatendido? (P27) Sin `autonomia` en el config, sí."""
+    if not autonomia.spec(config):
+        return True, ""
+    r = autonomia.resumen(config, root)
+    if r.get("loop"):
+        return True, ""
+    falta = [f"{f['etiqueta']}: {f['valor'] if f['valor'] is not None else '—'} (umbral {f['umbral']})"
+             for f in r.get("evidencia") or [] if not f["ok"]]
+    return False, (f"el agente está en {r['nivel']} ({r['nombre']}): ese nivel no trabaja desatendido. "
+                   "La autonomía se gana con evidencia (P27): "
+                   + (f"para {r['siguiente']} falta " + "; ".join(falta) if falta else
+                      f"la evidencia para {r['siguiente']} está; falta la firma de un humano")
+                   + f". Mirá `{r['comando']}`.")
 
 
 def proxima_tarea(texto: str) -> tuple[int, str] | None:
@@ -304,6 +320,8 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
                        "signature": "" if rc_gate == 0 else firma(salida_gate), "tail": "" if rc_gate == 0 else cola(salida_gate),
                        "secs": round(time.time() - t0, 1), "agentTail": cola(salida_agente, 40, 4000)}
         intentos.append(intento)
+        if intento.get("tampered"):
+            events.record(config, root, "tampering", task=tarea, paths=intento["tampered"][:10])
         events.record(config, root, "loop-iter", task=tarea, n=n, green=intento["green"], signature=intento["signature"])
         log(f"{'✓' if intento['green'] else '✗'} intento {n}: {'verde' if intento['green'] else intento['signature']}")
 
@@ -317,6 +335,9 @@ def una_tarea(config: dict, root: Path, tarea: str, quiet: bool = False) -> tupl
             estado.update(phase=resultado, reason=motivo, endedAt=time.time())
             guardar_estado(spec, root, estado)
             events.record(config, root, f"loop-{resultado}", task=tarea, reason=motivo, attempts=len(intentos))
+            bajo = autonomia.revisar(config, root)
+            if bajo:
+                log(f"⚠ nivel de autonomía: bajó a {bajo} (P28). Lo que siga lo decide un humano.")
             return resultado, motivo, intentos
 
 
@@ -415,6 +436,11 @@ def main(argv: list[str]) -> int:
     if not tarea:
         print(plan(config, root, None))
         return 0
+    if not a.en_sitio:  # el coordinador ya lo miró; el worktree comparte el nivel (gitdir común)
+        ok, motivo = nivel_permite_loop(config, root)
+        if not ok:
+            print(f"loop: {motivo}")
+            return 2
     agente = argv_de(spec.get("agentCommand") or [])
     if not agente or not (shutil.which(agente[0]) or Path(agente[0]).exists()):
         print(f"loop: `loop.agentCommand` no se puede ejecutar ({agente[:1] or 'vacío'}). ¿Hermes instalado?")
@@ -433,7 +459,7 @@ def main(argv: list[str]) -> int:
             return en_paralelo(config, root, 1, tareas, [a.task])
         if (a.paralelo > 1 or aislar) and not a.task:
             codigo = en_paralelo(config, root, max(1, a.paralelo), tareas)
-            while a.all and codigo == 0 and pendientes(tareas.read_text(encoding="utf-8"), 1):
+            while a.all and codigo == 0 and pendientes(tareas.read_text(encoding="utf-8"), 1) and nivel_permite_loop(config, root)[0]:
                 codigo = en_paralelo(config, root, max(1, a.paralelo), tareas)
             return codigo
         return correr_tareas(config, root, a, tareas, indice, tarea, siguiente)
@@ -583,6 +609,11 @@ def correr_tareas(config, root, a, tareas, indice, tarea, siguiente) -> int:
             codigo = 2
             break
         if not a.all or a.task:
+            break
+        ok, motivo = nivel_permite_loop(config, root)
+        if not ok:
+            print(f"\nloop: paro antes de la próxima tarea — {motivo}")
+            codigo = 2
             break
         indice, tarea = siguiente()
     if codigo == 0:
