@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugin"))
 sys.path.append(str(Path(__file__).resolve().parent))  # al final: no tapa al paquete `harness`
-from harness import events  # noqa: E402
+from harness import autonomia, events  # noqa: E402
 from harness.core import CONFIG_PATH, REPO_ROOT, git_dir, load_config, marker_path  # noqa: E402
 from harness.turn import branch_of  # noqa: E402
 
@@ -143,6 +143,9 @@ def fuentes(config: dict | None, root: Path) -> list[Path]:
         if p is not None:
             out.append(p)
     out.append(root / spec.get("tasksFile", ".hermes/loop/tasks.md"))
+    p = autonomia.ruta(config, root) if autonomia.spec(config) else None
+    if p is not None:
+        out.append(p)  # el nivel firmado: subir o bajar se ve al instante (P29)
     return out
 
 
@@ -194,6 +197,7 @@ def estado(config: dict | None, root: Path, n_eventos: int = 60) -> dict:
         "topRules": mas_mordieron(events.tail(config, root, 2000)),
         "integrations": por_integracion(config, events.tail(config, root, 2000)),
         "eventsEnabled": bool(events.spec(config)),
+        "autonomia": autonomia.resumen(config, root),
     }
 
 
@@ -314,6 +318,11 @@ ul{list-style:none;margin:0;padding:0}li{padding:.28rem 0;border-top:1px solid v
 #ev li{font-size:.86rem}#ev .t{font-family:var(--mono);color:var(--mute);font-size:.78rem;white-space:nowrap}
 #ev .msg{overflow-wrap:anywhere}.empty{color:var(--mute);font-size:.9rem}
 .bar{height:6px;background:var(--chip);border-radius:3px;overflow:hidden;margin-top:.5rem}.bar i{display:block;height:100%;background:var(--ok)}
+.ag{display:grid;gap:12px 24px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}h3{font-size:.85rem;margin:0 0 .4rem}
+.escalera{display:flex;gap:4px;margin-bottom:.5rem}.escalera span{flex:1;text-align:center;padding:.3rem .2rem;border-radius:6px;background:var(--chip);font-size:.78rem;color:var(--mute)}
+.escalera span.hecho{background:color-mix(in srgb,var(--ok) 25%,var(--chip));color:var(--ink)}.escalera span.aqui{background:var(--ok);color:var(--panel);font-weight:650}
+#aev li{display:block}#aev .bar{margin-top:.25rem}#aev .bar.no i{background:var(--warn)}#aev .fila{display:flex;gap:.5rem}#aev .fila .n{margin-left:auto}
+#aalertas li{color:var(--warn);font-size:.88rem}
 </style>
 </head>
 <body>
@@ -323,30 +332,40 @@ ul{list-style:none;margin:0;padding:0}li{padding:.28rem 0;border-top:1px solid v
   <span class="live" id="live"><b></b>conectando…</span>
 </header>
 <main>
+  <section class="wide" id="agente"><h2>Salud del agente · la autonomía se gana con evidencia</h2>
+    <div class="ag"><div><div class="escalera" id="escalera"></div><div class="big" id="anivel">—</div><p id="apuede"></p><p class="mute" id="anopuede"></p><ul id="aalertas"></ul></div>
+    <div><h3 id="aevtit">Evidencia</h3><ul id="aev"></ul><p id="afirma"></p></div>
+    <div><h3>Transiciones</h3><ul id="ahist"></ul></div></div></section>
   <section><h2>Gate</h2><div class="big" id="verdict">—</div><div class="mute" id="gatewhen"></div><ul id="signals" style="margin-top:.6rem"></ul></section>
   <section><h2>Loop autónomo</h2><div class="big" id="lphase">—</div><div id="ltask" class="mute"></div><div id="lreason"></div><ul id="attempts" style="margin-top:.6rem"></ul></section>
   <section><h2>Tareas</h2><div id="tasks"></div></section>
   <section><h2>Frenos activos</h2><div class="grid2" id="rules"></div><h2 style="margin-top:1rem">Los que más mordieron</h2><ul id="top"></ul></section>
   <section><h2>Integraciones</h2><ul id="integ"></ul></section>
-  <section><h2>Salud</h2><div class="grid2" id="health"></div></section>
+  <section><h2>Salud del arnés</h2><div class="grid2" id="health"></div></section>
   <section class="wide"><h2>Eventos en vivo</h2><ul id="ev"></ul></section>
 </main>
 <script>
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const hora=t=>t?new Date(t*1000).toLocaleTimeString():"—", hace=t=>{if(!t)return"";const s=Math.round(Date.now()/1000-t);return s<60?`hace ${s}s`:s<3600?`hace ${Math.round(s/60)} min`:s<86400?`hace ${Math.round(s/3600)} h`:`hace ${Math.round(s/86400)} d`};
 const CLS={verde:"ok",roja:"bad",omitida:"skip"};
-const EV={block:["bad","freno"],ask:["warn","escala a humano"],lint:["warn","lint"],"verify-pending":["warn","gate pendiente"],gate:["","gate"],"loop-start":["","loop: tarea"],"loop-iter":["","loop: intento"],"loop-verde":["ok","loop: verde"],"loop-escalar":["bad","loop: escaló"],"loop-parado":["warn","loop: parado"]};
+const EV={block:["bad","freno"],ask:["warn","escala a humano"],lint:["warn","lint"],"verify-pending":["warn","gate pendiente"],gate:["","gate"],"loop-start":["","loop: tarea"],"loop-iter":["","loop: intento"],"loop-verde":["ok","loop: verde"],"loop-escalar":["bad","loop: escaló"],"loop-parado":["warn","loop: parado"],"nivel-sube":["ok","nivel: sube"],"nivel-baja":["bad","nivel: baja"],"nivel-declarado":["warn","nivel: declarado"],aprobacion:["","aprobación"],recomendacion:["","recomendación"],tampering:["bad","intocables"],turno:["","sesión"]};
 function evText(e){switch(e.kind){
  case"block":case"ask":return`<span class="k">${esc(e.rule)}</span> en <span class="k">${esc(e.tool)}</span>`;
  case"lint":return`${esc(e.findings)} hallazgo(s): ${esc(e.first)}`;
  case"gate":return`${esc(e.mode)} → <b class="${e.verdict==="roja"?"bad":"ok"}">${esc(e.verdict)}</b>${(e.failed||[]).length?" · rojas: "+esc(e.failed.join(", ")):""}`;
  case"loop-start":return esc(e.task);
+ case"nivel-sube":case"nivel-baja":case"nivel-declarado":return`${esc(e.de)} → <b>${esc(e.a)}</b> · ${esc(e.firma||"automático")}${e.motivo?" — "+esc(e.motivo):""}`;
+ case"aprobacion":return`<b class="${e.approved?"ok":"bad"}">${e.approved?"aprobada":"denegada"}</b> · <span class="k">${esc(e.rule)}</span> en <span class="k">${esc(e.tool)}</span>`;
+ case"recomendacion":return`<b class="${e.aceptada?"ok":"bad"}">${e.aceptada?"aceptada":"rechazada"}</b> · <span class="k">${esc(e.archivo)}</span> · ${esc(e.firma)}`;
+ case"tampering":return`${esc((e.paths||[]).join(", "))} · ${esc(e.task)}`;
+ case"turno":return`<span class="k">${esc(e.session)}</span> en ${esc(e.nivel)}`;
  case"loop-iter":return`#${esc(e.n)} ${e.green?'<b class="ok">verde</b>':esc(e.signature)} · ${esc(e.task)}`;
  default:return`${esc(e.task||"")} ${e.reason?"— "+esc(e.reason):""}`}}
 function render(s){
  $("repo").textContent=s.repo?`Panel del arnés · ${s.repo}`:"Panel del arnés";
  if(!s.configured){$("verdict").textContent="sin config";return}
  $("branch").textContent=s.branch;
+ agente(s.autonomia||{});
  const g=s.gate||{}, sig=g.signals||{}, vals=Object.values(sig);
  const v=g.pending?["gate pendiente","warn"]:!vals.length?["nunca corrió","mute"]:vals.includes("roja")?["ROJO","bad"]:g.mode==="fast"?["fast (no entregable)","warn"]:vals.includes("omitida")?["verde con omitidas","ok"]:["VERDE","ok"];
  $("verdict").textContent=v[0];$("verdict").className="big "+v[1];
@@ -376,6 +395,23 @@ function render(s){
   +`<span>registro de eventos</span><b class="n ${s.eventsEnabled?"ok":"warn"}">${s.eventsEnabled?"encendido":"apagado"}</b>`;
  const evs=(s.events||[]).slice().reverse();
  $("ev").innerHTML=evs.length?evs.map(e=>{const[c,l]=EV[e.kind]||["",e.kind];return`<li><span class="t">${hora(e.at)}</span><span class="chip ${c}">${esc(l)}</span><span class="msg">${evText(e)}</span></li>`}).join(""):'<li class="empty">Todavía nada. Cada freno, gate y vuelta del loop aparece acá apenas pasa.</li>';
+}
+const PROPORCION=new Set(["aceptadasMin","denegadosMax","gateVerdeMin"]);
+function valor(f,x){if(x==null)return"—";return PROPORCION.has(f.clave)?Math.round(x*100)+"%":(Math.round(x*10)/10)}
+function agente(A){
+ if(!A.activa){$("agente").style.display="none";return}
+ $("agente").style.display="";
+ const i=(A.niveles||[]).findIndex(n=>n.id===A.nivel);
+ $("escalera").innerHTML=(A.niveles||[]).map((n,j)=>`<span class="${j<i?"hecho":j===i?"aqui":""}">${esc(n.id)} · ${esc(n.nombre)}</span>`).join("");
+ $("anivel").textContent=`${A.nivel} — ${A.nombre}`;$("anivel").className="big "+(A.alertas&&A.alertas.length?"warn":"ok");
+ $("apuede").textContent="Puede: "+(A.puede||"");$("anopuede").textContent=A.noPuede?"No puede: "+A.noPuede:"";
+ $("aalertas").innerHTML=(A.alertas||[]).map(a=>`<li>⚠ ${esc(a)}</li>`).join("");
+ if(!A.siguiente){$("aevtit").textContent="Evidencia";$("aev").innerHTML='<li class="empty">Nivel más alto: la evidencia ahora es para no bajar.</li>';$("afirma").textContent=""}
+ else{$("aevtit").textContent=`Evidencia para ${A.siguiente}`;
+  $("aev").innerHTML=(A.evidencia||[]).map(f=>{const u=f.umbral||0,v=f.valor??0;const w=f.modo==="max"?100:Math.min(100,u?Math.round(100*v/u):(f.ok?100:0));
+   return`<li><div class="fila"><span class="${f.ok?"ok":""}">${f.ok?"✓":"·"} ${esc(f.etiqueta)}</span><b class="n">${valor(f,f.valor)} <span class="mute">/ ${f.modo==="max"?"≤":"≥"} ${valor(f,u)}</span></b></div><div class="bar ${f.ok?"":"no"}"><i style="width:${w}%"></i></div></li>`}).join("")||'<li class="empty">Sin umbral declarado para este paso.</li>';
+  $("afirma").innerHTML=A.listoParaSubir?`<b class="ok">Lista para subir.</b> Firma un humano: <span class="k">${esc(A.comando)} subir --firma "Nombre"</span>`:'<span class="mute">Todavía no: la evidencia no alcanza. El panel no sube a nadie: firma un humano.</span>'}
+ $("ahist").innerHTML=(A.historial||[]).slice().reverse().map(h=>`<li><span class="t k">${new Date((h.at||0)*1000).toLocaleDateString()}</span><span class="chip ${h.tipo==="ganado"?"ok":h.tipo==="declarado"?"warn":"bad"}">${esc(h.de)}→${esc(h.a)}</span><span>${esc(h.firma||"automático")}${h.motivo?" · "+esc(h.motivo):""}</span></li>`).join("")||`<li class="empty">${A.inicial?"Nivel inicial del config: todavía ninguna transición.":"Sin transiciones."}</li>`;
 }
 function conectar(){
  const live=$("live");

@@ -165,6 +165,8 @@ def probar(config: dict, iid: str, root: Path = REPO_ROOT) -> list[str]:
             for ruta, valor in ej["set"].items():
                 ent = set_ruta(ent, ruta, valor)
             cfg = con(config, iid, ent)
+        # Se prueba la INTEGRACIÓN, no el nivel del agente: en L0 todo lo que no es lectura se frena antes.
+        cfg = {k: v for k, v in cfg.items() if k != "autonomia"}
         d = guards.evaluate(evento(cfg, iid, ent, ej), cfg, root)
         hizo = "block" if d.block else ("approve" if d.approve else "allow")
         que = ej.get("tool") or ej.get("command")

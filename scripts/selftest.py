@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # El núcleo vive DENTRO del plugin (`plugin/harness/`): Hermes copia el directorio del plugin
@@ -376,6 +377,192 @@ def seccion_integraciones(config: dict, ctx) -> None:
     check(any("browser_nueva" in a for a in avisos), "la sonda no avisó de una herramienta nueva sin declarar")
 
 
+def seccion_autonomia(config: dict, ctx) -> None:
+    """P27–P29: el nivel muerde, la evidencia decide, el humano firma, bajar es automático."""
+    from harness import autonomia as au
+    from harness import events as ev_mod
+    import loop as loop_mod  # noqa: E402
+    import panel as panel_mod  # noqa: E402
+
+    tools = config.get("tools") or {}
+    pre, post, llm = ctx.hooks["pre_tool_call"][0], ctx.hooks["post_tool_call"][0], ctx.hooks["pre_llm_call"][0]
+    s = au.spec(config)
+    check(bool(s), "el config no declara `autonomia` con `niveles`: el agente no tiene nivel (P27)")
+    if not s:
+        return
+    check(set(s.get("niveles") or {}) == set(au.NIVELES), f"`autonomia.niveles` no declara exactamente {au.NIVELES}")
+    for de, a in zip(au.NIVELES, au.NIVELES[1:]):
+        check(bool((s.get("ascenso") or {}).get(f"{de}->{a}")), f"`autonomia.ascenso` no tiene umbral para {de}->{a}: nadie podría subir")
+    plant = json.loads((HARNESS_HOME / "plantillas" / "harness.config.json").read_text(encoding="utf-8"))
+    check((plant.get("autonomia") or {}).get("inicial") == "L0", "la plantilla no arranca en L0: un repo nuevo regalaría autonomía (P27)")
+    check(not (plant.get("autonomia") or {}).get("niveles", {}).get("L0", {}).get("loop"), "L0 trabaja desatendido en la plantilla")
+
+    prueba = os.environ.pop("HARNESS_NIVEL_PRUEBA", None)
+    eventos_antes = os.environ.get("HARNESS_NO_EVENTS")
+    with tempfile.TemporaryDirectory() as tmp:
+        troot = Path(tmp).resolve()
+        subprocess.run(["git", "init", "-q"], cwd=troot, capture_output=True)
+        (troot / ".hermes").mkdir()
+        cfg = {**config, "observability": {**(config.get("observability") or {}), "events": {"file": ".git/harness-events.jsonl", "maxBytes": 5_000_000}}}
+        (troot / ".hermes" / "harness.config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        estado = au.ruta(cfg, troot)
+        os.environ["HARNESS_REPO"] = str(troot)
+        os.environ["HARNESS_NO_EVENTS"] = "1"
+
+        def fijar(n):
+            estado.parent.mkdir(parents=True, exist_ok=True)
+            estado.write_text(json.dumps({"nivel": n, "historial": [{"at": 1.0, "de": "L0", "a": n, "tipo": "declarado"}]}), encoding="utf-8")
+
+        def llamar(fam, args, sesion="selftest-nivel"):
+            tool = (tools.get(fam) or [None])[0]
+            return pre(tool_name=tool, args=args, session_id=sesion) if tool else "sin-herramienta"
+
+        try:
+            # P2: cada `ejemplo` de cada nivel, por el plugin real, con el nivel fijado en el estado.
+            for n in au.NIVELES:
+                fijar(n)
+                check(au.nivel(cfg, troot) == n, f"el estado dice {n} y el freno lee {au.nivel(cfg, troot)}")
+                ej = ((s["niveles"].get(n) or {}).get("ejemplos")) or {}
+                check(bool(ej), f"{n} no trae `ejemplos`: su freno no tiene prueba de vida (P2)")
+                for espera, lista in (("block", ej.get("bloquea")), ("approve", ej.get("pregunta")), (None, ej.get("deja"))):
+                    for e in lista or []:
+                        r = llamar(e.get("familia"), e.get("args") or {})
+                        hizo = r.get("action") if isinstance(r, dict) else r
+                        check(hizo == espera, f"{n}: {e.get('familia')} {json.dumps(e.get('args'), ensure_ascii=False)[:80]} → "
+                                              f"`{hizo}`, se esperaba `{espera}`")
+                        if espera:
+                            check(f"nivel-{n}" in str((r or {}).get("rule_key", "")) or f"NIVEL {n}" in str((r or {}).get("message", "")),
+                                  f"{n}: lo frenó otra regla, no el nivel: {str(r)[:120]}")
+            # El mensaje explica el porqué y qué hacer (lo único que el agente lee).
+            fijar("L0")
+            r = llamar("write", {"path": "src/x.py", "content": "x"})
+            msg = (r or {}).get("message", "")
+            check("L0" in msg and "evidencia" in msg and "podés" in msg, f"el bloqueo de nivel no explica qué puede hacer ni cómo se sube: {msg[:200]}")
+            # L0: leer siempre pasa; un subcomando colado o una sustitución no pasan por «lectura».
+            check(llamar("read", {"path": "README.md"}) is None, "L0 no deja leer")
+            for cmd in ("git status && rm -r src", "cat $(echo README.md)", "ls > lista.txt", "git log | tee x"):
+                check(isinstance(llamar("shell", {"command": cmd}), dict), f"L0 dejó pasar `{cmd}` por parecer lectura")
+            check(au.terminal_permitida("git log --oneline 2>&1", s["niveles"]["L0"].get("terminalPermitida")),
+                  "`2>&1` no es una redirección a un archivo: L0 no debería frenarlo")
+            # Un deny del repo le gana al «pedir aprobación» del nivel: aprobar un cambio en L2 no aprueba un --no-verify.
+            fijar("L2")
+            deny0 = next((x for x in (config.get("terminal") or {}).get("deny") or [] if x.get("example")), None)
+            if deny0:
+                r = llamar("shell", {"command": deny0["example"]})
+                check(isinstance(r, dict) and r.get("action") == "block", f"en L2 `{deny0['example']}` pidió aprobación en vez de bloquear")
+            # Un estado roto vale L0 (la única excepción a P5: un archivo corrupto no regala autonomía).
+            estado.write_text("{ roto", encoding="utf-8")
+            check(au.nivel(cfg, troot) == "L0", "un estado de autonomía roto no vale L0")
+            r = llamar("write", {"path": "src/x.py", "content": "x"})
+            check(isinstance(r, dict) and r.get("action") == "block", "con el estado roto se pudo escribir")
+            estado.write_text(json.dumps({"nivel": "L9"}), encoding="utf-8")
+            check(au.nivel(cfg, troot) == "L0", "un nivel inválido en el estado no vale L0")
+            estado.unlink()
+            check(au.nivel(cfg, troot) == s.get("inicial", "L0"), "sin estado no vale `autonomia.inicial`")
+            check(au.nivel({**cfg, "autonomia": {**s, "inicial": "L0"}}, troot) == "L0", "sin estado y con inicial L0 no vale L0")
+            # Sin `autonomia` en el config, el freno no actúa (repos que no gradúan la autonomía).
+            sin = {k: v for k, v in cfg.items() if k != "autonomia"}
+            check(not guards.nivel_guard(core.Event(tool=(tools.get("write") or ["w"])[0], args={"path": "a.py"}), sin, troot).block,
+                  "sin `autonomia` el freno de nivel bloquea igual")
+
+            # Subir: un nivel a la vez, con evidencia y firma. Bajar: solo, sin firma.
+            fijar("L0")
+            ok, msg, filas = au.subir(cfg, troot, "Ana", evs=[])
+            check(not ok and filas and not all(f["ok"] for f in filas), "subió de L0 sin evidencia")
+            ok, msg, _ = au.subir(cfg, troot, "", evs=[])
+            check(not ok and "firma" in msg, "subió sin firma")
+            ahora = time.time()
+            limpias = [{"at": ahora, "kind": "turno", "session": f"s{i}"} for i in range(10)]
+            ok, msg, _ = au.subir(cfg, troot, "Ana", evs=limpias)
+            check(ok and au.nivel(cfg, troot) == "L1", f"con la evidencia de L0->L1 no subió a L1: {msg}")
+            check(au.leer(cfg, troot)["historial"][-1].get("firma") == "Ana", "el ascenso no guardó la firma")
+            ok, msg, _ = au.subir(cfg, troot, "Ana", evs=limpias)
+            check(not ok and au.nivel(cfg, troot) == "L1", "subió dos niveles con la misma evidencia (la ventana no se reinició)")
+            check(not au.puede_subir(cfg, "L0", limpias, ahora + 10)[0],
+                  "la evidencia ANTERIOR a la última transición cuenta: bajar o subir no reinicia la ventana (P28)")
+            sucias = limpias + [{"at": ahora + 5, "kind": "block", "rule": "nivel-L0-write", "session": f"s{i}"} for i in range(10)]
+            filas = au.evidencia(cfg, "L0", sucias, 0)
+            check(not all(f["ok"] for f in filas), "una sesión que se salió del nivel cuenta como limpia")
+            check(not au.puede_subir({**cfg, "autonomia": {**s, "ascenso": {"L0->L1": {"metricaInventada": 1}}}}, "L0", limpias, 0)[0],
+                  "una métrica que el arnés no sabe medir se dio por cumplida")
+            fijar("L3")
+            check(not au.subir(cfg, troot, "Ana", evs=limpias)[0], "subió más allá de L3")
+            # Disparadores de descenso.
+            d = s.get("descenso") or {}
+            t0 = 100.0
+            check(au.disparador(cfg, [{"at": t0 + 1, "kind": "tampering", "paths": ["x"]}], t0) is not None, "tocar intocables no baja el nivel")
+            check(au.disparador(cfg, [{"at": t0 - 1, "kind": "tampering", "paths": ["x"]}], t0) is None,
+                  "un tampering ANTERIOR a la última transición la vuelve a bajar (la ventana no se reinicia)")
+            if d.get("reglasCriticas"):
+                check(au.disparador(cfg, [{"at": t0 + 1, "kind": "block", "rule": d["reglasCriticas"][0]}], t0) is not None,
+                      "intentar algo que veda una regla crítica no baja el nivel")
+                check(au.disparador(cfg, [{"at": t0 + 1, "kind": "block", "rule": "nivel-L0-write"}], t0) is None,
+                      "un freno de nivel cualquiera baja el nivel (sólo las reglas críticas)")
+            if d.get("denegadasSeguidas"):
+                n_ = int(d["denegadasSeguidas"])
+                den = [{"at": t0 + i + 1, "kind": "aprobacion", "approved": False} for i in range(n_)]
+                check(au.disparador(cfg, den, t0) is not None, f"{n_} aprobaciones denegadas seguidas no bajan el nivel")
+                check(au.disparador(cfg, den[:-1] + [{"at": t0 + 99, "kind": "aprobacion", "approved": True}], t0) is None,
+                      "una aprobación en el medio no corta la racha de denegadas")
+            if d.get("escaladasSeguidas"):
+                n_ = int(d["escaladasSeguidas"])
+                check(au.disparador(cfg, [{"at": t0 + i + 1, "kind": "loop-escalar"} for i in range(n_)], t0) is not None,
+                      f"{n_} tareas escaladas seguidas no bajan el nivel")
+            # De punta a punta: con el registro encendido, el plugin baja el nivel ante una regla crítica.
+            os.environ.pop("HARNESS_NO_EVENTS", None)
+            fijar("L3")
+            crit = next((x for x in (config.get("terminal") or {}).get("deny") or []
+                         if x.get("id") in set(d.get("reglasCriticas") or []) and x.get("example")), None)
+            if crit:
+                llamar("shell", {"command": crit["example"]})
+                check(au.nivel(cfg, troot) == "L2", f"el plugin frenó `{crit['id']}` (crítica) y el nivel no bajó de L3 a L2")
+                evs = ev_mod.tail(cfg, troot, 200)
+                check(any(e.get("kind") == "nivel-baja" and e.get("a") == "L2" for e in evs),
+                      "el descenso no quedó en el registro de eventos: una transición que no está ahí no ocurrió (P29)")
+                check(au.leer(cfg, troot)["historial"][-1].get("tipo") == "bajado-automatico", "el descenso automático quedó firmado")
+            # Lo que el humano decide en una aprobación es evidencia (`aprobacion`), aprobada o no.
+            fijar("L2")
+            tool_w = (tools.get("write") or [None])[0]
+            args_w = {"path": "src/x.py", "content": "x"}
+            r = pre(tool_name=tool_w, args=args_w, session_id="s-aprob", tool_call_id="c1")
+            post(tool_name=tool_w, args=args_w, status="ok", session_id="s-aprob", tool_call_id="c1")
+            r2 = pre(tool_name=tool_w, args=args_w, session_id="s-aprob", tool_call_id="c2")
+            post(tool_name=tool_w, args=args_w, status="blocked", session_id="s-aprob", tool_call_id="c2")
+            ap = [e for e in ev_mod.tail(cfg, troot, 200) if e.get("kind") == "aprobacion"]
+            check(isinstance(r, dict) and r.get("action") == "approve" and [e.get("approved") for e in ap[-2:]] == [True, False],
+                  f"lo que el humano dijo en las aprobaciones no quedó como evidencia: {ap[-2:]}")
+            # `turno`: una línea por sesión (la base de «sesiones limpias»), no una por mensaje.
+            antes = len([e for e in ev_mod.tail(cfg, troot, 500) if e.get("kind") == "turno"])
+            for _ in range(3):
+                llm(user_message="hola", session_id="s-turno")
+            despues = len([e for e in ev_mod.tail(cfg, troot, 500) if e.get("kind") == "turno"])
+            check(despues - antes == 1, f"`turno` se registró {despues - antes} veces para una sesión")
+            # El loop no trabaja desatendido por debajo de un nivel con `loop: true`.
+            fijar("L2")
+            ok, motivo = loop_mod.nivel_permite_loop(cfg, troot)
+            check(not ok and "L2" in motivo and "evidencia" in motivo, f"el loop corre en L2: {motivo}")
+            fijar("L3")
+            check(loop_mod.nivel_permite_loop(cfg, troot)[0], "el loop no corre en L3")
+            # El panel muestra la salud del agente y se entera al instante de una transición.
+            est = panel_mod.estado(cfg, troot)
+            a_ = est.get("autonomia") or {}
+            check(a_.get("activa") and a_.get("nivel") == "L3" and "evidencia" in a_ and "historial" in a_,
+                  "el panel no muestra el nivel, la evidencia y las transiciones (P29)")
+            check(any(str(p) == str(estado) for p in panel_mod.fuentes(cfg, troot)),
+                  "el panel no mira el estado de autonomía: una transición no se empujaría en vivo")
+            check('id="agente"' in panel_mod.HTML and "Salud del agente" in panel_mod.HTML, "el panel no tiene la sección «Salud del agente»")
+            # Declarar sin evidencia es posible, pero queda a la vista.
+            ok, _ = au.declarar(cfg, troot, "L3", "", "")
+            check(not ok, "declarar un nivel sin firma ni motivo")
+            au.declarar(cfg, troot, "L3", "selftest", "prueba")
+            check(any("declarado" in x for x in au.resumen(cfg, troot).get("alertas") or []), "un nivel declarado no aparece como alerta")
+        finally:
+            os.environ["HARNESS_REPO"] = str(REPO_ROOT)
+            os.environ["HARNESS_NO_EVENTS"] = eventos_antes or "1"
+            if prueba:
+                os.environ["HARNESS_NIVEL_PRUEBA"] = prueba
+
+
 def main() -> int:
     raiz_antes = sorted(p.name for p in REPO_ROOT.iterdir())
     # Los casos de "el freno revienta" loguean su traza a propósito: acá es ruido esperado.
@@ -386,6 +573,12 @@ def main() -> int:
     # Cientos de bloqueos de prueba no pueden llenar el panel del humano: el registro de eventos
     # se apaga acá y la sección 13 lo enciende en un repo temporal.
     os.environ["HARNESS_NO_EVENTS"] = "1"
+    # Dentro del loop aislado, el gate hereda `HARNESS_EVENTS_FILE` (el registro del repo principal): el
+    # self-test escribía y leía AHÍ sus eventos de prueba, y la sección 13 contaba líneas ajenas.
+    os.environ.pop("HARNESS_EVENTS_FILE", None)
+    # El nivel de autonomía se prueba en su sección (15); el resto prueba los OTROS frenos sin él encima
+    # (un repo instalado arranca en L0, donde todo lo que escribe se frena antes de llegar a la regla).
+    os.environ["HARNESS_NIVEL_PRUEBA"] = "L3"
     # Los repos de prueba son temporales: sin gc ni mantenimiento automático de git, que después de
     # un commit sigue escribiendo `objects` en segundo plano mientras el temporal se borra (CI macOS).
     os.environ.update({"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "gc.auto", "GIT_CONFIG_VALUE_0": "0",
@@ -1730,6 +1923,10 @@ def main() -> int:
     # ── 14. Integraciones: lo que el agente hace afuera ──────────────────────
     section("14. integraciones: catálogo, clases, destinatarios, presupuesto, alcance, lanzador")
     seccion_integraciones(config, ctx)
+
+    # ── 15. Autonomía por niveles: se gana con evidencia ─────────────────────
+    section("15. nivel de autonomía: el freno, la evidencia, la firma y el descenso (P27–P29)")
+    seccion_autonomia(config, ctx)
 
     # ── 10. P7: el self-test no dejó nada en la raíz ─────────────────────────
     section("10. el self-test no escribe en el árbol (P7)")

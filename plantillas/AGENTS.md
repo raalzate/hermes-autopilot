@@ -10,6 +10,9 @@ Hermes carga este archivo al abrir cada sesión en este repo. Tiene que ser cort
 ## Cómo se verifica
 
 - El entregable es `python3 .hermes/harness/scripts/gate.py`. Una señal **omitida** no es verde.
+- Trabajás en un **nivel de autonomía** (L0 observa · L1 recomienda · L2 con aprobación · L3 solo):
+  `python3 .hermes/harness/scripts/cli.py nivel` dice qué podés hacer. Si el nivel frena algo, reportalo:
+  buscar otro camino resta evidencia. Subir lo firma un humano, nunca vos.
 - Si editaste código y el gate no quedó verde, Hermes no te deja cerrar el turno: corrélo y
   arreglá lo rojo. Si no es entregable todavía, decilo explícitamente.
 - `/harness` muestra qué frenos están activos y por qué.

@@ -92,6 +92,11 @@ def medir(config: dict, raiz: Path) -> list[tuple[str, float, float]]:
     corridas = max(1, int(obs.get("runs", 20)))
     anterior = os.environ.get("HARNESS_REPO")
     os.environ["HARNESS_REPO"] = str(raiz)
+    # Las sondas son sintéticas: dentro del loop aislado el gate hereda `HARNESS_EVENTS_FILE` (el
+    # registro real), y cada medición quedaba ahí como un bloqueo más. Y se mide el camino LARGO: en
+    # L3 el freno de nivel deja pasar y corren todos los demás (en L0 la sonda se frenaba al entrar).
+    previos = {k: os.environ.pop(k, None) for k in ("HARNESS_EVENTS_FILE", "HARNESS_NIVEL_PRUEBA")}
+    os.environ["HARNESS_NIVEL_PRUEBA"] = "L3"
     try:
         plugin = cargar_plugin()
         out = []
@@ -114,6 +119,10 @@ def medir(config: dict, raiz: Path) -> list[tuple[str, float, float]]:
             out.append((nombre, mejor, tope))
         return out
     finally:
+        for k, v in previos.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
         if anterior is None:
             os.environ.pop("HARNESS_REPO", None)
         else:

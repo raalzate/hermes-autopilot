@@ -1,6 +1,6 @@
 # Constitución — Hermes Autopilot
 
-**Versión 1.6.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
+**Versión 1.7.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
 viven en `AGENTS.md`; el arnés que los hace cumplir, en `docs/arnes.md`.
 
 Cada principio dice su **fuerza**:
@@ -267,6 +267,46 @@ repo ni por el modelo, y lo que el perfil veda ni siquiera se le muestra al mode
 `pre_tool_call`; el lanzador `scripts/integ_run.py`; `integ.py check` en el gate, self-test §14,
 mutaciones y cinco casos replicables (ADR 0010).
 
+## P27 — La autonomía se gana con evidencia · BLOCKING
+
+Un agente no arranca confiable: arranca observando. Cuatro niveles, cada uno con lo que permite:
+**L0 Observador** lee y reporta; **L1 Recomendar** además corre el gate y los tests y deja
+propuestas para que un humano las juzgue; **L2 Con aprobación** cambia el repo, pero cada escritura
+o comando que cambia algo lo aprueba un humano antes; **L3 Autonomía** trabaja solo, también
+desatendido en el loop. Toda instalación nueva arranca en L0. El nivel lo hace cumplir el plugin
+en cada tool call —antes que los otros frenos—, no el prompt: un agente que «sabe» que no debe
+escribir y escribe igual es exactamente lo que el nivel existe para frenar. Un estado de nivel
+ilegible vale L0: es la única excepción a P5, porque un archivo roto no puede regalar autonomía.
+
+*Mecanismo:* `autonomia` en el config (niveles, `ejemplos` por nivel), `plugin/harness/autonomia.py`
+y `nivel_guard` en `plugin/harness/guards.py`; el loop no arranca en un nivel sin `loop: true`;
+self-test §15 y mutaciones (ADR 0012).
+
+## P28 — Subir lo firma un humano, bajar es automático · BLOCKING
+
+Se sube de a un nivel, sólo cuando la evidencia del registro cumple el umbral declarado
+(`autonomia.ascenso`) y con la firma de un humano; el agente no se firma su propio ascenso ni juzga
+sus propias recomendaciones. Se baja solo, sin firma, ante un disparador (`autonomia.descenso`):
+tocar intocables en el loop, intentar lo que veda una regla crítica, aprobaciones denegadas
+seguidas, tareas escaladas seguidas. Cada transición reinicia la ventana de evidencia. Declarar un
+nivel sin evidencia es posible —un sandbox, el repo del propio arnés— pero lleva firma y motivo y
+queda a la vista como alerta mientras dure.
+
+*Mecanismo:* `cli.py nivel subir|bajar|declarar` y `cli.py recomendacion aceptar|rechazar` (la regla
+`nivel-firma` de `terminal.ask` las escala al humano si las corre el agente; `nivel-prueba` veda la
+variable del self-test); `autonomia.revisar` en el plugin y en el loop; self-test §15 y mutaciones.
+
+## P29 — La salud del agente se ve · BLOCKING
+
+El nivel actual, lo que permite, la evidencia contra el umbral del siguiente, las transiciones y
+las alertas se ven en el panel en vivo y en `cli.py nivel`. Lo que el humano decide (aprobar,
+denegar, aceptar una recomendación) queda en el registro de eventos como evidencia. Una transición
+que no está en el registro no ocurrió.
+
+*Mecanismo:* sección «Salud del agente» de `scripts/panel.py` (clave `autonomia` del estado, el
+archivo de nivel entre las fuentes del stream), eventos `turno`, `aprobacion`, `recomendacion`,
+`tampering`, `nivel-sube`, `nivel-baja`, `nivel-declarado`; self-test §15.
+
 ## Precedencia — cuando dos BLOCKING chocan · REVIEW
 
 Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el resto en orden.
@@ -284,3 +324,4 @@ Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el 
 | 1.4.0 | 2026-10-08 | Herramientas verificadas contra el código de Hermes: P8 suma `code_guard` (`execute_code` no pasaba por ningún freno) y el código en línea; P21 suma el paralelo por worktrees. |
 | 1.5.0 | 2026-10-08 | Cierre de huecos: P8 suma la guardia de Python; P21, el loop aislado en worktree; P24 (lo que entra de un tercero no sale solo: sesión contaminada); P25 (un sensor inferencial se mide con una tasa: `revision.py`). |
 | 1.6.0 | 2026-10-09 | Integraciones: P26 (lo que el agente hace afuera tiene clase, destinatario y tope). Hermes conecta, el arnés gobierna: catálogo de manifiestos, perfiles, lanzador con secretos por referencia, dependencias aisladas con lock (ADR 0010). |
+| 1.7.0 | 2026-10-14 | Autonomía por evidencia: P27 (cuatro niveles —L0 observa, L1 recomienda, L2 con aprobación, L3 autonomía—, toda instalación arranca en L0, lo hace cumplir el plugin), P28 (subir con evidencia y firma humana, bajar automático) y P29 (la salud del agente se ve). ADR 0012. |

@@ -68,6 +68,10 @@ sin `example` es roja.
 | `loop.tasksFile`, `agentCommand`, `gateCommand`, `maxIterations`, `sameFailureLimit`, `maxMinutes`, `agentTimeoutMinutes`, `gateTimeoutMinutes`, `branchPrefix`, `stopFile`, `stateFile`, `prompt`, `retryPrompt`, `reason` | el loop autónomo (P21). Ver [`loop-autonomo.md`](loop-autonomo.md) |
 | `drift.statusDatePattern`, `statusMaxAgeDays`, `historyCommits`, `runner`, `command`, `reason` | el barrido de deriva (P20). `runner` es el pipeline que lo corre y `command` lo que ese pipeline tiene que invocar |
 | `review.command`, `dataset`, `minRecall`, `minPrecision`, `timeoutSeconds`, `requiresEnv`, `runner`, `runnerCommand`, `reason` | el revisor inferencial medido (`scripts/revision.py`): `command` es el revisor (`{prompt}` lleva el diff y la tarea), `dataset` los diffs etiquetados, los umbrales, y `requiresEnv` la variable que dice que hay un modelo (sin ella, OMITIDA) |
+| `autonomia.inicial`, `estado`, `comando` | el nivel de autonomía (P27, [`autonomia.md`](autonomia.md)): con qué nivel arranca un repo sin estado (`L0` en la plantilla), dónde vive el nivel firmado (`.git/` = gitdir común; ilegible vale L0) y el comando que nombran los mensajes |
+| `autonomia.niveles.{L0..L3}` | por nivel: `nombre`, `puede`, `noPuede`, y para cada familia `escribir`·`terminal`·`codigo`·`aprender`·`integraciones` = `allow`·`ask`·`deny`; `escribirPermitido[]` (rutas que se escriben igual), `terminalPermitida[]` (cada subcomando tiene que casar; sin `$(…)` ni redirecciones), `loop` (si trabaja desatendido) y `ejemplos{bloquea, pregunta, deja}` que el self-test pasa por el plugin (P2) |
+| `autonomia.ascenso."Ln->Lm"` | el umbral de cada paso, medido en el registro desde la última transición: `sesionesLimpias`, `intentosFueraDeNivel`, `recomendaciones`, `aceptadasMin`, `cambiosAprobados`, `denegadosMax`, `gatesMin`, `gateVerdeMin`, `tamperings`, `diasMin`. Una métrica desconocida no se da por cumplida |
+| `autonomia.descenso` | lo que baja UN nivel sin firma (P28): `tampering`, `reglasCriticas[]` (ids de reglas), `denegadasSeguidas`, `escaladasSeguidas` |
 | `taxonomy.stages`, `events`, `gitHooksDir`, `gitHooks`, `gateStages`, `skills`, `guides`, `pieces`, `pipelines` | el mapa guía/freno/sensor (P20): cada pieza con `direction`, `kind` (opcional) y `stage`. Una sin clasificar es rojo |
 
 ## Una integración (`integrations.enabled.<id>` y el manifiesto del catálogo)
@@ -118,6 +122,7 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `observability` | `scripts/timing.py`, `scripts/install.py` (`probe.filePath` desde el perfil), `scripts/selftest.py`; `events`: `plugin/harness/events.py`, `scripts/gate.py`, `scripts/loop.py`, `scripts/panel.py` |
 | `loop` | `scripts/loop.py`, `scripts/panel.py`, `scripts/cli.py` (`task`, y `gateCommand` como inocente de `rule add`), `scripts/selftest.py` |
 | `drift` | `scripts/drift.py`, `scripts/selftest.py` (que el `runner` invoque el `command`) |
+| `autonomia` | `plugin/harness/autonomia.py`, `plugin/harness/guards.py` (`nivel_guard`), `plugin/__init__.py` (`turno`, `aprobacion`, `revisar`), `scripts/loop.py` (`nivel_permite_loop`), `scripts/panel.py` (Salud del agente), `scripts/cli.py` (`nivel`, `recomendacion`), `scripts/selftest.py` (§15) |
 | `taxonomy` | `scripts/map.py`, `scripts/panel.py` (salud), `scripts/selftest.py` |
 
 Todas las claves también las lee y escribe `scripts/cli.py` (`config get|set`, `rule`, `signal`).

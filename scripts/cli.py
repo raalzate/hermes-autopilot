@@ -12,6 +12,11 @@
     python3 scripts/cli.py signal list | signal add "nombre" --why "…" [--apply] -- cmd args… | signal rm "nombre" [--apply]
     python3 scripts/cli.py profile list
     python3 scripts/cli.py task add "texto" | task list           la cola del loop autónomo
+    python3 scripts/cli.py nivel [--json]                         el nivel de autonomía y la evidencia para subir
+    python3 scripts/cli.py nivel subir --firma "Nombre"           sube UN nivel, sólo si la evidencia alcanza (P28)
+    python3 scripts/cli.py nivel bajar [--a L1] --motivo "…" --firma "Nombre"
+    python3 scripts/cli.py nivel declarar L3 --motivo "…" --firma "Nombre"   sin evidencia: queda como alerta
+    python3 scripts/cli.py recomendacion list | aceptar|rechazar <archivo> [--firma "Nombre"]   las propuestas de L1
     python3 scripts/cli.py integ list|show|add|set|rm|test|deps|hermes|check   las integraciones (scripts/integ.py)
     python3 scripts/cli.py gate|selftest|lint|map|timing|doctor|drift|install|loop|panel|casos [args…]
 
@@ -121,7 +126,9 @@ def decision(config: dict, root: Path, familia: str, regla: dict, texto: str) ->
     tool = ((config.get("tools") or {}).get(kind) or [None])[0] if kind else None
     if not tool:
         return None
-    return guards.evaluate(core.Event(tool=tool, args=caso(familia, regla, texto)), config, root)
+    # Se prueba la REGLA, no el nivel del agente: en L0 todo se frena y ningún ejemplo probaría nada.
+    sin_nivel = {k: v for k, v in config.items() if k != "autonomia"}
+    return guards.evaluate(core.Event(tool=tool, args=caso(familia, regla, texto)), sin_nivel, root)
 
 
 def validar(config: dict, familia: str, regla: dict, root: Path = REPO_ROOT) -> list[str]:
@@ -246,6 +253,11 @@ def cmd_status(args: list[str]) -> int:
         print(f"    {'✓' if v == 'verde' else '·' if v == 'omitida' else '✗'} {n}")
     st = s["status"]
     print(f"  {st['file']:<9} veredicto de hace {st['ageDays']} día(s)" if st.get("ageDays") is not None else f"  {st['file']}: sin fecha")
+    au = s.get("autonomia") or {}
+    if au.get("activa"):
+        print(f"  nivel     {au['nivel']} ({au['nombre']})"
+              + (f" · listo para {au['siguiente']}: falta la firma" if au.get("listoParaSubir") else "")
+              + "".join(f"\n            ⚠ {x}" for x in au.get("alertas") or []))
     print("  frenos    " + " · ".join(f"{k} {v}" for k, v in s["rules"].items() if v))
     integ = s.get("integrations") or []
     print("  integ.    " + (" · ".join(f"{i['id']} ({i['perfil']})" for i in integ) if integ else "ninguna habilitada (`cli.py integ list`)"))
@@ -265,6 +277,133 @@ def cmd_status(args: list[str]) -> int:
             print(f"    {_t.strftime('%H:%M:%S', _t.localtime(ev.get('at', 0)))} {ev.get('kind'):<14} "
                   f"{ev.get('rule') or ev.get('verdict') or ev.get('task') or ev.get('first') or ''}")
     print("Panel en vivo: cli.py panel")
+    return 0
+
+
+def _opcion(args: list[str], nombre: str) -> str:
+    if nombre in args:
+        i = args.index(nombre)
+        return args[i + 1] if i + 1 < len(args) else ""
+    return ""
+
+
+def _firma_de(args: list[str]) -> str:
+    f = _opcion(args, "--firma")
+    if f:
+        return f
+    p = subprocess.run(["git", "config", "user.name"], cwd=REPO_ROOT, capture_output=True, text=True)
+    return p.stdout.strip()
+
+
+PROPORCION = {"aceptadasMin", "denegadosMax", "gateVerdeMin"}  # el resto son conteos (o días)
+
+
+def _fila(f: dict) -> str:
+    v, u, prop = f["valor"], f["umbral"], f["clave"] in PROPORCION
+    v = "—" if v is None else (f"{v:.0%}" if prop else (f"{v:.1f}" if isinstance(v, float) else str(v)))
+    u = f"{u:.0%}" if prop and isinstance(u, (int, float)) else str(u)
+    return f"    {'✓' if f['ok'] else '✗'} {f['etiqueta']:<34} {v:>6}  ({'al menos' if f['modo'] == 'min' else 'como mucho'} {u})"
+
+
+def cmd_nivel(args: list[str]) -> int:
+    """El nivel de autonomía (P27–P29): verlo, subirlo con evidencia y firma, bajarlo, declararlo."""
+    from harness import autonomia
+
+    config = leer_config()
+    if not autonomia.spec(config):
+        print("harness: el config no declara `autonomia`: este repo no gradúa la autonomía del agente.")
+        return 1
+    sub = args[0] if args and not args[0].startswith("-") else "ver"
+    if sub == "subir":
+        ok, msg, filas = autonomia.subir(config, REPO_ROOT, _firma_de(args) if "--firma" in args else "")
+        print(("✓ " if ok else "✗ ") + msg)
+        for f in filas:
+            print(_fila(f))
+        return 0 if ok else 2
+    if sub == "bajar":
+        motivo, firma = _opcion(args, "--motivo"), _firma_de(args)
+        if not motivo or not firma:
+            print("bajar a mano lleva --motivo y una firma (--firma o `git config user.name`).")
+            return 1
+        a = autonomia.bajar(config, REPO_ROOT, motivo, firma=firma, a=_opcion(args, "--a") or None)
+        print(f"✓ bajó a {a}." if a else "✗ no hay un nivel más bajo que el actual (o --a no es más bajo).")
+        return 0 if a else 2
+    if sub == "declarar":
+        a = args[1] if len(args) > 1 else ""
+        ok, msg = autonomia.declarar(config, REPO_ROOT, a, _opcion(args, "--firma"), _opcion(args, "--motivo"))
+        print(("✓ " if ok else "✗ ") + msg)
+        return 0 if ok else 2
+    r = autonomia.resumen(config, REPO_ROOT)
+    if "--json" in args:
+        print(json.dumps(r, indent=1, ensure_ascii=False, default=str))
+        return 0
+    import time as _t
+    print(f"Nivel {r['nivel']} — {r['nombre']}" + (f"  (desde {_t.strftime('%Y-%m-%d %H:%M', _t.localtime(r['desde']))})" if r["desde"] else ""))
+    print(f"  puede     {r['puede']}")
+    if r.get("noPuede"):
+        print(f"  no puede  {r['noPuede']}")
+    print(f"  loop      {'sí, desatendido' if r['loop'] else 'no'}")
+    for a in r["alertas"]:
+        print(f"  ⚠ {a}")
+    if r["siguiente"]:
+        print(f"\nEvidencia para {r['siguiente']} (desde la última transición):")
+        for f in r["evidencia"]:
+            print(_fila(f))
+        print("\n" + (f"Lista para subir: un humano firma con `{r['comando']} subir --firma \"Nombre\"`." if r["listoParaSubir"]
+                      else "Todavía no: la evidencia no alcanza."))
+    if r["historial"]:
+        print("\nTransiciones:")
+        for h in r["historial"]:
+            quien = h.get("firma") or "automático"
+            print(f"  {_t.strftime('%Y-%m-%d %H:%M', _t.localtime(h.get('at', 0)))}  {h.get('de')} → {h.get('a')}  "
+                  f"{h.get('tipo')} · {quien}" + (f" · {h.get('motivo')}" if h.get("motivo") else ""))
+    return 0
+
+
+def cmd_recomendacion(args: list[str]) -> int:
+    """Las propuestas que el agente deja en L1: un humano las juzga, y eso es evidencia (P27)."""
+    from harness import events
+
+    config = leer_config()
+    d = REPO_ROOT / ".hermes" / "recomendaciones"
+    sub = args[0] if args else "list"
+    MARCA = "<!-- juicio:"
+    if sub == "list":
+        archivos = sorted(d.glob("*.md")) if d.is_dir() else []
+        if not archivos:
+            print(f"Sin recomendaciones en {d.relative_to(REPO_ROOT)}/.")
+        for f in archivos:
+            texto = f.read_text(encoding="utf-8", errors="replace")
+            estado = re.search(r"<!-- juicio: (\w+)", texto)
+            titulo = next((l.lstrip("# ").strip() for l in texto.splitlines() if l.strip()), f.name)
+            print(f"  [{estado.group(1) if estado else 'pendiente':<9}] {f.relative_to(REPO_ROOT)} — {titulo[:80]}")
+        return 0
+    if sub not in ("aceptar", "rechazar") or len(args) < 2:
+        print("uso: harness recomendacion list | aceptar|rechazar <archivo> [--firma \"Nombre\"]")
+        return 1
+    f = (REPO_ROOT / args[1]).resolve() if not Path(args[1]).is_absolute() else Path(args[1]).resolve()
+    try:
+        f.relative_to(d.resolve())
+    except ValueError:
+        print(f"✗ {args[1]} no está en {d.relative_to(REPO_ROOT)}/: sólo se juzgan recomendaciones del agente.")
+        return 1
+    if not f.is_file():
+        print(f"✗ no existe {args[1]}.")
+        return 1
+    texto = f.read_text(encoding="utf-8", errors="replace")
+    if MARCA in texto:
+        print(f"✗ {f.name} ya fue juzgada: una recomendación cuenta una vez.")
+        return 2
+    firma = _firma_de(args)
+    if not firma:
+        print("✗ juzgar una recomendación lleva firma (--firma o `git config user.name`).")
+        return 1
+    aceptada = sub == "aceptar"
+    import time as _t
+    f.write_text(texto.rstrip("\n") + f"\n\n{MARCA} {'aceptada' if aceptada else 'rechazada'} · {firma} · "
+                 f"{_t.strftime('%Y-%m-%d %H:%M')} -->\n", encoding="utf-8")
+    events.record(config, REPO_ROOT, "recomendacion", archivo=f.relative_to(REPO_ROOT).as_posix(), aceptada=aceptada, firma=firma)
+    print(f"✓ {f.name}: {'aceptada' if aceptada else 'rechazada'} por {firma}. Cuenta como evidencia para subir de L1.")
     return 0
 
 
@@ -494,7 +633,7 @@ def main(argv: list[str]) -> int:
         print(f"harness: no hay {CONFIG_PATH}. Instalalo primero (`harness install <repo>`).")
         return 1
     fn = {"status": cmd_status, "rule": cmd_rule, "config": cmd_config, "profile": cmd_profile, "task": cmd_task,
-          "signal": cmd_signal}.get(cmd)
+          "signal": cmd_signal, "nivel": cmd_nivel, "recomendacion": cmd_recomendacion}.get(cmd)
     if fn is None:
         print(f"harness: comando desconocido `{cmd}`.\n")
         print(__doc__)

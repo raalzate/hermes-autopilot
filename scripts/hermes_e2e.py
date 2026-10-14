@@ -91,6 +91,9 @@ def adentro() -> int:
         (hh / "config.yaml").write_text("plugins:\n  enabled:\n    - repo-harness\n", encoding="utf-8")
         os.environ["HERMES_HOME"] = str(hh)
         os.environ.pop("HARNESS_REPO", None)
+        # Se prueban los frenos del repo, no el nivel de autonomía: sin esto, el primer ejemplo de una
+        # regla crítica bajaba el nivel y los siguientes los frenaba el nivel, sin el `reason` de la regla.
+        os.environ["HARNESS_NIVEL_PRUEBA"] = "L3"
         os.chdir(repo)
 
         from hermes_cli import plugins as hp  # noqa: E402 — sólo existe dentro de Hermes

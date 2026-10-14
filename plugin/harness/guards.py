@@ -11,7 +11,7 @@ import os
 import re
 from pathlib import Path
 
-from . import integ
+from . import autonomia, integ
 from .core import (
     Decision,
     Event,
@@ -443,6 +443,42 @@ def minutos_entre_corridas(sched: str) -> float | None:
     return None
 
 
+# ── nivel de autonomía ───────────────────────────────────────────────────────
+def nivel_guard(ev: Event, config: dict, root: Path) -> Decision:
+    """Lo que el NIVEL del agente permite (P27). L0 observa, L1 recomienda, L2 cambia con
+    aprobación, L3 trabaja solo; qué es cada cosa lo declara `autonomia.niveles`. Corre ANTES que
+    los otros frenos: un agente en L0 no escribe aunque ninguna regla del repo lo prohíba."""
+    if not autonomia.spec(config):
+        return Decision.allow()
+    n = autonomia.nivel(config, root)
+    kind = tool_kind(config, ev.tool)
+    ctx: dict = {}
+    if kind == "write":
+        ctx["rutas"] = [rel_to_repo(r, root, ev.cwd) for r in paths_of(config, ev)]
+        que = f"escribir `{(ctx['rutas'] or ['?'])[0]}`"
+    elif kind == "shell":
+        ctx["comando"] = command_of(config, ev)
+        que = f"correr `{ctx['comando'][:120]}`"
+    elif kind == "code":
+        que = "ejecutar código"
+    elif kind in autonomia.APRENDER:
+        que = f"guardar en `{ev.tool}`"
+    elif kind:
+        return Decision.allow()
+    else:
+        de = integ.de_herramienta(config, ev.tool)
+        if not de:
+            return Decision.allow()  # una herramienta sin dueño la decide `integrations.undeclared`
+        kind, ctx["clase"] = "integracion", integ.clase(de[1], de[2])
+        que = f"usar `{ev.tool}` ({ctx['clase']})"
+    act = autonomia.accion(config, n, kind, ctx)
+    if act == "allow":
+        return Decision.allow()
+    regla = {"id": f"nivel-{n}-{kind}", "reason": f"el nivel {n} no permite {que} sin más"}
+    texto = autonomia.mensaje(config, n, kind, que, act)
+    return Decision.ask(texto, regla) if act == "ask" else Decision.deny(texto, regla)
+
+
 # Qué frenos corren para qué clase de herramienta. El orden importa: el primero que bloquea gana.
 GUARDS = {
     "shell": [terminal_guard],
@@ -513,9 +549,23 @@ def taint_guard(ev: Event, config: dict, root: Path) -> Decision:
 
 
 def evaluate(ev: Event, config: dict | None, root: Path) -> Decision:
-    """El punto de entrada del plugin: la primera decisión que bloquea o escala, o allow."""
+    """El punto de entrada del plugin: la primera decisión que bloquea o escala, o allow.
+
+    El nivel de autonomía va primero si BLOQUEA; si sólo pide aprobación, los frenos del repo
+    corren igual y un bloqueo de ellos le gana (aprobar un cambio en L2 no aprueba un `--force`)."""
     if not config:
         return Decision.allow("config ausente o inválido: el arnés deja pasar (P5)")
+    try:
+        dn = nivel_guard(ev, config, root)
+    except Exception as e:  # noqa: BLE001 — un freno roto deja pasar (P5); un ESTADO roto es L0 (autonomia.leer)
+        dn = Decision.allow(f"freno de nivel roto: {e}")
+    if dn.block:
+        return dn
+    d = _evaluar_frenos(ev, config, root)
+    return d if (d.block or d.approve) else dn
+
+
+def _evaluar_frenos(ev: Event, config: dict, root: Path) -> Decision:
     kind = tool_kind(config, ev.tool)
     if not kind:
         # Una herramienta de una integración (un MCP, el gateway, el navegador) o con forma de una.

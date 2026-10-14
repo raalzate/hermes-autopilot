@@ -21,7 +21,7 @@ Este repo se audita a sí mismo: si algo acá no cumple lo que el arnés predica
 ```
 .hermes/harness.config.json  la única fuente de especificidad (reglas, rutas, nombres de herramientas)
 plugin/                      el plugin `repo-harness`: pre_tool_call · post_tool_call · transform_tool_result · transform_llm_output · pre_verify · pre_llm_call
-plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (frenos) · integ (integraciones) · rules (lint) · turn (turno) · events (registro)
+plugin/harness/              núcleo puro, DENTRO del plugin: core · guards (frenos) · autonomia (niveles L0–L3) · integ · rules (lint) · turn · events
 plugin/guardia/              la guardia de Python (audit hook PEP 578): la carga el loop, y con `sessionGuard.python` también cada sesión de Hermes
 scripts/hook.py              el mismo núcleo como shell hook de Hermes (para quien no habilita plugins)
 scripts/gate.py              ejecuta gate.signals; no sabe de stacks
@@ -85,6 +85,7 @@ python3 scripts/drift.py         # ¿algo se degradó sin que nadie lo tocara? (
 python3 scripts/cli.py status    # todo lo anterior en una pantalla; `cli.py panel` lo muestra en vivo
 python3 scripts/casos.py         # los casos replicables (también en el gate)
 python3 scripts/integ.py check   # las integraciones: cada manifiesto con cada perfil, por el plugin (también en el gate)
+python3 scripts/cli.py nivel     # el nivel de autonomía del agente y la evidencia para subir (P27–P29)
 ```
 
 - CI (`.github/workflows/ci.yml`) corre el mismo gate en Linux, macOS y Windows.
@@ -110,7 +111,9 @@ python3 scripts/integ.py check   # las integraciones: cada manifiesto con cada p
 | operar el loop autónomo | `docs/loop-autonomo.md` |
 | la CLI y el panel | `docs/cli-y-panel.md` |
 | integraciones: catálogo, perfiles, secretos, recursos, dependencias | `docs/integraciones.md` |
+| autonomía por niveles: L0–L3, evidencia, firma y descenso | `docs/autonomia.md` |
 | el workshop de agentes autónomos | `docs/workshop/README.md` |
+| el workshop del agente desarrollador que se gana la autonomía | `docs/workshop/autonomia/README.md` |
 | casos reales replicables (programación, infra, oficina…) | `casos/README.md` |
 | huecos: los cerrados y los abiertos | `docs/huecos.md` |
 | por qué está hecho así | `docs/decisions/` |

@@ -18,6 +18,17 @@ ap config set branches.protected '["main"]' --apply
 
 Lo segundo hace que el loop no trabaje sobre `main`: abre una rama `loop/…` antes de tocar nada.
 
+El sandbox arrancó en **L0** (observador): ahí el loop no corre, porque la autonomía se gana con
+evidencia (P27). Este módulo enseña la mecánica del loop, no cómo se gana el nivel, así que lo
+**declarás** en L3. Queda firmado y el panel lo muestra como alerta («declarado, no ganado»):
+
+```bash
+ap nivel declarar L3 --motivo "sandbox del workshop: aprender la mecánica del loop" --firma "Vos"
+ap nivel
+```
+
+Cómo se gana de verdad, de L0 a L3, es la [pista de autonomía](autonomia/README.md).
+
 ## Ejercicio 4.2 — La tarea, y el plan sin ejecutar
 
 ```bash

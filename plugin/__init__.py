@@ -28,7 +28,7 @@ import os
 # (`hermes_plugins.<slug>`, con `__path__` en su directorio) y lo COPIA para validarlo e
 # instalarlo: un núcleo afuera del directorio, o un `sys.path` apuntando al repo del arnés, se
 # rompe exactamente ahí (docs/gotchas.md).
-from .harness import core, events, guards, integ, turn
+from .harness import autonomia, core, events, guards, integ, turn
 
 logger = logging.getLogger("repo-harness")
 
@@ -84,12 +84,15 @@ _CONTAMINADAS: dict[str, str] = {}
 # de eventos. Con registro se cuenta de ahí: vale entre procesos (el loop, cron y el gateway).
 _USOS: dict[str, list[float]] = {}
 _HORA = 3600.0
-# Llamadas con presupuesto que el freno mandó a aprobar: {id de la llamada: "<integración>:<clase>"}.
-# `pre_tool_call` no sabe si el humano dijo que sí; `post_tool_call` sí (status ≠ "blocked").
-_APROBANDO: dict[str, str] = {}
+# Llamadas que el freno mandó a aprobar: {id de la llamada: (regla, "<integración>:<clase>" o "")}.
+# `pre_tool_call` no sabe si el humano dijo que sí; `post_tool_call` sí (status ≠ "blocked"). Lo que
+# dijo es evidencia del nivel L2 (P27) y, si tiene presupuesto, gasta el presupuesto.
+_APROBANDO: dict[str, tuple[str, str]] = {}
 _MAX_APROBANDO = 256  # una llamada sin `post_tool_call` (un Hermes que revienta) no puede acumular memoria
 # Repos a los que ya se les dejó el spec de la guardia de sesión en este proceso: {raíz: spec}.
 _GUARDIAS: dict[str, str] = {}
+# Sesiones ya anotadas como `turno` (una vez por sesión y proceso): la base de «sesiones limpias».
+_TURNOS: set[str] = set()
 
 
 def _integraciones_de_la_tarea():
@@ -172,11 +175,11 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
     d = guards.evaluate(ev, config, root)
     if clave and not (d.block or d.approve):
         _registrar_uso(config, root, clave, tool_name)
-    elif clave and d.approve:
-        # Lo que el humano apruebe también gasta el presupuesto: lo cuenta `post_tool_call`.
+    elif d.approve:
+        # Lo que el humano decida lo cuenta `post_tool_call`: evidencia, y presupuesto si lo tiene.
         if len(_APROBANDO) >= _MAX_APROBANDO:
             _APROBANDO.pop(next(iter(_APROBANDO)))
-        _APROBANDO[_id_llamada(tool_name, args, sesion, tool_call_id)] = clave
+        _APROBANDO[_id_llamada(tool_name, args, sesion, tool_call_id)] = ((d.rule or {}).get("id", "?"), clave)
     if not (d.block or d.approve):
         fuente = guards.fuente_externa(ev, config, root)
         if fuente and sesion not in _CONTAMINADAS:
@@ -186,23 +189,32 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
         # Lo que el freno decidió, para el panel: sin esto se ve sólo dentro de esta conversación.
         events.record(config, root, "block" if d.block else "ask", rule=(d.rule or {}).get("id", "?"),
                       tool=tool_name, session=session_id)
+    if d.block:
+        autonomia.revisar(config, root)  # una regla crítica baja el nivel sin esperar a nadie (P28)
     return d.to_hermes()
 
 
 @_seguro
 def on_post_tool_call(tool_name: str = "", args=None, status: str = "", session_id: str = "", task_id: str = "",
                       tool_call_id: str = "", **_):
-    """Una llamada que el freno mandó a aprobar y que se EJECUTÓ (el humano dijo que sí) cuenta en el
-    presupuesto. Sin esto, con aprobaciones seguidas el tope por hora dejaba de cortar."""
+    """Una llamada que el freno mandó a aprobar: lo que dijo el humano queda como evidencia (`aprobacion`),
+    y si se EJECUTÓ y tiene presupuesto, lo gasta (sin esto, con aprobaciones seguidas el tope por
+    hora dejaba de cortar). Denegar puede bajar el nivel (`autonomia.descenso.denegadasSeguidas`)."""
     if not _APROBANDO:
         return None
     args = args if isinstance(args, dict) else {}
-    clave = _APROBANDO.pop(_id_llamada(tool_name, args, session_id or task_id or "default", tool_call_id), "")
-    if not clave or status == "blocked":
+    regla, clave = _APROBANDO.pop(_id_llamada(tool_name, args, session_id or task_id or "default", tool_call_id), ("", ""))
+    if not regla:
         return None
     root, config = _contexto(_cwd_de(args, task_id) or None)
-    if config:
+    if not config:
+        return None
+    aprobada = status != "blocked"
+    events.record(config, root, "aprobacion", rule=regla, tool=tool_name, approved=aprobada, session=session_id)
+    if clave and aprobada:
         _registrar_uso(config, root, clave, tool_name, aprobada=True)
+    if not aprobada:
+        autonomia.revisar(config, root)
     return None
 
 
@@ -253,8 +265,13 @@ def on_pre_verify(task_id: str = "", **_):
 
 
 @_seguro
-def on_pre_llm_call(user_message: str = "", task_id: str = "", **_):
+def on_pre_llm_call(user_message: str = "", task_id: str = "", session_id: str = "", **_):
     root, config = _contexto(_cwd_de_sesion(task_id) or None)
+    sesion = session_id or task_id or "default"
+    if config and autonomia.spec(config) and sesion not in _TURNOS:
+        # Una línea por sesión: la base de «sesiones limpias» (las que no se salieron del nivel).
+        _TURNOS.add(sesion)
+        events.record(config, root, "turno", session=sesion, nivel=autonomia.nivel(config, root))
     hint = turn.route(config, user_message) if config else ""
     return {"context": hint} if hint else None
 
