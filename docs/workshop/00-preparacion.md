@@ -6,6 +6,8 @@ agente solo, tiene que existir ese comando.
 ## Ejercicio 0.1 — Un sandbox con el arnés
 
 ```bash
+git clone https://github.com/raalzate/hermes-autopilot.git ~/hermes-autopilot
+export AUTOPILOT=~/hermes-autopilot
 mkdir ~/taller-autopilot && cd ~/taller-autopilot
 git init -b main
 git config user.email "vos@ejemplo.test" && git config user.name "Vos"
