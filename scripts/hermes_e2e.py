@@ -58,13 +58,46 @@ def interprete_del_shebang(lineas: list[str]) -> str | None:
     return partes[-1] if partes and "env" in partes[0] and len(partes) > 1 else (partes[0] if partes else None)
 
 
+def comando_de_runtime(salida: str, script: str) -> list[str] | None:
+    """El comando que arranca un Python DENTRO del entorno de Hermes, corriendo `script`.
+
+    Un Hermes instalado desde su código fuente publica un lanzador de dos niveles
+    (`hermes` → `.hermes/bin/hermes` → un Python propio con `-I -c <arranque>`): su shebang es
+    `/bin/sh`, y las dependencias (ruamel, …) se enganchan con `hermes_bootstrap` al arrancar. El
+    propio lanzador dice cómo arrancar con `--print-runtime-command`: un JSON con el argv, que
+    termina en `runpy.run_module(<módulo>, …)`. Se cambia esa última llamada por el script."""
+    try:
+        argv = json.loads(salida)
+    except ValueError:
+        return None
+    if not (isinstance(argv, list) and argv and all(isinstance(a, str) for a in argv)):
+        return None
+    arranque, n = re.subn(r"runpy\.run_module\(.*\)\s*$", f"runpy.run_path({script!r}, run_name='__main__')", argv[-1])
+    return None if n != 1 else [*argv[:-1], arranque]
+
+
+def comando_de_hermes() -> list[str] | None:
+    exe = shutil.which("hermes")
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "--print-runtime-command"], capture_output=True, text=True, timeout=60)
+        cmd = comando_de_runtime(r.stdout, __file__) if r.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        cmd = None
+    if cmd:
+        return cmd
+    py = interprete_de_hermes()  # un Hermes sin esa interfaz (PyPI): el intérprete sale del shebang
+    return [py, __file__] if py else None
+
+
 def main() -> int:
     if os.environ.get("HARNESS_E2E_INNER") != "1":
-        py = interprete_de_hermes()
-        if not py:
-            print("hermes_e2e: no hay `hermes` en el PATH (o no se puede leer su intérprete).")
+        cmd = comando_de_hermes()
+        if not cmd:
+            print("hermes_e2e: no hay `hermes` en el PATH (o no se puede saber con qué Python corre).")
             return 3
-        return subprocess.run([py, __file__], env={**os.environ, "HARNESS_E2E_INNER": "1"}).returncode
+        return subprocess.run(cmd, env={**os.environ, "HARNESS_E2E_INNER": "1"}).returncode
     return adentro()
 
 

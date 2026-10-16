@@ -292,6 +292,12 @@ def seccion_integraciones(config: dict, ctx) -> None:
     check("sin el lanzador" in textos, "doctor no vio un MCP del repo arrancado sin el lanzador")
     check("allow_all_users" in textos, "doctor no vio el gateway abierto a cualquiera")
     check("`mcp_servers.otro` no es de ninguna" in textos, "doctor no avisó de un MCP sin declarar")
+    # `hermes plugins enable` escribe sus líneas tras un blanco y los comentarios de la sección que
+    # sigue: para YAML son hijas de `plugins:`, y el doctor las daba por ausentes (falso rojo).
+    sep = "plugins:\n  clone_timeout_seconds: 300\n\n# ====\n# Model\n# ====\n  enabled:\n    - repo-harness\n  disabled: []\nmodel:\n  enabled:\n    - otro\n"
+    check(dr.yaml_lista(sep, "plugins", "enabled") == ["repo-harness"], f"doctor: lista tras un blanco y comentarios {dr.yaml_lista(sep, 'plugins', 'enabled')}")
+    check(dr.yaml_lista(sep, "plugins", "disabled") == [], "doctor: leyó `disabled: []` como no vacío")
+    check(dr.yaml_lista("plugins:\n  enabled: [a, b]\n", "plugins", "enabled") == ["a", "b"], "doctor: ya no lee la lista en línea")
     dr.hallazgos.clear()
 
     # panel: cada integración con sus usos, frenos y escaladas, desde el registro de eventos.
@@ -1626,6 +1632,14 @@ def main() -> int:
         check(e2e_mod.interprete_del_shebang(["#!/usr/bin/env python3"]) == "python3", "e2e: no lee un shebang con env")
         check(e2e_mod.interprete_del_shebang(["#!/bin/sh", "'''exec' '/muy/largo/venv/bin/python3' \"$0\" \"$@\"", "' '''"]) == "/muy/largo/venv/bin/python3",
               "e2e: con una ruta larga (pip/uv escriben un exec en la línea 2) toma sh por intérprete")
+        # Hermes desde su código fuente: el shebang es `sh`; el argv sale de `--print-runtime-command`.
+        rt = json.dumps(["/h/python3", "-I", "-c", "import runpy; import hermes_bootstrap; runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"])
+        cmd_rt = e2e_mod.comando_de_runtime(rt, "/r/hermes_e2e.py")
+        check(cmd_rt is not None and cmd_rt[:3] == ["/h/python3", "-I", "-c"] and "run_path('/r/hermes_e2e.py'" in cmd_rt[3]
+              and "run_module" not in cmd_rt[3] and "hermes_bootstrap" in cmd_rt[3],
+              "e2e: con el lanzador de Hermes de código fuente no corre el script dentro de su entorno")
+        check(e2e_mod.comando_de_runtime("no es json", "x.py") is None and e2e_mod.comando_de_runtime('["a"]', "x.py") is None,
+              "e2e: acepta un comando de runtime ilegible o sin run_module en vez de caer al shebang")
 
     # Guardia de Python (PEP 578): lo que un programa ABRE, aunque arme la ruta por partes.
     gdir = HARNESS_HOME / "plugin" / "guardia"
@@ -1744,6 +1758,10 @@ def main() -> int:
               "revision: el conjunto etiquetado no tiene atajos y arreglos suficientes")
         perfecto = revision_mod.medir(items_, lambda it: it["esperado"])
         check(perfecto["recall"] == 1 and perfecto["precision"] == 1, f"revision: un revisor perfecto no mide 100 %: {perfecto}")
+        eco = ("Contestá `VEREDICTO: APROBAR` o `VEREDICTO: RECHAZAR`.\n\n╭─ ☤ Hermes ─╮\nVEREDICTO: RECHAZAR\nsilenció un test\n╰─╯")
+        check(revision_mod.veredicto_de(eco) == "rechazar",
+              "revision: con la consulta repetida en la salida (hermes chat -q) toma el veredicto del prompt y no el de la respuesta")
+        check(revision_mod.veredicto_de("sin formato") is None, "revision: una salida sin veredicto no da None")
         todo_ok = revision_mod.medir(items_, lambda it: "aprobar")
         check(todo_ok["recall"] == 0, "revision: un revisor que aprueba todo no mide recall 0")
         r_ = subprocess.run([sys.executable, str(HARNESS_HOME / "scripts" / "revision.py"), "--comando", "python3", "-c",
