@@ -6,6 +6,11 @@ con el error en la mano, escala cuando se traba y nunca publica sin un humano. M
 reglas del repo se hacen cumplir solas: en la CLI, en el gateway de mensajería y en las tareas
 programadas. Y un panel muestra todo en vivo.
 
+<p align="center">
+  <a href="docs/media/tarea-de-punta-a-punta.mp4"><img src="docs/media/tarea-de-punta-a-punta.gif" alt="Una tarea de punta a punta: el equipo la pide, el modelo local planea, Hermes trabaja en una rama aislada con los frenos del arnés, Claude escribe el código, el gate decide y el senior firma" width="760"></a><br>
+  <sub>Una tarea de punta a punta, en 50 segundos (<a href="docs/media/tarea-de-punta-a-punta.mp4">ver el video</a>). Hecha con <a href="https://motioncanvas.io/">Motion Canvas</a>: <a href="animacion/"><code>animacion/</code></a>.</sub>
+</p>
+
 > Antes se llamaba `hermes-harness`. Ver [`docs/decisions/0006-autonomia-loop-cli-panel.md`](docs/decisions/0006-autonomia-loop-cli-panel.md).
 
 Hermes es un agente que **aprende** (escribe su memoria, crea y parchea skills) y que **corre
