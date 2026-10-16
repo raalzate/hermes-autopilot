@@ -243,6 +243,70 @@ ol.laws b { color: var(--ink); font-weight: 600; }
 .scar p b { color: var(--ink); }
 
 footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-faint); }
+
+/* gráficos: mapa, recorrido de una acción, escalera de niveles */
+.gfx { margin-top: 1.6rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: clamp(.6rem, 2vw, 1.2rem); }
+.gfx svg { display: block; width: 100%; height: auto; font-family: var(--f-body); }
+.gfx .zone { fill: var(--surface-2); stroke: none; }
+.gfx .bx { fill: var(--surface); stroke: var(--rule); stroke-width: 2; }
+.gfx .bx.ac { fill: var(--accent); stroke: var(--accent); }
+.gfx .bx.hu { stroke: var(--ink); stroke-width: 2.5; }
+.gfx .bx.ex { stroke-dasharray: 6 5; }
+.gfx .hd { font-family: var(--f-mono); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; fill: var(--ink-faint); }
+.gfx .tg { font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; fill: var(--accent-ink); }
+.gfx .tt { font-family: var(--f-display); font-weight: 700; font-size: 19px; fill: var(--ink); }
+.gfx .tx { font-size: 13.5px; fill: var(--ink-soft); }
+.gfx .ac-t { fill: #fff; } .gfx .ac-tx { fill: #e9e6ff; } .gfx .ac-tg { fill: #cfc8ff; }
+:root[data-theme="dark"] .gfx .ac-t { fill: #11141d; } :root[data-theme="dark"] .gfx .ac-tx, :root[data-theme="dark"] .gfx .ac-tg { fill: #262a44; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gfx .ac-t { fill: #11141d; } :root:not([data-theme="light"]) .gfx .ac-tx, :root:not([data-theme="light"]) .gfx .ac-tg { fill: #262a44; } }
+.gfx .ar { fill: none; stroke: var(--ink-faint); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.gfx .ar.br { stroke: var(--accent); stroke-width: 3; }
+.gfx .ar.ds { stroke-dasharray: 3 8; }
+.gfx .lb { font-family: var(--f-mono); font-size: 12px; fill: var(--ink-soft); }
+.gfx .arh { fill: var(--ink-faint); } .gfx .arh.br { fill: var(--accent); }
+.gfx .mob { display: none; }
+@media (max-width: 44rem) { .gfx .desk { display: none; } .gfx .mob { display: block; } }
+.leyenda-g { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin-top: .8rem; font-size: var(--step--1); color: var(--ink-faint); font-family: var(--f-mono); }
+.leyenda-g i { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; margin-right: .4rem; vertical-align: -.1em; border: 2px solid var(--rule); }
+.leyenda-g .l-ac { background: var(--accent); border-color: var(--accent); } .leyenda-g .l-hu { border-color: var(--ink); } .leyenda-g .l-ex { border-style: dashed; }
+
+/* pruebas de diez segundos */
+.pruebas { display: grid; gap: 1px; background: var(--rule-soft); border: 1px solid var(--rule-soft); border-radius: 4px; grid-template-columns: minmax(0, 1fr); margin-top: 1.6rem; overflow: hidden; }
+@media (min-width: 48rem) { .pruebas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 72rem) { .pruebas { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.prueba { background: var(--surface); display: flex; flex-direction: column; min-width: 0; }
+.prueba .q { padding: .8rem 1rem .6rem; font-size: var(--step--1); color: var(--ink-soft); }
+.prueba .q b { display: block; font-family: var(--f-display); color: var(--ink); font-size: var(--step-0); margin-bottom: .15rem; }
+.prueba .t { background: var(--term-bg); color: var(--term-ink); font-family: var(--f-mono); font-size: .74rem; line-height: 1.6; padding: .7rem .9rem; flex: 1; overflow-wrap: anywhere; }
+.prueba .t .c { color: #9fbaf5; display: block; } .prueba .t .v { display: block; font-weight: 700; margin-top: .35rem; } .prueba .t .m { display: block; color: #e9c6c2; border-left: 2px solid #5b2f2f; padding-left: .6rem; margin-top: .3rem; }
+.v.no { color: #ef8a80; } .v.ap { color: #d3ae5e; } .v.si { color: #5cc47c; }
+
+/* escalera de autonomía */
+.escalera { display: grid; gap: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; margin-top: 1.6rem; }
+@media (max-width: 54rem) { .escalera { grid-template-columns: minmax(0, 1fr); gap: .6rem; } .peldano { min-height: 0 !important; } }
+.peldano { background: var(--surface); border: 1px solid var(--rule); border-top: 4px solid var(--accent); padding: .9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.peldano:nth-child(1) { min-height: 11rem; border-top-color: var(--ink-faint); } .peldano:nth-child(2) { min-height: 14rem; } .peldano:nth-child(3) { min-height: 17rem; } .peldano:nth-child(4) { min-height: 20rem; border-top-color: var(--verde); }
+.peldano .lv { font-family: var(--f-display); font-weight: 800; font-size: var(--step-3); line-height: 1; color: var(--accent-ink); }
+.peldano h3 { font-size: var(--step-0); } .peldano p { font-size: var(--step--1); color: var(--ink-soft); }
+.peldano .ev { margin-top: auto; font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-soft); border-top: 1px dashed var(--rule); padding-top: .5rem; }
+.peldano .ev b { color: var(--verde); display: block; }
+.bajada { margin-top: 1rem; border: 1px solid var(--rojo); border-left-width: 4px; border-radius: 3px; padding: .75rem 1rem; background: color-mix(in srgb, var(--rojo) 7%, var(--surface)); font-size: var(--step--1); color: var(--ink-soft); }
+.bajada b { color: var(--rojo); }
+.nunca { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; align-items: center; font-size: var(--step--1); color: var(--ink-soft); }
+.nunca span.x { border: 1px solid var(--ink); border-radius: 2px; padding: .15rem .55rem; font-family: var(--f-mono); background: var(--surface); }
+
+/* el recorrido de una acción */
+.puertas { list-style: none; margin: 1.6rem 0 0; padding: 0; display: grid; gap: .9rem; grid-template-columns: minmax(0, 1fr); counter-reset: pu; }
+@media (min-width: 62rem) { .puertas { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.4rem; } }
+.puertas > li { counter-increment: pu; position: relative; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: .9rem 1rem 1rem; display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.puertas > li::before { content: counter(pu); font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-faint); }
+.puertas > li:not(:last-child)::after { content: "↓"; position: absolute; left: 50%; bottom: -1.05rem; transform: translateX(-50%); color: var(--accent); font-weight: 700; font-family: var(--f-mono); line-height: 1; }
+@media (min-width: 62rem) { .puertas > li:not(:last-child)::after { content: "→"; left: auto; right: -1.15rem; top: 50%; bottom: auto; transform: translateY(-50%); } }
+.puertas li.fr { border-color: var(--accent); border-width: 2px; }
+.puertas h3 { font-size: var(--step-0); } .puertas p, .puertas li > span { font-size: var(--step--1); color: var(--ink-soft); }
+.vs { display: flex; flex-direction: column; gap: .3rem; margin-top: .2rem; }
+.vs span { font-family: var(--f-mono); font-size: .78rem; padding: .15rem .45rem; border-radius: 2px; border-left: 3px solid; background: var(--surface-2); color: var(--ink); }
+.vs .si { border-color: var(--verde); } .vs .ap { border-color: var(--ocre); } .vs .no { border-color: var(--rojo); }
 </style>
 </head>
 <body>
@@ -251,7 +315,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
   <div class="wrap">
     <a class="brand" href="#top">Hermes <span>Autopilot</span></a>
     <nav class="nav" aria-label="Secciones">
-      <a href="#casos-vivo">Casos</a><a href="#tesis">Tesis</a><a href="#autonomia">Autonomía</a><a href="#prueba">Prueba</a><a href="#huecos">Huecos</a><a href="#onboarding">Onboarding</a>
+      <a href="#casos-vivo">Casos</a><a href="#mapa">Mapa</a><a href="#acciones">Acción</a><a href="#niveles">Niveles</a><a href="#tesis">Tesis</a><a href="#autonomia">Autonomía</a><a href="#prueba">Prueba</a><a href="#huecos">Huecos</a><a href="#onboarding">Onboarding</a>
       <a href="#piezas">Piezas</a><a href="#contrato">Contrato</a><a href="#aprende">Aprende</a>
       <a href="#cicatrices">Cicatrices</a><a href="#portar">Portar</a><a href="#principios">Principios</a>
       <a href="#docs">Docs</a>
@@ -336,6 +400,67 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 </header>
 
 <main>
+
+<section id="mapa"><div class="wrap sec-inner">
+  <div class="rail"><b>0a</b>mapa</div>
+  <div>
+    <div class="col stack">
+      <h2>Un compañero digital con alma, cerebro, manos y empresa</h2>
+      <p class="lede">Pensalo como una persona. El <b>alma</b> es su identidad y su oficio. El <b>cerebro</b> es el modelo, y se cambia. Las <b>manos</b> son Hermes Agent: terminal, archivos, navegador, correo. Y la <b>empresa</b> que la rodea es el arnés: reglas que se cumplen solas, sin depender de que alguien se acuerde.</p>
+    </div>
+    <div class="gfx" role="group" aria-label="Mapa del sistema"><svg class="desk" viewBox="0 0 1200 560" role="img" aria-labelledby="mp-t mp-d"><title id="mp-t">Mapa del copiloto</title><desc id="mp-d">Las personas piden tareas; en la caja de cómputo, Hermes con alma y cerebro trabaja siempre dentro del arnés; hacia afuera salen Claude, las integraciones y los repos, y todo vuelve a un senior que firma.</desc><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="arh" d="M0 0L10 5L0 10z"/></marker><marker id="ahb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="arh br" d="M0 0L10 5L0 10z"/></marker></defs><rect class="zone" x="280" y="8" width="640" height="544" rx="22"/><text class="hd" x="10" y="30">Personas</text><text class="hd" x="300" y="30">Caja de cómputo propia</text><text class="hd" x="940" y="30">Afuera</text><rect class="bx hu" x="10" y="60" width="240" height="120" rx="12"/><text class="tg" x="26" y="84">Equipo</text><text class="tt tt" x="26" y="110">Chat · correo</text><text class="tx tx" x="26" y="134">pide la tarea</text><text class="tx tx" x="26" y="152">y conversa con el agente</text><rect class="bx hu" x="10" y="380" width="240" height="130" rx="12"/><text class="tg" x="26" y="404">Humano</text><text class="tt tt" x="26" y="430">Senior · mentor</text><text class="tx tx" x="26" y="454">juzga, aprueba y</text><text class="tx tx" x="26" y="472">firma cada ascenso</text><rect class="bx " x="300" y="50" width="290" height="120" rx="12"/><text class="tg" x="316" y="74">Alma</text><text class="tt tt" x="316" y="100">Identidad y oficio</text><text class="tx tx" x="316" y="124">SOUL.md · AGENTS.md</text><text class="tx tx" x="316" y="142">skills · memoria</text><rect class="bx " x="610" y="50" width="290" height="120" rx="12"/><text class="tg" x="626" y="74">Cerebro</text><text class="tt tt" x="626" y="100">Modelo intercambiable</text><text class="tx tx" x="626" y="124">local (datos adentro)</text><text class="tx tx" x="626" y="142">o Claude para código</text><rect class="bx " x="300" y="215" width="600" height="100" rx="12"/><text class="tg" x="316" y="239">Manos</text><text class="tt tt" x="316" y="265">Hermes Agent</text><text class="tx tx" x="316" y="289">cola de tareas · rama aislada · terminal, archivos, navegador, correo</text><rect class="bx ac" x="300" y="365" width="600" height="100" rx="12"/><text class="ac-tg" x="316" y="389">Empresa · tus reglas</text><text class="ac-t tt" x="316" y="415">Arnés</text><text class="ac-tx tx" x="316" y="439">frenos · gate verde o rojo · niveles L0–L3 · registro de eventos</text><rect class="bx " x="300" y="490" width="600" height="50" rx="12"/><text class="tt" x="316" y="521" style="font-size:16px">Panel en vivo</text><text class="tx" x="450" y="521">solo lectura · 127.0.0.1 · nivel, gate, loop y frenos</text><rect class="bx ex" x="940" y="50" width="250" height="120" rx="12"/><text class="tg" x="956" y="74">Anthropic</text><text class="tt tt" x="956" y="100">Claude</text><text class="tx tx" x="956" y="124">escribe y refactoriza,</text><text class="tx tx" x="956" y="142">revisa el diff</text><rect class="bx ex" x="940" y="215" width="250" height="100" rx="12"/><text class="tg" x="956" y="239">Integración MCP</text><text class="tt tt" x="956" y="265">Workspace y más</text><text class="tx tx" x="956" y="289">una herramienta por vez</text><rect class="bx ex" x="940" y="365" width="250" height="100" rx="12"/><text class="tg" x="956" y="389">Git</text><text class="tt tt" x="956" y="415">Repos</text><text class="tx tx" x="956" y="439">ramas loop/* → PR</text><path class="ar " d="M250 120H275V265H300" marker-end="url(#ah)"/><path class="ar " d="M445 170V215" marker-end="url(#ah)"/><path class="ar " d="M755 170V215" marker-end="url(#ah)"/><path class="ar br" d="M600 315V365" marker-end="url(#ahb)"/><path class="ar " d="M900 235H920V110H940" marker-end="url(#ah)"/><path class="ar " d="M900 280H940" marker-end="url(#ah)"/><path class="ar br" d="M900 415H940" marker-end="url(#ahb)"/><path class="ar ds" d="M300 440H275V445H250" marker-end="url(#ah)"/><text class="lb" x="612" y="344">toda llamada pasa por los frenos</text><text class="lb" x="148" y="368" text-anchor="middle">PR + panel</text></svg><svg class="mob" viewBox="0 0 360 640" role="img" aria-label="Mapa del copiloto: equipo, alma y cerebro, Hermes, arnés, y afuera Claude, integraciones y repos; el senior firma"><defs><marker id="ahm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="arh" d="M0 0L10 5L0 10z"/></marker><marker id="ahmb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path class="arh br" d="M0 0L10 5L0 10z"/></marker></defs><rect class="bx hu" x="10" y="8" width="340" height="56" rx="10"/><text class="tg tg" x="22" y="27">Equipo</text><text class="tt tt" x="22" y="50" style="font-size:16px">Chat · correo</text><rect class="bx " x="10" y="100" width="165" height="56" rx="10"/><text class="tg tg" x="22" y="119">Alma</text><text class="tt tt" x="22" y="142" style="font-size:16px">SOUL · AGENTS</text><rect class="bx " x="185" y="100" width="165" height="56" rx="10"/><text class="tg tg" x="197" y="119">Cerebro</text><text class="tt tt" x="197" y="142" style="font-size:16px">Modelo</text><rect class="bx " x="10" y="196" width="340" height="56" rx="10"/><text class="tg tg" x="22" y="215">Manos</text><text class="tt tt" x="22" y="238" style="font-size:16px">Hermes Agent</text><rect class="bx ac" x="10" y="288" width="340" height="56" rx="10"/><text class="ac-tg tg" x="22" y="307">Empresa · tus reglas</text><text class="ac-t tt" x="22" y="330" style="font-size:16px">Arnés: frenos · gate · L0–L3</text><rect class="bx ex" x="10" y="380" width="108" height="56" rx="10"/><text class="tg tg" x="22" y="399">Anthropic</text><text class="tt tt" x="22" y="422" style="font-size:16px">Claude</text><rect class="bx ex" x="126" y="380" width="108" height="56" rx="10"/><text class="tg tg" x="138" y="399">MCP</text><text class="tt tt" x="138" y="422" style="font-size:16px">Integr.</text><rect class="bx ex" x="242" y="380" width="108" height="56" rx="10"/><text class="tg tg" x="254" y="399">Git</text><text class="tt tt" x="254" y="422" style="font-size:16px">Repos</text><rect class="bx hu" x="10" y="476" width="340" height="56" rx="10"/><text class="tg tg" x="22" y="495">Humano</text><text class="tt tt" x="22" y="518" style="font-size:16px">Senior · mentor firma</text><rect class="bx " x="10" y="568" width="340" height="56" rx="10"/><text class="tg tg" x="22" y="587"></text><text class="tt tt" x="22" y="610" style="font-size:16px">Panel en vivo · solo lectura</text><path class="ar " d="M180 64V100" marker-end="url(#ahm)"/><path class="ar " d="M180 156V196" marker-end="url(#ahm)"/><path class="ar br" d="M180 252V288" marker-end="url(#ahmb)"/><path class="ar br" d="M180 344V380" marker-end="url(#ahmb)"/><path class="ar ds" d="M180 436V476" marker-end="url(#ahm)"/></svg>
+      <div class="leyenda-g"><span><i class="l-ac"></i>lo que definís vos (el arnés)</span><span><i class="l-hu"></i>personas</span><span><i class="l-ex"></i>servicios de afuera</span><span><i></i>lo que viene hecho (Hermes, modelo)</span></div>
+    </div>
+    <div class="grid three">
+      <div class="cell"><span class="mark">qué puede hacer</span><h3>Trabajar solo, con tarea y tope</h3><p>Toma una tarea de la cola, trabaja en una rama aislada, corre el gate y repite hasta verde o hasta que el tope lo frene. El resultado queda en un pull request.</p></div>
+      <div class="cell"><span class="mark">qué puede tocar</span><h3>Herramientas, una por una</h3><p>Terminal, archivos, correo, Drive, repos. Cada integración arranca con mínimo privilegio y el arnés gobierna cada herramienta, no el servicio entero.</p></div>
+      <div class="cell"><span class="mark">qué nunca hace solo</span><h3>Fusionar, firmarse, ampliarse</h3><p>Ni en el nivel más alto: fusionar a <code>main</code>, firmar su propio ascenso o cambiar sus permisos. Eso lo hace una persona.</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="acciones"><div class="wrap sec-inner">
+  <div class="rail"><b>0b</b>acción</div>
+  <div>
+    <div class="col stack">
+      <h2>Qué pasa entre «el agente quiere» y «el agente hizo»</h2>
+      <p class="lede">El modelo propone; el arnés dispone. Los frenos corren fuera del modelo, en cada llamada a una herramienta: no dependen de que el modelo se porte bien. Cuatro ejemplos reales, tal cual los devuelve el plugin:</p>
+    </div>
+    <div class="pruebas">
+      <div class="prueba"><div class="q"><b>Reescribir historia remota</b>El agente quiere forzar un push a main.</div><div class="t"><span class="c">terminal · git push origin main --force</span><span class="v no">✗ bloquea</span><span class="m">reescribe historia remota. Usá --force-with-lease y pedí confirmación.</span></div></div>
+      <div class="prueba"><div class="q"><b>Leer los secretos</b>Para diagnosticar, quiere abrir el .env.</div><div class="t"><span class="c">read_file · .env</span><span class="v no">✗ bloquea</span><span class="m">leé .env.example; si falta una variable, pedíla al humano.</span></div></div>
+      <div class="prueba"><div class="q"><b>Publicar su trabajo</b>Empujar una rama es legítimo, pero publica.</div><div class="t"><span class="c">terminal · git push origin feat/x</span><span class="v ap">? pide aprobación</span><span class="m">empujar publica el trabajo: se confirma con el humano. En cron no hay a quién preguntarle: no se empuja.</span></div></div>
+      <div class="prueba"><div class="q"><b>Lo inocente pasa</b>Un freno que muerde de más no sirve.</div><div class="t"><span class="c">terminal · git commit -m 'docs: por qué git push --force está prohibido'</span><span class="v si">✓ pasa</span><span class="m">ningún freno tiene nada que decir</span></div></div>
+    </div>
+    <ol class="puertas" aria-label="El recorrido de una acción">
+      <li><h3>El agente decide</h3><span>Elige una herramienta y sus argumentos: <code>terminal</code>, <code>patch</code>, <code>memory</code>, un MCP.</span></li>
+      <li class="fr"><h3>Freno · antes</h3><span>El plugin decide con funciones puras, en milisegundos:</span><div class="vs"><span class="si">pasa</span><span class="ap">pide aprobación</span><span class="no">bloquea + el porqué</span></div></li>
+      <li><h3>Ejecuta · después</h3><span>Se cuenta lo aprobado, se tapa un secreto en la respuesta y se anota el evento para el panel.</span></li>
+      <li class="fr"><h3>Gate · al terminar</h3><span>Un comando decide «terminado»: self-test, lint, tests del repo. Verde o rojo; no hay opinión.</span></li>
+      <li><h3>Loop · la tarea</h3><span>Verde: un humano lo revisa. Rojo distinto: reintenta con el rojo en mano. El mismo rojo dos veces, o el tope: <b>escala</b>.</span></li>
+    </ol>
+    <p class="col" style="margin-top:1.2rem;font-size:var(--step--1);color:var(--ink-faint)">Más abajo, la consola reproduce corridas completas de 22 casos: elegí uno y mirá dónde frena.</p>
+  </div>
+</div></section>
+
+<section id="niveles"><div class="wrap sec-inner">
+  <div class="rail"><b>0c</b>niveles</div>
+  <div>
+    <div class="col stack">
+      <h2>El agente no arranca confiable: arranca observando</h2>
+      <p class="lede">La autonomía se gana por repo y con evidencia que imprime un comando, no con una promesa. Sube un nivel solo cuando una persona lo firma; baja solo, sin pedir permiso, cuando intenta salirse.</p>
+    </div>
+    <div class="escalera" role="list" aria-label="Los cuatro niveles de autonomía">
+      <div class="peldano" role="listitem"><span class="lv">L0</span><h3>Observador</h3><p>Lee y explica. No escribe nada.</p><div class="ev">para subir<b>3 sesiones limpias</b></div></div>
+      <div class="peldano" role="listitem"><span class="lv">L1</span><h3>Recomienda</h3><p>Propone cambios, pero los hace una persona.</p><div class="ev">para subir<b>5 recomendaciones, ≥ 80 % aceptadas</b></div></div>
+      <div class="peldano" role="listitem"><span class="lv">L2</span><h3>Con aprobación</h3><p>Escribe, y cada escritura la aprueba un humano.</p><div class="ev">para subir<b>10 cambios aprobados · ≤ 10 % denegados · gates ≥ 90 % en verde</b></div></div>
+      <div class="peldano" role="listitem"><span class="lv">L3</span><h3>Autonomía en el loop</h3><p>Trabaja solo dentro del loop, con gate, tope y freno de mano.</p><div class="ev">sigue vigilado<b>un senior juzga y firma cada PR</b></div></div>
+    </div>
+    <p class="bajada"><b>Bajar es automático.</b> En las pruebas, un agente en L3 intentó algo que una regla crítica veda y bajó a L2; después tocó archivos que no debía y bajó a L1. El panel en vivo lo mostró como alerta, con el motivo. El nivel vive bajo <code>.git/</code>, donde el agente no escribe: no se firma a sí mismo.</p>
+    <div class="nunca"><b>Ni en L3, solo:</b><span class="x">fusionar a main</span><span class="x">firmar su ascenso</span><span class="x">cambiar sus permisos</span></div>
+    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/autonomia.md">Autonomía por niveles</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workshop/autonomia/README.md">Workshop del agente que se gana la autonomía</a></p>
+  </div>
+</div></section>
 
 <section id="tesis"><div class="wrap sec-inner">
   <div class="rail"><b>01</b>tesis</div>
