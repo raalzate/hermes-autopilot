@@ -362,6 +362,12 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 .nota-paso { border-top: 1px solid var(--term-rule); padding: .7rem 1.1rem; font-size: var(--step--1); color: var(--term-ink); line-height: 1.5; display: grid; gap: .25rem; }
 .nota-paso b { color: #9fbaf5; font-family: var(--f-mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
 @media (prefers-reduced-motion: reduce) { .actor.on, .arnes-barra.frena { animation: none; } .actor, .arnes-barra { transition: none; } }
+
+.mc { margin: 1.6rem 0 0; background: #eeeff4; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.mc motion-canvas-player { display: block; width: 100%; aspect-ratio: 16 / 9; }
+.mc figcaption { background: var(--surface); border-top: 1px solid var(--rule-soft); padding: .6rem .9rem; font-size: var(--step--1); color: var(--ink-soft); }
+.paso-a-paso { margin-top: 1.2rem; }
+.paso-a-paso > summary { cursor: pointer; font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-soft); padding: .4rem 0; }
 </style>
 </head>
 <body>
@@ -423,6 +429,11 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <h2>Una tarea, de punta a punta, con todo junto</h2>
       <p class="lede">Hermes son las manos, el modelo es la capa inteligente y el arnés es lo que no se negocia. Mirá la corrida: se enciende quién trabaja en cada paso, la consola muestra lo que pasa y la barra del arnés se pone roja, ámbar o verde según lo que decide.</p>
     </div>
+    <figure class="mc" id="mc-fig">
+      <motion-canvas-player id="mc" src="./project.js" aria-label="Animación: una tarea de punta a punta, del chat al pull request"></motion-canvas-player>
+      <figcaption>Una tarea de punta a punta, animada. Hacé clic para pausar, o mirala paso a paso en la consola de abajo. Hecha con <a href="https://motioncanvas.io/">Motion Canvas</a>; la fuente está en <a href="https://github.com/raalzate/hermes-autopilot/tree/main/animacion"><code>animacion/</code></a>.</figcaption>
+    </figure>
+    <details class="paso-a-paso" open><summary>Consola paso a paso (interactiva)</summary>
     <div class="escena">
       <div class="reparto" id="reparto" aria-label="Quién trabaja en cada paso">
         <div class="actor" data-a="persona"><span class="ic" aria-hidden="true">🧑</span><b>Equipo</b><span class="s">chat · correo</span></div>
@@ -448,6 +459,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
         </div>
       </div>
     </div>
+    </details>
     <div class="dual">
       <div><span class="mark" style="font-family:var(--f-mono);font-size:var(--step--1);color:var(--accent-ink);letter-spacing:.08em;text-transform:uppercase">capa inteligente · local</span><h3>El modelo de la caja</h3><ul><li>Conversa y resume</li><li>Explora el repo y prepara el plan</li><li>Trabajo diario: los datos no salen</li></ul></div>
       <div><span class="mark" style="font-family:var(--f-mono);font-size:var(--step--1);color:var(--accent-ink);letter-spacing:.08em;text-transform:uppercase">capa inteligente · Claude</span><h3>El modelo para lo pesado</h3><ul><li>Escribe y refactoriza código</li><li>Revisa el diff antes de la firma</li><li>Se llama por la terminal, con tope</li></ul></div>
@@ -913,6 +925,15 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
   $("f-pausa").addEventListener("click", (e) => { pausa = !pausa; e.currentTarget.setAttribute("aria-pressed", pausa); e.currentTarget.textContent = pausa ? "▶ seguir" : "⏸ pausa"; });
   progreso(0); marcar(0); arnes(0, false);
   new IntersectionObserver((es, ob) => { if (es[0].isIntersecting) { ob.disconnect(); ir(0, quieto); } }, { threshold: 0.3 }).observe($("flujo"));
+})();
+
+// La animación (Motion Canvas): arranca cuando se ve y vuelve a empezar al terminar.
+(() => {
+  const mc = document.getElementById("mc");
+  if (!mc) return;
+  const s = document.createElement("script"); s.type = "module"; s.src = "animacion/player.js"; document.head.appendChild(s);
+  const lazo = setInterval(() => { if (mc.player) { try { mc.player.toggleLoop(true); } catch (e) {} clearInterval(lazo); } }, 300);
+  new IntersectionObserver((es) => { mc.setAttribute("auto", es[0].isIntersecting && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "true" : ""); }, { threshold: 0.35 }).observe(mc);
 })();
 
 const raiz = document.documentElement;
