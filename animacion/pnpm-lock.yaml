@@ -15,18 +15,12 @@ importers:
         specifier: 3.17.2
         version: 3.17.2
     devDependencies:
-      '@motion-canvas/player':
-        specifier: 3.17.2
-        version: 3.17.2
       '@motion-canvas/ui':
         specifier: 3.17.2
         version: 3.17.2
       '@motion-canvas/vite-plugin':
         specifier: 3.17.2
         version: 3.17.2(vite@5.4.21)
-      esbuild:
-        specifier: 0.21.5
-        version: 0.21.5
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -203,9 +197,6 @@ packages:
 
   '@motion-canvas/core@3.17.2':
     resolution: {integrity: sha512-9M4NxNVR9LLxZ+ykTznMcbMlKjbe2NkmDIlFDl2uOyVkK5wFiRwF7k13a1I/n3BVxJJoKPt9UOQF/wn3LrBXJA==}
-
-  '@motion-canvas/player@3.17.2':
-    resolution: {integrity: sha512-fmiYSXoERbNoZXuXpFD/89nuQVcHIB1Z46USTKWqBItC2Lo43d+E9KyqYoXFnnVXDMuROomOASo99jUh+2eUZA==}
 
   '@motion-canvas/ui@3.17.2':
     resolution: {integrity: sha512-gbsdbFP60IhgckZei7NDuqQWekfLX+mUjyYpAEOe4OZSyIhoavZo+jako+liD9E7+dYu67E9YRjT+/BesLV7Pg==}
@@ -725,8 +716,6 @@ snapshots:
     dependencies:
       '@types/chroma-js': 2.4.4
       chroma-js: 2.4.2
-
-  '@motion-canvas/player@3.17.2': {}
 
   '@motion-canvas/ui@3.17.2':
     dependencies:
