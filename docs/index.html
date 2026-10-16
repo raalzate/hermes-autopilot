@@ -430,7 +430,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <p class="lede">Hermes son las manos, el modelo es la capa inteligente y el arnés es lo que no se negocia. Mirá la corrida: se enciende quién trabaja en cada paso, la consola muestra lo que pasa y la barra del arnés se pone roja, ámbar o verde según lo que decide.</p>
     </div>
     <figure class="mc" id="mc-fig">
-      <motion-canvas-player id="mc" src="./project.js" aria-label="Animación: una tarea de punta a punta, del chat al pull request"></motion-canvas-player>
+      <motion-canvas-player id="mc" aria-label="Animación: una tarea de punta a punta, del chat al pull request"></motion-canvas-player>
       <figcaption>Una tarea de punta a punta, animada. Hacé clic para pausar, o mirala paso a paso en la consola de abajo. Hecha con <a href="https://motioncanvas.io/">Motion Canvas</a>; la fuente está en <a href="https://github.com/raalzate/hermes-autopilot/tree/main/animacion"><code>animacion/</code></a>.</figcaption>
     </figure>
     <details class="paso-a-paso" open><summary>Consola paso a paso (interactiva)</summary>
@@ -931,7 +931,10 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 (() => {
   const mc = document.getElementById("mc");
   if (!mc) return;
-  const s = document.createElement("script"); s.type = "module"; s.src = "animacion/player.js"; document.head.appendChild(s);
+  const cargar = (src) => new Promise((ok, mal) => { const t = document.createElement("script"); t.src = src; t.onload = ok; t.onerror = mal; document.head.appendChild(t); });
+  Promise.all([cargar("animacion/player.js"), cargar("animacion/project.js")]).then(() => {
+    mc.setAttribute("src", URL.createObjectURL(new Blob([window.MC_PROYECTO], { type: "text/javascript" })));
+  }).catch(() => { mc.closest("figure").hidden = true; });
   const lazo = setInterval(() => { if (mc.player) { try { mc.player.toggleLoop(true); } catch (e) {} clearInterval(lazo); } }, 300);
   new IntersectionObserver((es) => { mc.setAttribute("auto", es[0].isIntersecting && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "true" : ""); }, { threshold: 0.35 }).observe(mc);
 })();
