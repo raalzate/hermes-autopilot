@@ -39,10 +39,19 @@ def hermes_home() -> Path:
 def yaml_lista(texto: str, clave_padre: str, clave: str) -> list[str]:
     """`padre:\\n  clave: [a, b]` o en bloque `- a`. Sin PyYAML: sólo las dos formas que escribe
     Hermes. Si no encuentra nada devuelve [] — y el diagnóstico lo dice, no lo inventa."""
-    m = re.search(rf"^{clave_padre}:\s*\n((?:[ \t]+.*\n?)*)", texto, re.M)
-    if not m:
+    # El bloque llega hasta la próxima clave de primer nivel: los blancos y los comentarios no lo
+    # cortan. `hermes plugins enable` / `skills trust` escriben sus líneas después de un blanco y de
+    # los comentarios de la sección siguiente, y para YAML siguen siendo hijas de `padre:`.
+    lineas = texto.splitlines(keepends=True)
+    inicio = next((i for i, l in enumerate(lineas) if re.match(rf"{clave_padre}:\s*$", l)), None)
+    if inicio is None:
         return []
-    bloque = m.group(1)
+    cuerpo: list[str] = []
+    for l in lineas[inicio + 1:]:
+        if l.strip() and not l.lstrip().startswith("#") and not l[0].isspace():
+            break
+        cuerpo.append(l if l.endswith("\n") else l + "\n")
+    bloque = "".join(cuerpo)
     mm = re.search(rf"^\s+{clave}:\s*\[(.*?)\]", bloque, re.M)
     if mm:
         return [x.strip().strip("'\"") for x in mm.group(1).split(",") if x.strip()]

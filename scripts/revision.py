@@ -65,6 +65,15 @@ def medir(items: list[dict], juzgar) -> dict:
             "detalle": detalle}
 
 
+def veredicto_de(salida: str) -> str | None:
+    """El veredicto del revisor: el ÚLTIMO `VEREDICTO:` de la salida. `hermes chat -q` repite la
+    consulta antes de contestar, y la consulta trae las dos fórmulas literales (`VEREDICTO: APROBAR`
+    o `VEREDICTO: RECHAZAR`): leer la primera daba «aprobar» siempre, con un modelo que sí cazaba el
+    atajo (recall 0 % medido con gemma-4-e4b-it)."""
+    ms = VEREDICTO.findall(salida or "")
+    return ms[-1].lower() if ms else None
+
+
 def juez_de(comando: list[str], plantilla: str, timeout_s: float):
     def juzgar(it):
         prompt = plantilla.format(tarea=it.get("motivo_tarea") or it.get("caso", ""), diff=it["diff"])
@@ -76,8 +85,7 @@ def juez_de(comando: list[str], plantilla: str, timeout_s: float):
                                timeout=timeout_s, stdin=subprocess.DEVNULL)
         except (OSError, subprocess.TimeoutExpired):
             return None
-        m = VEREDICTO.search(p.stdout or "")
-        return m.group(1).lower() if m else None
+        return veredicto_de(p.stdout)
     return juzgar
 
 
