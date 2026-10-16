@@ -8,7 +8,7 @@ punta a punta por el loop autónomo, en un repo temporal con el arnés instalado
     python3 scripts/casos.py infra-env-secretos oficina-reporte-ventas
     python3 scripts/casos.py preparar <id> <dir> [--hermes]   un sandbox para replicarlo a mano
     python3 scripts/casos.py readme [<id>…]     regenera el README de cada caso desde caso.json + agente.py
-    python3 scripts/casos.py pagina             regenera la consola de la portada (docs/index.html) con corridas reales
+    python3 scripts/casos.py pagina             regenera casos/CORRIDAS.md con las corridas reales
     python3 scripts/casos.py cifras             copia a la portada los números de STATUS.md, huecos, constitución y casos
 
 Cada caso vive en `casos/<id>/`:
@@ -396,38 +396,41 @@ def frenos_sueltos() -> list[dict]:
 
 
 def pagina(casos: list[dict]) -> int:
-    """Escribe en docs/index.html los datos de la consola de la portada: cada corrida de cada caso,
-    corrida de verdad, y los frenos sueltos evaluados con el config real."""
-    import re
-
+    """Escribe casos/CORRIDAS.md: cada corrida de cada caso, corrida de verdad, y los frenos sueltos
+    evaluados con el config real. Es lo que antes reproducía la consola de la portada."""
     trabajos = [(c, r) for c in casos if not problemas_de_forma(c) for r in c["corridas"]]
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 2)) as ex:
         res = {(r["caso"], r["modo"]): r for r in ex.map(lambda cr: correr(*cr), trabajos)}
     malos = [k for k, r in res.items() if r["dif"]]
     if malos:
-        print(f"casos: {malos} no dan lo esperado; la página no se regenera con corridas rojas.")
+        print(f"casos: {malos} no dan lo esperado; CORRIDAS.md no se regenera con corridas rojas.")
         return 1
-    datos = {"frenos": frenos_sueltos(), "casos": []}
+    frenos = frenos_sueltos()
+    md = ["# Corridas de los casos", "",
+          "Transcripciones **reales**: las genera `python3 scripts/casos.py pagina` corriendo cada caso en un repo",
+          "nuevo con el arnés instalado. El agente es un juguete determinista (sigue un guion para que la corrida",
+          "salga igual cada vez); los frenos, el gate y el loop que lo controlan son los reales. No se editan a mano:",
+          "el gate es rojo si falta un caso o un modo. El catálogo y cómo replicarlos: [README.md](README.md).", "",
+          "## Frenos sueltos", "",
+          "Una llamada a una herramienta evaluada con el config de este repo, sin loop.", ""]
+    for f in frenos:
+        md += [f"### {f['titulo']}", "", "```text", *f["lineas"], "```", ""]
+    modos_vistos = 0
     for c in casos:
+        if c.get("_error"):
+            continue
         modos = modos_de(c)
-        datos["casos"].append({
-            "id": c["id"], "dominio": c["dominio"], "titulo": c["titulo"], "historia": c["historia"],
-            "demuestra": c["demuestra"], "tarea": c["tarea"],
-            "reglas": [{"id": r["id"], "familia": f, "motivo": r.get("reason") or r.get("hint")} for f, rs in (c.get("reglas") or {}).items() for r in rs],
-            "corridas": [{"modo": r["modo"], "nombre": ESCENARIOS.get(r["modo"], r["modo"]), "que": modos.get(r["modo"], ""), "resultado": r["resultado"],
-                          "intentos": r.get("intentos"), "frenos": r.get("frenos") or [], "intocables": bool(r.get("intocables")),
-                          "lineas": res[(c["id"], r["modo"])]["lineas"]} for r in c["corridas"]],
-        })
+        md += [f"## `{c['id']}` — {c['titulo']}", "", f"*{c['dominio']}* · {c['historia']}", "",
+               f"**Tarea:** {c['tarea']}", "", f"**Demuestra:** {c['demuestra']}", ""]
+        for r in c["corridas"]:
+            modos_vistos += 1
+            md += [f"### `{c['id']}` · modo `{r['modo']}` — {ESCENARIOS.get(r['modo'], r['modo'])}", "",
+                   f"{modos.get(r['modo'], '')} Resultado: **{r['resultado']}**.", "", "```text",
+                   *res[(c["id"], r["modo"])]["lineas"], "```", ""]
+    (CASOS / "CORRIDAS.md").write_text("\n".join(md), encoding="utf-8")
     html = (HOME / "docs" / "index.html").read_text(encoding="utf-8")
-    js = json.dumps(datos, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    nuevo, n = re.subn(r'(<script id="datos-casos" type="application/json">).*?(</script>)',
-                       lambda m: m.group(1) + js + m.group(2), html, flags=re.S)
-    if n != 1:
-        print('casos: docs/index.html no tiene <script id="datos-casos" type="application/json">.')
-        return 1
-    (HOME / "docs" / "index.html").write_text(pintar_cifras(nuevo, cifras(casos)), encoding="utf-8")
-    print(f"  ✓ docs/index.html — {len(datos['casos'])} casos, {sum(len(c['corridas']) for c in datos['casos'])} corridas, "
-          f"{len(datos['frenos'])} frenos sueltos")
+    (HOME / "docs" / "index.html").write_text(pintar_cifras(html, cifras(casos)), encoding="utf-8")
+    print(f"  ✓ casos/CORRIDAS.md — {len([c for c in casos if not c.get('_error')])} casos, {modos_vistos} corridas, {len(frenos)} frenos sueltos")
     return 0
 
 
@@ -490,18 +493,12 @@ def problemas_de_cifras(casos: list[dict], html: str | None = None) -> list[tupl
 
 
 def problemas_de_pagina(casos: list[dict]) -> list[tuple[str, str]]:
-    """La portada tiene que mostrar cada caso y cada modo: si no, `casos.py pagina`."""
-    import re
-
-    html = (HOME / "docs" / "index.html").read_text(encoding="utf-8") if (HOME / "docs" / "index.html").is_file() else ""
-    m = re.search(r'<script id="datos-casos" type="application/json">(.*?)</script>', html, re.S)
-    try:
-        datos = json.loads(m.group(1).replace("<\\/", "</")) if m else {}
-    except ValueError:
-        datos = {}
-    hay = {(c["id"], r["modo"]) for c in datos.get("casos") or [] for r in c.get("corridas") or []}
-    return [(c["id"], f"docs/index.html no muestra el modo `{r['modo']}`: corré `python3 scripts/casos.py pagina`")
-            for c in casos if not c.get("_error") for r in c.get("corridas") or [] if (c["id"], r["modo"]) not in hay]
+    """casos/CORRIDAS.md tiene que mostrar cada caso y cada modo: si no, `casos.py pagina`."""
+    f = CASOS / "CORRIDAS.md"
+    md = f.read_text(encoding="utf-8") if f.is_file() else ""
+    return [(c["id"], f"casos/CORRIDAS.md no muestra el modo `{r['modo']}`: corré `python3 scripts/casos.py pagina`")
+            for c in casos if not c.get("_error") for r in c.get("corridas") or []
+            if f"### `{c['id']}` · modo `{r['modo']}`" not in md]
 
 
 def main(argv: list[str]) -> int:
