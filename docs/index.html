@@ -323,22 +323,45 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 .cierre b { color: var(--accent-ink); }
 
 /* el flujo integrado */
-.carriles { margin: 1.6rem 0 0; padding: 0; list-style: none; display: grid; gap: 0; counter-reset: ca; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); overflow: hidden; }
-.carriles > li { counter-increment: ca; display: grid; grid-template-columns: 2rem 11rem minmax(0, 1fr) minmax(0, .9fr); gap: .3rem 1rem; padding: .9rem 1rem; border-top: 1px solid var(--rule-soft); align-items: start; }
-.carriles > li:first-child { border-top: 0; }
-.carriles > li::before { content: counter(ca); font-family: var(--f-mono); color: var(--ink-faint); font-size: var(--step--1); padding-top: .15rem; }
-.carriles .quien { font-family: var(--f-mono); font-size: var(--step--1); padding: .15rem .45rem; border-radius: 2px; border: 1px solid var(--rule); justify-self: start; background: var(--surface-2); color: var(--ink); line-height: 1.4; }
-.carriles .quien.pe { border: 2px solid var(--ink); background: var(--surface); } .carriles .quien.ci { background: color-mix(in srgb, var(--ocre) 18%, var(--surface)); border-color: var(--ocre); }
-.carriles .quien.ar { background: var(--accent); color: #fff; border-color: var(--accent); } .carriles .quien.ma { border-color: var(--accent); }
-:root[data-theme="dark"] .carriles .quien.ar { color: #11141d; } @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .carriles .quien.ar { color: #11141d; } }
-.carriles .que b { display: block; font-family: var(--f-display); font-size: var(--step-0); }
-.carriles .que span { font-size: var(--step--1); color: var(--ink-soft); }
-.carriles .mira { font-family: var(--f-mono); font-size: .78rem; color: var(--ink-soft); border-left: 3px solid var(--accent); padding-left: .65rem; line-height: 1.55; }
-.carriles .mira em { font-style: normal; color: var(--accent-ink); display: block; text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; }
-@media (max-width: 54rem) { .carriles > li { grid-template-columns: 2rem minmax(0, 1fr); } .carriles .que, .carriles .mira { grid-column: 2; } }
 .dual { display: grid; gap: 1px; background: var(--rule-soft); border: 1px solid var(--rule-soft); border-radius: 4px; margin-top: 1.4rem; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 @media (min-width: 48rem) { .dual { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .dual > div { background: var(--surface); padding: 1rem 1.2rem 1.2rem; } .dual h3 { font-size: var(--step-1); } .dual ul { margin: .5rem 0 0; padding-left: 1.1rem; color: var(--ink-soft); font-size: var(--step--1); } .dual li { margin: .2rem 0; }
+
+/* el flujo integrado, animado */
+.escena { margin-top: 1.6rem; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+.reparto { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem; position: relative; }
+@media (max-width: 62rem) { .reparto { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 34rem) { .reparto { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.actor { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: .6rem .55rem .65rem; text-align: center; transition: transform .35s, border-color .35s, box-shadow .35s, background .35s, opacity .35s; opacity: .55; min-width: 0; position: relative; }
+.actor .ic { display: block; font-size: 1.35rem; line-height: 1.2; }
+.actor b { display: block; font-family: var(--f-display); font-size: var(--step--1); margin-top: .1rem; }
+.actor span.s { display: block; font-family: var(--f-mono); font-size: .68rem; color: var(--ink-faint); line-height: 1.3; }
+.actor.hecho { opacity: .85; }
+.actor.on { opacity: 1; transform: translateY(-4px) scale(1.04); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--surface)); box-shadow: 0 10px 24px -12px var(--accent); animation: latido 1.4s ease-in-out infinite; }
+.actor.ci.on { border-color: var(--ocre); background: color-mix(in srgb, var(--ocre) 14%, var(--surface)); box-shadow: 0 10px 24px -12px var(--ocre); }
+.actor.on::after { content: ""; position: absolute; left: 50%; bottom: -9px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--accent); }
+@keyframes latido { 50% { box-shadow: 0 14px 30px -10px var(--accent); } }
+.arnes-barra { border: 2px solid var(--accent); border-radius: 6px; padding: .5rem .9rem; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem; font-family: var(--f-mono); font-size: var(--step--1); color: var(--ink-soft); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); transition: border-color .25s, background .25s; }
+.arnes-barra b { color: var(--accent-ink); }
+.arnes-barra .est { margin-left: auto; font-weight: 700; color: var(--ink-faint); transition: color .25s; }
+.arnes-barra.frena { border-color: var(--rojo); background: color-mix(in srgb, var(--rojo) 10%, var(--surface)); animation: sacudida .35s; }
+.arnes-barra.frena .est { color: var(--rojo); }
+.arnes-barra.verde { border-color: var(--verde); background: color-mix(in srgb, var(--verde) 10%, var(--surface)); } .arnes-barra.verde .est { color: var(--verde); }
+.arnes-barra.aprueba { border-color: var(--ocre); background: color-mix(in srgb, var(--ocre) 12%, var(--surface)); } .arnes-barra.aprueba .est { color: var(--ocre); }
+@keyframes sacudida { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.consola-flujo { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 64rem) { .consola-flujo { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); align-items: start; } }
+.pasos-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; counter-reset: pl; }
+@media (max-width: 63.99rem) { .pasos-lista { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); } }
+.pasos-lista button { appearance: none; width: 100%; text-align: left; cursor: pointer; font: inherit; font-size: var(--step--1); line-height: 1.3; padding: .5rem .65rem; border: 1px solid var(--rule-soft); border-left: 3px solid transparent; border-radius: 3px; background: var(--surface); color: var(--ink-soft); transition: background .2s, border-color .2s; }
+.pasos-lista button:hover { background: var(--surface-2); }
+.pasos-lista button[aria-current="true"] { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--ink); font-weight: 600; }
+.pasos-lista button.listo::before { content: "✓ "; color: var(--verde); }
+.pasos-lista button:not(.listo)::before { content: counter(pl) " · "; color: var(--ink-faint); font-family: var(--f-mono); }
+.pasos-lista li { counter-increment: pl; }
+.nota-paso { border-top: 1px solid var(--term-rule); padding: .7rem 1.1rem; font-size: var(--step--1); color: var(--term-ink); line-height: 1.5; display: grid; gap: .25rem; }
+.nota-paso b { color: #9fbaf5; font-family: var(--f-mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+@media (prefers-reduced-motion: reduce) { .actor.on, .arnes-barra.frena { animation: none; } .actor, .arnes-barra { transition: none; } }
 </style>
 </head>
 <body>
@@ -398,18 +421,33 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
   <div>
     <div class="col stack">
       <h2>Una tarea, de punta a punta, con todo junto</h2>
-      <p class="lede">Hermes son las manos, el modelo es la capa inteligente y el arnés es lo que no se negocia. Así se ve una tarea real cuando todo trabaja en conjunto, desde que alguien la pide hasta que una persona la firma.</p>
+      <p class="lede">Hermes son las manos, el modelo es la capa inteligente y el arnés es lo que no se negocia. Mirá la corrida: se enciende quién trabaja en cada paso, la consola muestra lo que pasa y la barra del arnés se pone roja, ámbar o verde según lo que decide.</p>
     </div>
-    <ol class="carriles" aria-label="Una tarea de punta a punta">
-<li><span class="quien pe">Persona</span><div class="que"><b>Pide la tarea</b><span>El equipo escribe por chat o correo: «Arreglá el bug del issue #42 y dejalo en un PR». Hermes la convierte en una tarea de la cola.</span></div><div class="mira"><em>el arnés</em>La cola <code>.hermes/loop/tasks.md</code> es la única entrada. Lo que llega de un tercero marca la sesión como contaminada.</div></li>
-<li><span class="quien ci">Capa inteligente · modelo local</span><div class="que"><b>Explora y prepara el plan</b><span>Lee el repo, resume el issue, propone los pasos. Es el trabajo diario y los datos no salen de la caja.</span></div><div class="mira"><em>el arnés</em>Las guías orientan antes de decidir: <code>AGENTS.md</code>, el estado del repo al abrir, la skill que toca.</div></li>
-<li><span class="quien ma">Hermes · manos</span><div class="que"><b>Trabaja en una rama aislada</b><span>Cada tarea corre en su propio <code>git worktree</code> <code>loop/*</code>: el <code>.env</code> y lo ignorado por git ni existen ahí.</span></div><div class="mira"><em>el arnés</em>Cada llamada a una herramienta pasa por los frenos antes de ejecutarse: pasa, pide aprobación o bloquea con el motivo.</div></li>
-<li><span class="quien ci">Capa inteligente · Claude</span><div class="que"><b>Escribe y refactoriza el código</b><span>El modelo pesado hace lo difícil: Hermes le delega el cambio por la terminal, con herramientas y turnos acotados.</span></div><div class="mira"><em>el arnés</em>Lo que Claude hace por la terminal pasa por los mismos frenos: delegar no es un atajo.</div></li>
-<li><span class="quien ma">Hermes + integraciones</span><div class="que"><b>Consulta afuera</b><span>Lee el issue, mira un Drive, redacta un correo. Cada servicio es un MCP con sus herramientas.</span></div><div class="mira"><em>el arnés</em>Cada herramienta se declara y arranca con mínimo privilegio. Si leyó a un tercero, enviar algo escala a un humano.</div></li>
-<li><span class="quien ar">Arnés · gate</span><div class="que"><b>Decide si terminó</b><span>Un comando corre tests, lint y reglas. Verde o rojo: la opinión del agente no cuenta.</span></div><div class="mira"><em>el arnés</em>Rojo distinto: reintenta con el rojo en mano. El mismo rojo dos veces, o el tope: escala con el motivo.</div></li>
-<li><span class="quien ci">Capa inteligente · Claude</span><div class="que"><b>Revisa el diff antes del humano</b><span>Un revisor inferencial busca atajos que ninguna regla vio: tests silenciados, secretos, cambios fuera de la tarea.</span></div><div class="mira"><em>el arnés</em>Está medido contra casos etiquetados: recall <b data-cifra="revisor-recall">100 %</b>, precisión <b data-cifra="revisor-precision">91 %</b> con un modelo real.</div></li>
-<li><span class="quien pe">Persona · senior</span><div class="que"><b>Juzga y firma</b><span>Llega un pull request con el gate verde. El senior no escribe el código: lo juzga, y su firma es lo que sube el nivel de autonomía.</span></div><div class="mira"><em>el arnés</em>El agente no se firma a sí mismo (el nivel vive bajo <code>.git/</code>) y no fusiona a <code>main</code>. El panel muestra todo en vivo.</div></li>
-    </ol>
+    <div class="escena">
+      <div class="reparto" id="reparto" aria-label="Quién trabaja en cada paso">
+        <div class="actor" data-a="persona"><span class="ic" aria-hidden="true">🧑</span><b>Equipo</b><span class="s">chat · correo</span></div>
+        <div class="actor ci" data-a="local"><span class="ic" aria-hidden="true">🧠</span><b>Modelo local</b><span class="s">capa inteligente</span></div>
+        <div class="actor" data-a="hermes"><span class="ic" aria-hidden="true">🖐️</span><b>Hermes</b><span class="s">manos · rama aislada</span></div>
+        <div class="actor ci" data-a="claude"><span class="ic" aria-hidden="true">✨</span><b>Claude</b><span class="s">código y revisión</span></div>
+        <div class="actor" data-a="mcp"><span class="ic" aria-hidden="true">🔌</span><b>Integraciones</b><span class="s">MCP · mínimo privilegio</span></div>
+        <div class="actor" data-a="gate"><span class="ic" aria-hidden="true">🚦</span><b>Gate</b><span class="s">verde o rojo</span></div>
+        <div class="actor" data-a="senior"><span class="ic" aria-hidden="true">✍️</span><b>Senior</b><span class="s">juzga y firma</span></div>
+      </div>
+      <div class="arnes-barra" id="arnes-barra"><b>Arnés</b><span>cada llamada pasa por los frenos</span><span class="est" id="arnes-est">esperando…</span></div>
+      <div class="consola-flujo">
+        <ol class="pasos-lista" id="pasos-lista" aria-label="Pasos de la tarea"></ol>
+        <div class="term" aria-label="Consola: una tarea de punta a punta">
+          <div class="t-bar">
+            <span class="t-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="t-title">~/repo — issue #42 · de la petición al PR</span>
+            <span class="t-ctl"><button type="button" id="f-repetir">↻ repetir</button><button type="button" id="f-todo">⏭ todo</button><button type="button" id="f-pausa" aria-pressed="false">⏸ pausa</button></span>
+          </div>
+          <div class="tbody" id="f-body" aria-live="off"><pre id="f-out"></pre></div>
+          <div class="nota-paso" id="f-nota"></div>
+          <div class="tnote"><span class="prog"><i id="f-prog"></i></span><span>corrida de ejemplo: el agente sigue un guion; los frenos, el gate y el loop son los reales</span><span id="f-cnt"></span></div>
+        </div>
+      </div>
+    </div>
     <div class="dual">
       <div><span class="mark" style="font-family:var(--f-mono);font-size:var(--step--1);color:var(--accent-ink);letter-spacing:.08em;text-transform:uppercase">capa inteligente · local</span><h3>El modelo de la caja</h3><ul><li>Conversa y resume</li><li>Explora el repo y prepara el plan</li><li>Trabajo diario: los datos no salen</li></ul></div>
       <div><span class="mark" style="font-family:var(--f-mono);font-size:var(--step--1);color:var(--accent-ink);letter-spacing:.08em;text-transform:uppercase">capa inteligente · Claude</span><h3>El modelo para lo pesado</h3><ul><li>Escribe y refactoriza código</li><li>Revisa el diff antes de la firma</li><li>Se llama por la terminal, con tope</li></ul></div>
@@ -801,6 +839,82 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 <footer><div class="wrap">Hermes Autopilot · Apache-2.0 · <a href="https://github.com/raalzate/hermes-autopilot">github.com/raalzate/hermes-autopilot</a> · hermano de <a href="https://raalzate.github.io/agent-harness/">agent-harness</a></div></footer>
 
 <script>
+// El flujo integrado: una tarea de punta a punta, escrita como guion para que salga igual cada vez.
+(() => {
+  const PASOS = [
+    { a: "persona", t: "Pide la tarea", est: "tarea en la cola", cls: "",
+      nota: "El equipo escribe por chat o correo y Hermes la convierte en una tarea de la cola. Lo que llega de un tercero marca la sesión como contaminada.",
+      l: [["cmd", "chat › equipo: Arreglá el bug del issue #42 y dejalo en un PR"], ["accion", "✓ tarea en la cola · .hermes/loop/tasks.md"]] },
+    { a: "local", t: "Explora y planea", est: "guías cargadas", cls: "",
+      nota: "El modelo local lee el repo y prepara el plan. Es el trabajo diario y los datos no salen de la caja. Las guías orientan antes de decidir: AGENTS.md y el estado del repo.",
+      l: [["paso", "▶ modelo local · explora y planea"], ["accion", "[read_file] ✓ src/fechas.py"], ["voz", "«parse_fecha() revienta con una fecha vacía. Plan: test que falla, arreglo, gate.»"]] },
+    { a: "hermes", t: "Rama aislada y un freno", est: "✗ bloqueó .env", cls: "frena",
+      nota: "Cada tarea corre en su git worktree loop/*. Antes de cada llamada, el plugin decide: pasa, pide aprobación o bloquea con el motivo. El agente lo lee y corrige el rumbo.",
+      l: [["paso", "▶ hermes · rama aislada loop/issue-42"], ["accion", "[terminal] ✓ git worktree add … loop/issue-42"], ["voz", "«para ver cómo conecta, leo el .env»"], ["cmd", "agente → read_file {\"path\": \".env\"}"], ["freno", "✗ block · LECTURA PROTEGIDA: `.env` no lo lee el agente."], ["motivo", "   Motivo: tiene los secretos del repo. Leé .env.example; si falta una variable, pedíla al humano."], ["accion", "[read_file] ✓ .env.example"]] },
+    { a: "claude", t: "Claude escribe el código", est: "✓ mismos frenos", cls: "verde",
+      nota: "Hermes le delega lo difícil a Claude por la terminal, con herramientas y turnos acotados. Lo que Claude haga pasa por los mismos frenos: delegar no es un atajo.",
+      l: [["paso", "▶ claude (delegado) · tools acotadas · tope de turnos"], ["accion", "[write_file] ✓ tests/test_fechas.py"], ["accion", "[write_file] ✓ src/fechas.py"]] },
+    { a: "mcp", t: "Consulta afuera", est: "? pide aprobación", cls: "aprueba",
+      nota: "Cada integración declara sus herramientas y arranca con mínimo privilegio. Después de leer a un tercero (un issue público), todo lo que tenga efecto afuera escala a una persona.",
+      l: [["accion", "[mcp__github__issue_get] ✓ declarada · solo lectura"], ["voz", "«aviso al cliente por correo de que quedó»"], ["cmd", "agente → mcp__correo__send_email {\"to\": \"cliente@afuera.example\"}"], ["alerta", "? approve · la sesión leyó a un tercero: enviar algo lo decide un humano"]] },
+    { a: "gate", t: "El gate decide", est: "rojo → verde", cls: "verde",
+      nota: "Un comando decide «terminado»: tests, lint y reglas. Rojo distinto: reintenta con el rojo en mano. El mismo rojo dos veces o el tope: escala con el motivo.",
+      l: [["paso", "▶ intento 1 · el gate verifica"], ["rojo", "✗ intento 1: rojo — tests/test_fechas.py::test_fecha_vacia"], ["paso", "▶ intento 2 · reintento con el rojo en mano"], ["accion", "[write_file] ✓ src/fechas.py"], ["verde", "✓ intento 2: verde"]] },
+    { a: "claude", t: "Revisa el diff", est: "✓ sin atajos", cls: "verde",
+      nota: "Un revisor inferencial busca lo que ninguna regla vio: tests silenciados, secretos, cambios fuera de la tarea. Está medido contra casos etiquetados, no a ojo.",
+      l: [["paso", "▶ revisor inferencial · Claude lee el diff"], ["verde", "✓ sin atajos: ningún test silenciado ni cambio fuera de la tarea"]] },
+    { a: "senior", t: "Juzga y firma", est: "listo para revisión", cls: "verde",
+      nota: "El senior no escribe el código: lo juzga y firma. El agente no se firma a sí mismo (el nivel vive bajo .git/) y no fusiona a main. Todo quedó en el panel, en vivo.",
+      l: [["final ok", "✓ LISTO PARA REVISIÓN — gate verde en el intento 2"], ["accion", "PR #43 abierto · espera la firma del senior"], ["dim", "no fusiona a main · no cambia sus permisos · el nivel lo sube una persona"]] },
+  ];
+  const $ = (id) => document.getElementById(id);
+  const out = $("f-out"), body = $("f-body"), barra = $("arnes-barra"), est = $("arnes-est");
+  const quieto = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const PAUSA = { cmd: 500, paso: 450, voz: 520, accion: 380, freno: 800, motivo: 200, alerta: 800, rojo: 700, verde: 600, "final ok": 0, dim: 200 };
+  const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  $("pasos-lista").innerHTML = PASOS.map((p, i) => `<li><button type="button" data-i="${i}">${esc(p.t)}</button></li>`).join("");
+  const botones = [...document.querySelectorAll("#pasos-lista button")];
+  const actores = [...document.querySelectorAll("#reparto .actor")];
+  let gen = 0, pausa = false, total = PASOS.reduce((n, p) => n + p.l.length, 0);
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  const linea = (tipo, txt) => { const d = document.createElement("span"); d.className = "l " + tipo; d.textContent = txt; out.appendChild(d); body.scrollTop = body.scrollHeight; };
+  function marcar(i, estado) {
+    const p = PASOS[i];
+    botones.forEach((b, j) => { b.classList.toggle("listo", j < i || (j === i && estado === "fin")); b.setAttribute("aria-current", j === i ? "true" : "false"); });
+    actores.forEach((a) => { a.classList.toggle("on", a.dataset.a === p.a); a.classList.toggle("hecho", PASOS.slice(0, i).some((q) => q.a === a.dataset.a) && a.dataset.a !== p.a); });
+    $("f-nota").innerHTML = `<b>${esc(p.t)}</b><span>${esc(p.nota)}</span>`;
+  }
+  function arnes(i, alcanzo) {
+    barra.className = "arnes-barra" + (alcanzo && PASOS[i].cls ? " " + PASOS[i].cls : "");
+    est.textContent = alcanzo ? PASOS[i].est : "vigilando…";
+    if (!alcanzo) return;
+  }
+  function progreso(n) { $("f-prog").style.width = (100 * n / total) + "%"; $("f-cnt").textContent = n + "/" + total; }
+  async function reproducir(desde, instantaneo) {
+    const mi = ++gen; out.textContent = ""; let n = 0;
+    for (let i = 0; i < PASOS.length; i++) {
+      const rapido = instantaneo || i < desde;
+      marcar(i); arnes(i, false);
+      for (const [tipo, txt] of PASOS[i].l) {
+        if (mi !== gen) return;
+        while (pausa && mi === gen) await espera(120);
+        linea(tipo, txt); n++; progreso(n);
+        if (!rapido && !quieto) await espera(PAUSA[tipo] ?? 400);
+        if (tipo === "freno" || tipo === "alerta" || tipo === "rojo") arnes(i, true);
+      }
+      arnes(i, true); marcar(i, "fin");
+      if (!rapido && !quieto) await espera(700);
+    }
+  }
+  const ir = (i, inst) => reproducir(i, inst);
+  botones.forEach((b) => b.addEventListener("click", () => ir(+b.dataset.i)));
+  $("f-repetir").addEventListener("click", () => ir(0));
+  $("f-todo").addEventListener("click", () => ir(0, true));
+  $("f-pausa").addEventListener("click", (e) => { pausa = !pausa; e.currentTarget.setAttribute("aria-pressed", pausa); e.currentTarget.textContent = pausa ? "▶ seguir" : "⏸ pausa"; });
+  progreso(0); marcar(0); arnes(0, false);
+  new IntersectionObserver((es, ob) => { if (es[0].isIntersecting) { ob.disconnect(); ir(0, quieto); } }, { threshold: 0.3 }).observe($("flujo"));
+})();
+
 const raiz = document.documentElement;
 try { const t = localStorage.getItem("hh-tema"); if (t) raiz.dataset.theme = t; } catch (e) {}
 document.getElementById("theme").addEventListener("click", () => {
