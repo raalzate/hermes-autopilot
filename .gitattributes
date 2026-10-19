@@ -1,2 +1,4 @@
 # Las semillas de los casos se comparan byte a byte (hashes, intocables): sin conversión CRLF en Windows.
 casos/** text eol=lf
+# El conjunto de la evaluación lleva huella (SHA-256) en docs/evaluacion.html: sin conversión CRLF en Windows.
+evals/** text eol=lf

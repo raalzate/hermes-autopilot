@@ -117,6 +117,43 @@ def reviewer_measurement() -> dict | None:
             "recall": rate(tp, tp + fn), "precision": rate(tp, tp + fp), "tp": tp, "fp": fp, "fn": fn, "tn": tn}
 
 
+REPO_URL = "https://github.com/raalzate/hermes-autopilot/blob/main/"
+
+
+def dataset() -> dict:
+    """What was measured with: every data file, its case count, its SHA-256 and its schema, and one
+    fingerprint for the whole set. `--check` compares it, so a changed case means a stale page."""
+    files = []
+    for suite_rel, schema in (("evals/deterministic/suite.json", "evals/schema/suite.schema.json"),
+                              ("evals/inferential/suite.json", "evals/schema/inferential-suite.schema.json")):
+        suite = json.loads((HOME / suite_rel).read_text(encoding="utf-8"))
+        files.append({"path": suite_rel, "role": "suite", "cases": None, "schema": schema})
+        for rel in suite.get("caseFiles") or []:
+            path = (Path(suite_rel).parent / rel).as_posix()
+            doc = json.loads((HOME / path).read_text(encoding="utf-8"))
+            files.append({"path": path, "role": doc["group"], "cases": len(doc.get("cases") or []),
+                          "schema": "evals/schema/case-file.schema.json"})
+    extra = [("evals/measurements/deterministic-history.json", "history")]
+    extra += [(f.relative_to(HOME).as_posix(), "measurement") for f in sorted((HOME / "evals" / "measurements").glob("reviewer-*.txt"))]
+    for path, role in extra:
+        files.append({"path": path, "role": role, "cases": None, "schema": None})
+    whole = hashlib.sha256()
+    for f in files:
+        # LF always: a Windows checkout with `core.autocrlf` must give the same fingerprint.
+        digest = hashlib.sha256((HOME / f["path"]).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        f["sha256"] = digest
+        whole.update(f["path"].encode("utf-8") + b"\0" + digest.encode("ascii"))
+    return {"files": files, "fingerprint": whole.hexdigest()[:16],
+            "cases": sum(f["cases"] or 0 for f in files), "license": "Apache-2.0"}
+
+
+def dataset_row(d: dict) -> str:
+    schema = (f'<a href="{REPO_URL}{e(d["schema"])}"><code>{e(Path(d["schema"]).name)}</code></a>' if d["schema"] else "—")
+    return (f'<tr><td><a href="{REPO_URL}{e(d["path"])}"><code>{e(d["path"])}</code></a></td>'
+            f'<td>{e(DATA_ROLE_ES.get(d["role"], d["role"]))}</td><td>{d["cases"] if d["cases"] is not None else "—"}</td>'
+            f'<td><code title="{d["sha256"]}">{d["sha256"][:12]}</code></td><td>{schema}</td></tr>')
+
+
 def measure() -> tuple[dict, dict]:
     """(facts, latency): facts are what the page claims and `--check` compares; latency varies by machine."""
     reports = {p: run_profile(p) for p in PROFILES}
@@ -165,6 +202,7 @@ def measure() -> tuple[dict, dict]:
         "reviewer": reviewer_measurement(),
         "agentMeasured": False,
         "history": json.loads(HISTORY.read_text(encoding="utf-8"))["runs"] if HISTORY.is_file() else [],
+        "dataset": dataset(),
         "results": [{k: r[k] for k in ("id", "group", "lang", "expected", "did", "hit") if k in r}
                     | ({"category": r["category"]} if r.get("category") else {}) | ({"type": r["type"]} if r.get("type") else {})
                     | ({"variant": r["variant"]} if r.get("variant") else {}) | ({"knownGap": True} if r.get("knownGap") else {})
@@ -185,6 +223,9 @@ CATEGORY_ES = {"secrets (read)": "secretos (lectura)", "protected paths": "rutas
                "data out": "datos hacia afuera", "remote code": "código remoto", "disarm the harness": "desarmar el arnés",
                "memory and skills": "memoria y skills", "GitHub integration": "integración GitHub",
                "third-party content": "contenido de terceros", "autonomy level": "nivel de autonomía"}
+DATA_ROLE_ES = {"suite": "suite", "guides": "casos · guías", "rules": "casos · reglas", "signals": "casos · señales",
+                "reviewer": "casos · revisor (IA)", "agent": "casos · agente (IA)", "history": "historial de corridas",
+                "measurement": "medición real con un modelo"}
 TYPE_ES = {"context": "contexto", "status": "estado", "reason": "motivo", "turn-end": "fin de turno", "response": "respuesta",
            "tool-result": "resultado", "commit": "commit"}
 
@@ -390,6 +431,7 @@ def page(f: dict, lat: dict) -> str:
                               "Revisor de diffs con un modelo real", "Recall y precisión con su IC95: con 10 atajos, el intervalo es ancho."))
     if not rv:
         rev_block = "<p>Todavía no hay una medición real del revisor.</p>"
+    dataset_rows = "".join(dataset_row(d) for d in f["dataset"]["files"])
     facts_json = json.dumps(f, ensure_ascii=False, sort_keys=True).replace("</", "<\\/")
     lat_json = json.dumps(lat, ensure_ascii=False).replace("</", "<\\/")
     return f"""<!doctype html>
@@ -483,6 +525,7 @@ td.g {{ color: var(--verde); font-weight: 600; }} td.r {{ color: var(--rojo); fo
 .rubric .what {{ display: block; font-weight: 400; font-size: .82rem; color: var(--ink-faint); }}
 .score {{ display: block; font-family: var(--f-display); font-size: 2.4rem; font-weight: 800; line-height: 1.1; margin: .2rem 0 .6rem; }}
 .score small {{ font-size: 1rem; font-weight: 600; color: var(--ink-soft); }}
+.cite {{ font-family: var(--f-mono); font-size: .82rem; background: var(--surface); border: 1px solid var(--rule-soft); border-radius: 4px; padding: .8rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }}
 .note {{ border-left: 3px solid var(--ocre); padding: .4rem .9rem; color: var(--ink-soft); background: var(--surface); margin: 1rem 0; }}
 ul {{ max-width: 72ch; }}
 footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: var(--ink-faint); font-family: var(--f-mono); font-size: .8rem; }}
@@ -496,7 +539,7 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
   <nav class="nav" aria-label="Secciones">
     <a href="index.html">← Portada</a><a href="#resumen">Resumen</a><a href="#metodo">Método</a><a href="#resultados">Resultados</a><a href="#idiomas">Idiomas</a>
     <a href="#stacks">Stacks</a><a href="#costo">Costo</a><a href="#historia">Historia</a><a href="#inferencial">IA</a>
-    <a href="#rubrica">Rúbrica</a><a href="#validez">Validez</a><a href="#reproducir">Reproducir</a>
+    <a href="#rubrica">Rúbrica</a><a href="#validez">Validez</a><a href="#datos">Datos</a><a href="#reproducir">Reproducir</a>
   </nav>
   <button class="theme" id="theme" type="button" aria-label="Cambiar tema">tema</button>
 </div></div>
@@ -625,6 +668,23 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
     <li><b>Las tasas son de esta suite, no de toda acción posible.</b> El intervalo de confianza cuantifica el azar del muestreo, no el sesgo de qué se eligió medir.</li>
     <li><b>La latencia se midió en una sola máquina</b>, y el resto no depende de la máquina: lo prueban los ocho perfiles y la corrida repetida.</li>
   </ul>
+</div></section>
+
+<section id="datos"><div class="wrap">
+  <h2>Conjunto de datos</h2>
+  <p>Lo que se midió, con qué versión exacta. Cada archivo sigue su JSON Schema y se valida antes de cada corrida; la huella del conjunto
+    cambia si cambia un solo caso, y entonces esta página queda vieja y el gate lo marca.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Archivo</th><th>Rol</th><th>Casos</th><th>SHA-256</th><th>Esquema</th></tr></thead>
+    <tbody>{dataset_rows}</tbody>
+  </table></div>
+  <p>Huella del conjunto: <code>{f["dataset"]["fingerprint"]}</code> · {f["dataset"]["cases"]} casos ({f["cases"]} deterministas y
+    {f["dataset"]["cases"] - f["cases"]} inferenciales) · licencia {e(f["dataset"]["license"])}. Los resultados caso por caso de esta corrida
+    están en esta misma página, en JSON (<code>&lt;script id="facts"&gt;</code>, campo <code>results</code>).</p>
+  <h3>Cómo citarlo</h3>
+  <pre class="cite">Hermes Autopilot. Evaluación determinista e inferencial del arnés del copiloto (conjunto {f["dataset"]["fingerprint"]}),
+{f["cases"]} casos deterministas en inglés y en español, {e(date.today().isoformat())}.
+https://github.com/raalzate/hermes-autopilot/tree/main/evals</pre>
 </div></section>
 
 <section id="reproducir"><div class="wrap">
