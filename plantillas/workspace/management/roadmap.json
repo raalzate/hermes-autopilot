@@ -1,0 +1,13 @@
+{
+  "$comment": "The milestones of the management project. `workspace.py init --apply` creates them in the forge; an epic hangs from one with `--milestone`. Edit titles and dates before applying.",
+  "milestones": [
+    {
+      "title": "M1 · Foundations",
+      "description": "Repos created, the harness installed in each one and the gate green in CI."
+    },
+    {
+      "title": "M2 · First delivery",
+      "description": "The first epic end to end: dispatched, worked and closed."
+    }
+  ]
+}

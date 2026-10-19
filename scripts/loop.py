@@ -197,7 +197,7 @@ def integraciones_de(tarea: str, spec: dict) -> list[str] | None:
 
 def issue_de(tarea: str) -> str:
     """El issue de la forja que la tarea trabaja: `[issue: org/api#12]`, lo que escribe
-    `workspace.py despachar` en la cola del codificador. "" si la tarea no viene de una épica."""
+    `workspace.py dispatch` en la cola del codificador. "" si la tarea no viene de una épica."""
     m = re.search(r"\[issue:\s*([^\]\s]+#\d+)\s*\]", tarea or "")
     return m.group(1) if m else ""
 

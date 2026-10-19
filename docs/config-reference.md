@@ -53,8 +53,8 @@ sin `example` es roja.
 | `incidents` | `{file, heading, requiredLines[]}` — formato de `docs/gotchas.md` |
 | `docs.pathRoots`, `externalPaths`, `ignoreFiles` | qué backticks cuentan como rutas del repo en el link-check |
 | `status.file`, `headLines`, `reminder` | lo que la sección de estado muestra al abrir la sesión |
-| `tracker.kind`, `issuePattern`, `issueExample` | qué cuenta como referencia a un ítem de trabajo. `install.py --forja` lo fija desde `plantillas/forjas/<id>.json` |
-| `workspace.rol`, `manifiesto`, `id`, `gestion` | el rol del repo en un workspace ([`workspace.md`](workspace.md)): `gestion` (sin código de un stack; su gate corre `workspace.py check`) o `codificador` (su `id` en `workspace.json` y el repo de gestión). Lo escriben `workspace.py init` y `add` |
+| `tracker.kind`, `issuePattern`, `issueExample` | qué cuenta como referencia a un ítem de trabajo. `install.py --forge` lo fija desde `plantillas/forjas/<id>.json` |
+| `workspace.role`, `manifest`, `id`, `management` | el rol del repo en un workspace ([`workspace.md`](workspace.md)): `management` (sin código de un stack; su gate corre `workspace.py check`) o `coder` (su `id` en `workspace.json` y el repo de gestión). Lo escriben `workspace.py init` y `add` |
 | `commitMsg.codePattern`, `ignoreExtensions`, `escapeLine`, `skipSubjects` | qué commits piden registro y cómo se declara la excepción |
 | `lint.ignore[]` | rutas que el lint no barre |
 | `profiles.dir`, `requiredKeys`, `forbiddenKeys`, `reason` | regla `PERFIL`: un perfil de stack lleva hechos del lenguaje, no reglas (P17). Una clave con punto (`gate.signals`) es una ruta anidada |
@@ -117,7 +117,7 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `docs.*` | `scripts/linkcheck.py` |
 | `status.*` | `plugin/harness/turn.py` |
 | `tracker`, `commitMsg` | `scripts/githooks.py`, `scripts/selftest.py`; `tracker` lo escribe `scripts/install.py` (`con_forja`) |
-| `workspace` | `scripts/workspace.py` (`problemas_de_gestion`), `scripts/selftest.py` (§16) |
+| `workspace` | `scripts/workspace.py` (`management_problems`), `scripts/selftest.py` (§16) |
 | `profiles` | `plugin/harness/rules.py` (`rule_perfil`), `scripts/lint.py`, `scripts/selftest.py` |
 | `coherence` | `plugin/harness/rules.py` (`rule_coherencia`, `es_guia`), `scripts/lint.py`, `scripts/selftest.py` |
 | `branches` | `scripts/githooks.py` (`pre_push`), `scripts/selftest.py` |

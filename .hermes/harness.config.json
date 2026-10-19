@@ -146,6 +146,15 @@
         "why": "una forja cuyo comando ya no es el que su integración clasifica, un pipeline que no corre el gate o un despacho que sale a medias pasan el self-test de los frenos y fallan recién al despachar una épica real, con la mitad de los hijos ya publicados. Se ve acá: cada forja con sus ejemplos y un despacho de punta a punta contra la forja simulada, sin red"
       },
       {
+        "name": "página de la evaluación al día (docs/evaluacion.html)",
+        "command": [
+          "python3",
+          "scripts/evals_page.py",
+          "--check"
+        ],
+        "why": "la página pública de la evaluación muestra números (recall, falsos positivos, intervalos, la rúbrica): si el arnés cambia y nadie la regenera, GitHub Pages publica una medición que ya no es cierta. Esto vuelve a medir en los ocho perfiles y falla si la página dice otra cosa"
+      },
+      {
         "name": "evaluación determinista (guías · reglas · señales)",
         "command": [
           "python3",
@@ -370,13 +379,14 @@
       },
       {
         "id": "workspace-publica",
-        "pattern": "\\bworkspace(\\.py)?\\s+(init|add|despachar|estado|wiki)\\b[^|;&]*--apply",
-        "example": "python3 .hermes/harness/scripts/workspace.py despachar 12 --apply",
+        "pattern": "\\bworkspace(\\.py)?\\s+(init|add|epic|dispatch|status|wiki)\\b[^|;&]*--apply",
+        "example": "python3 .hermes/harness/scripts/workspace.py dispatch 12 --apply",
         "moreExamples": [
-          "python3 scripts/workspace.py init ../gestion --forja github --org mi-org --apply",
-          "python3 .hermes/harness/scripts/workspace.py wiki --apply"
+          "python3 scripts/workspace.py init ../gestion --forge github --org mi-org --apply",
+          "python3 .hermes/harness/scripts/workspace.py wiki --apply",
+          "python3 .hermes/harness/scripts/workspace.py epic \"Login\" --child api:\"Endpoint\" --apply"
         ],
-        "reason": "con --apply el workspace publica en la forja (crea repos, issues, milestones y tableros, edita la épica, empuja la wiki): el plugin ve `python3 workspace.py`, no cada `gh`/`glab`/`az`, así que lo aprueba un humano acá. Sin --apply (el plan, con las lecturas reales) pasa."
+        "reason": "con --apply el workspace publica en la forja (crea repos, épicas, issues, milestones y tableros, edita la épica, empuja la wiki): el plugin ve `python3 workspace.py`, no cada `gh`/`glab`/`az`, así que lo aprueba un humano acá. Sin --apply (el plan, con las lecturas reales) pasa."
       },
       {
         "id": "nivel-firma",
@@ -1450,12 +1460,17 @@
         "direction": "sensor",
         "stage": "integración"
       },
+      "página de la evaluación (scripts/evals_page.py --check)": {
+        "file": "scripts/evals_page.py",
+        "direction": "sensor",
+        "stage": "integración"
+      },
       "evaluación determinista (scripts/evals.py deterministic)": {
         "file": "scripts/evals.py",
         "direction": "sensor",
         "stage": "integración"
       },
-      "workspace · estado de las épicas (scripts/workspace.py estado)": {
+      "workspace · estado de las épicas (scripts/workspace.py status)": {
         "file": "scripts/workspace.py",
         "direction": "sensor",
         "stage": "continuo"

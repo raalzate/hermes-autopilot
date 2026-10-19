@@ -34,18 +34,18 @@ commit.
      de gestión que declara código de un stack.
 2. **La épica es la fuente de la verdad del despacho.** Es un issue padre con un checklist, una
    línea por hijo: `- [ ] [<proyecto>] <título>`.
-   - `despachar` crea un issue por línea en el repo del proyecto y lo vincula al padre con el
+   - `dispatch` crea un issue por línea en el repo del proyecto y lo vincula al padre con el
      vínculo nativo de la forja: sub-issue en GitHub, issue link en GitLab, Parent en Azure.
    - Además, el padre queda nombrado en el cuerpo del hijo, que es el vínculo que sobrevive entre
      forjas distintas.
    - Agrega la referencia a la línea (`→ org/repo#n`) y encola la tarea en el loop del
      codificador con `[issue: …]`.
    - Es todo o nada: con una línea inválida no se crea ningún hijo. Despachar dos veces no repite.
-   - `estado` marca `[x]` lo cerrado en la forja y `[!]` lo que el loop del codificador escaló.
-3. **Las forjas son manifiestos** (`plantillas/forjas/<id>.json`), no código (P4).
+   - `status` marca `[x]` lo cerrado en la forja y `[!]` lo que el loop del codificador escaló.
+3. **Las forjas son manifiestos** (`plantillas/forges/<id>.json`, con su esquema `forge.schema.json`), no código (P4).
    - Cada operación abstracta (`issue.crear`, `issue.vincular`…) es un argv de su CLI, con grupos
      opcionales. La salida se lee con una regex o una ruta JSON.
-   - `plugin/harness/forja.py` es puro: arma comandos y reescribe el checklist, y no lanza procesos.
+   - `plugin/harness/forge.py` es puro: arma comandos y reescribe el checklist, y no lanza procesos.
    - Agregar una forja es agregar un manifiesto.
 4. **Cada operación está clasificada por la integración de su CLI** (`github`, `gitlab`,
    `azure-devops`).
@@ -55,10 +55,10 @@ commit.
 5. **Seco por defecto, y publicar lo aprueba un humano** (P9, P13).
    - Sin `--apply`, las lecturas van a la forja de verdad, para que el plan salga con la épica
      real, y lo que escribe se imprime y se simula.
-   - El plugin ve `python3 workspace.py despachar --apply`, no cada `gh`. Por eso la regla
+   - El plugin ve `python3 workspace.py dispatch --apply`, no cada `gh`. Por eso la regla
      `terminal.ask` `workspace-publica` pide aprobación en la plantilla de todo repo.
    - El loop sigue sin publicar.
-6. **El pipeline sale de la forja.** `install.py --forja` instala GitHub Actions, GitLab CI o Azure
+6. **El pipeline sale de la forja.** `install.py --forge` instala GitHub Actions, GitLab CI o Azure
    Pipelines, todos con el mismo `gate.py`. También apunta `drift.runner` al archivo que corre la
    deriva y fija `tracker` desde el manifiesto.
 
@@ -67,10 +67,12 @@ commit.
 - `workspace.py check` es una señal del gate, sin red. Cubre cada forja con sus ejemplos, cada
   operación contra su integración, el pipeline y un despacho de punta a punta contra la forja
   simulada. Doce mutaciones exigen que el self-test (§16) note cada pieza rota.
-- **Abierto (docs/huecos.md):** el despacho contra una forja real. GitLab y Azure son adaptadores
-  probados en seco. GitHub está completo en operaciones, pero tampoco tiene una corrida automática
-  contra una organización real.
+- **Probado contra GitHub real (2026-10-19):** repos privados de prueba, milestones, tableros de
+  GitHub Projects, la épica con su milestone, los hijos como sub-issues entre repos, la cola del
+  codificador y `status` marcando lo cerrado y lo escalado.
+- **Abierto (docs/huecos.md):** GitLab y Azure DevOps contra la forja real; sólo se probaron en seco.
 - **Límites conocidos:**
   - La descripción de un work item de Azure es HTML: el checklist viaja con `<br>`.
-  - La wiki de GitHub y la de Azure se crean una vez desde la web.
+  - La wiki de GitHub y la de Azure se crean una vez desde la web. En GitHub, un repo privado sólo
+    tiene wiki con un plan pago.
   - El tablero de GitHub (Projects) pide el scope `project` de `gh`.

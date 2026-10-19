@@ -240,13 +240,14 @@
       },
       {
         "id": "workspace-publica",
-        "pattern": "\\bworkspace(\\.py)?\\s+(init|add|despachar|estado|wiki)\\b[^|;&]*--apply",
-        "example": "python3 .hermes/harness/scripts/workspace.py despachar 12 --apply",
+        "pattern": "\\bworkspace(\\.py)?\\s+(init|add|epic|dispatch|status|wiki)\\b[^|;&]*--apply",
+        "example": "python3 .hermes/harness/scripts/workspace.py dispatch 12 --apply",
         "moreExamples": [
-          "python3 scripts/workspace.py init ../gestion --forja github --org mi-org --apply",
-          "python3 .hermes/harness/scripts/workspace.py wiki --apply"
+          "python3 scripts/workspace.py init ../gestion --forge github --org mi-org --apply",
+          "python3 .hermes/harness/scripts/workspace.py wiki --apply",
+          "python3 .hermes/harness/scripts/workspace.py epic \"Login\" --child api:\"Endpoint\" --apply"
         ],
-        "reason": "con --apply el workspace publica en la forja (crea repos, issues, milestones y tableros, edita la épica, empuja la wiki): el plugin ve `python3 workspace.py`, no cada `gh`/`glab`/`az`, así que lo aprueba un humano acá. Sin --apply (el plan, con las lecturas reales) pasa."
+        "reason": "con --apply el workspace publica en la forja (crea repos, épicas, issues, milestones y tableros, edita la épica, empuja la wiki): el plugin ve `python3 workspace.py`, no cada `gh`/`glab`/`az`, así que lo aprueba un humano acá. Sin --apply (el plan, con las lecturas reales) pasa."
       },
       {
         "id": "nivel-firma",

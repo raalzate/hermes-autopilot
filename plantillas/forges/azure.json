@@ -1,0 +1,225 @@
+{
+  "$schema": "forge.schema.json",
+  "id": "azure",
+  "title": "Azure DevOps (`az` + azure-devops extension)",
+  "description": "Repos, work items with a Parent relation (the native parent→child link), iterations as milestones, Azure Boards (comes with the project: not created), the wiki as a git repo and Azure Pipelines. A repo is named `<org>/<project>/<repo>`. Adapter: checked by `workspace.py check` and dry-run, not against a real Azure DevOps.",
+  "verified": "2026-10-19 · az 2.x + azure-devops: `repos create`, `boards work-item create|show|update|relation add`, `boards iteration project create`.",
+  "cli": "az",
+  "integration": "azure-devops",
+  "issuePattern": "(AB)?#\\d+",
+  "issueExample": "AB#12",
+  "closes": "Fixes AB#{n}",
+  "childBody": "Part of {parent}",
+  "wiki": "https://dev.azure.com/{owner}/{project}/_git/{project}.wiki",
+  "wikiNote": "The project wiki is created from the web (Overview → Wiki → Create project wiki). A work item description is HTML: the epic checklist is stored with one `<br>` per line.",
+  "defaults": {
+    "type": "Issue"
+  },
+  "repoParts": 3,
+  "lineBreak": "<br>",
+  "issueTemplate": null,
+  "ci": [
+    {
+      "from": "ci/azure-pipelines.yml",
+      "to": "azure-pipelines.yml",
+      "runner": "drift"
+    }
+  ],
+  "ops": {
+    "repo.create": [
+      "az",
+      "repos",
+      "create",
+      "--name",
+      "{name}",
+      "--project",
+      "{project}",
+      "--org",
+      "https://dev.azure.com/{owner}"
+    ],
+    "issue.create": [
+      "az",
+      "boards",
+      "work-item",
+      "create",
+      "--type",
+      "{type}",
+      "--title",
+      "{title}",
+      "--description",
+      "{body}",
+      "--project",
+      "{project}",
+      "--org",
+      "https://dev.azure.com/{owner}",
+      [
+        "--iteration",
+        "{milestone}"
+      ],
+      "--output",
+      "json"
+    ],
+    "issue.id": null,
+    "issue.link": [
+      "az",
+      "boards",
+      "work-item",
+      "relation",
+      "add",
+      "--id",
+      "{n}",
+      "--relation-type",
+      "parent",
+      "--target-id",
+      "{parent_n}",
+      "--org",
+      "https://dev.azure.com/{owner}"
+    ],
+    "issue.state": [
+      "az",
+      "boards",
+      "work-item",
+      "show",
+      "--id",
+      "{n}",
+      "--org",
+      "https://dev.azure.com/{owner}",
+      "--query",
+      "fields.\"System.State\"",
+      "--output",
+      "tsv"
+    ],
+    "issue.body": [
+      "az",
+      "boards",
+      "work-item",
+      "show",
+      "--id",
+      "{n}",
+      "--org",
+      "https://dev.azure.com/{owner}",
+      "--query",
+      "fields.\"System.Description\"",
+      "--output",
+      "tsv"
+    ],
+    "issue.edit": [
+      "az",
+      "boards",
+      "work-item",
+      "update",
+      "--id",
+      "{n}",
+      "--description",
+      "{body}",
+      "--org",
+      "https://dev.azure.com/{owner}"
+    ],
+    "milestone.create": [
+      "az",
+      "boards",
+      "iteration",
+      "project",
+      "create",
+      "--name",
+      "{title}",
+      "--project",
+      "{project}",
+      "--org",
+      "https://dev.azure.com/{owner}",
+      [
+        "--finish-date",
+        "{date}"
+      ]
+    ],
+    "board.create": null,
+    "board.add": null
+  },
+  "output": {
+    "issue.create": {
+      "json": "id"
+    }
+  },
+  "states": {
+    "New": "open",
+    "To Do": "open",
+    "Active": "open",
+    "Doing": "open",
+    "Resolved": "closed",
+    "Done": "closed",
+    "Closed": "closed"
+  },
+  "simulated": {
+    "issue.create": "{\"id\": {n}}",
+    "issue.state": "{raw}",
+    "issue.body": "{body}"
+  },
+  "classes": {
+    "repo.create": "write",
+    "issue.create": "send",
+    "issue.link": "write",
+    "issue.state": "read",
+    "issue.body": "read",
+    "issue.edit": "write",
+    "milestone.create": "write"
+  },
+  "setup": [
+    "az extension add --name azure-devops",
+    "az login                       # once, outside the agent"
+  ],
+  "examples": [
+    {
+      "op": "issue.create",
+      "vars": {
+        "owner": "org",
+        "project": "plataforma",
+        "title": "Login",
+        "body": "Parte de org/plataforma/gestion#1",
+        "type": "Issue"
+      },
+      "argv": [
+        "az",
+        "boards",
+        "work-item",
+        "create",
+        "--type",
+        "Issue",
+        "--title",
+        "Login",
+        "--description",
+        "Parte de org/plataforma/gestion#1",
+        "--project",
+        "plataforma",
+        "--org",
+        "https://dev.azure.com/org",
+        "--output",
+        "json"
+      ],
+      "why": "the type comes from `defaults` (Issue in the Basic process; `User Story` in Agile)"
+    },
+    {
+      "op": "issue.link",
+      "vars": {
+        "n": "41",
+        "parent_n": "40",
+        "owner": "org"
+      },
+      "argv": [
+        "az",
+        "boards",
+        "work-item",
+        "relation",
+        "add",
+        "--id",
+        "41",
+        "--relation-type",
+        "parent",
+        "--target-id",
+        "40",
+        "--org",
+        "https://dev.azure.com/org"
+      ],
+      "why": "the child points to its Parent: the relation lives in the child"
+    }
+  ]
+}

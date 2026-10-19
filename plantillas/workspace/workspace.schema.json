@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plantillas/workspace/workspace.schema.json",
+  "title": "Workspace · manifest (workspace.json)",
+  "description": "The management repo and its coder projects (docs/workspace.md, ADR 0013). `management` is the repo where Hermes orchestrates: epics, milestones, the portfolio board, the wiki and the orchestrator queue, no code. Each `projects[]` entry is a coder with its repo, forge, stack profile, agent and local `dir`. `agents` are the `loop.agentCommand` each coder can get. Written by `workspace.py init` and `workspace.py add`.",
+  "type": "object",
+  "required": ["name", "forge", "management", "projects", "agents", "epics"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string"},
+    "$comment": {"type": "string"},
+    "name": {"type": "string", "minLength": 1},
+    "forge": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "The default forge (plantillas/forges/<id>.json)."},
+    "management": {
+      "type": "object",
+      "required": ["repo", "agent"],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {"$ref": "#/$defs/repo"},
+        "agent": {"type": "string", "minLength": 1},
+        "board": {"oneOf": [{"type": "null"}, {"type": "string"}]}
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "repo", "role"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "pattern": "^[\\w.-]+$"},
+          "repo": {"$ref": "#/$defs/repo"},
+          "role": {"const": "coder", "description": "There is one management repo; every project is a coder."},
+          "forge": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+          "profile": {"type": "string", "minLength": 1},
+          "agent": {"type": "string", "minLength": 1},
+          "dir": {"type": "string", "minLength": 1, "description": "Local path, relative to the management repo."},
+          "board": {"oneOf": [{"type": "null"}, {"type": "string"}]},
+          "label": {"type": "string"}
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+      "description": "agent name → argv with `{prompt}`."
+    },
+    "epics": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1}, "description": "Epics dispatched so far: `status` follows them."}
+  },
+  "$defs": {
+    "repo": {"type": "string", "pattern": "^[\\w.-]+(/[\\w.-]+){1,2}$", "description": "`owner/repo`, or `org/project/repo` on Azure."}
+  }
+}

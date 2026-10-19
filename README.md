@@ -103,6 +103,7 @@ python3 .hermes/harness/scripts/cli.py loop --apply
 - [`docs/loop-autonomo.md`](docs/loop-autonomo.md) — operar el loop.
 - [`docs/cli-y-panel.md`](docs/cli-y-panel.md) — la CLI y el panel.
 - [`docs/integraciones.md`](docs/integraciones.md) — correo, WhatsApp, navegador, Google, Microsoft, GitHub, bases: catálogo, perfiles, secretos, recursos y dependencias.
+- [La evaluación, publicada](https://raalzate.github.io/hermes-autopilot/evaluacion.html) — gráficos, intervalos de confianza y la rúbrica (`docs/evaluacion.html`, la genera `scripts/evals_page.py`).
 - [`docs/evaluaciones.md`](docs/evaluaciones.md) — las evaluaciones del copiloto: determinista (guías · reglas · señales, en el gate) e inferencial (con IA).
 - [`docs/workspace.md`](docs/workspace.md) — varios proyectos: gestión que orquesta, codificadores, forjas.
 - [`docs/hermes.md`](docs/hermes.md) — cómo se engancha a Hermes, verificado contra su código.

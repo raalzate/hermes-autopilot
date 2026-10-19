@@ -1,38 +1,41 @@
 #!/usr/bin/env python3
 """
-El workspace: varios proyectos sobre una forja, uno de GESTIÓN y N CODIFICADORES (ADR 0013).
+The workspace: several projects on a forge, one MANAGEMENT repo and N CODER repos (ADR 0013).
 
-    python3 scripts/workspace.py init <dir> --org X [--forja github] [--nombre N] [--repo X/gestion] [--local] [--apply]
-    python3 scripts/workspace.py add <id> --repo R [--dir D] [--perfil P] [--agente claude-code] [--forja gitlab] [--crear] [--local] [--apply]
-    python3 scripts/workspace.py despachar <n> [--apply]
-    python3 scripts/workspace.py estado [<n> …] [--apply]
+    python3 scripts/workspace.py init <dir> --org X [--forge github] [--name N] [--repo X/management] [--local] [--apply]
+    python3 scripts/workspace.py add <id> --repo R [--dir D] [--profile P] [--agent claude-code] [--forge gitlab] [--create] [--local] [--apply]
+    python3 scripts/workspace.py epic "<title>" --child <project>:"<task>" [--child …] [--milestone M] [--goal G] [--apply]
+    python3 scripts/workspace.py dispatch <n> [--apply]
+    python3 scripts/workspace.py status [<n> …] [--apply]
     python3 scripts/workspace.py wiki [--apply]
     python3 scripts/workspace.py check
 
-El proyecto de gestión (este `workspace.json`) tiene las épicas, los milestones, el tablero de
-portafolio, la wiki y la cola del ORQUESTADOR (Hermes). No tiene código. Cada codificador tiene su
-repo, su tablero, su cola y su agente (Claude Code o Hermes), con su propio arnés. Lo que los une
-es la épica: un issue padre en gestión con un checklist de hijos, y un issue hijo por línea en el
-repo del codificador, vinculado al padre (plugin/harness/forja.py).
+The management repo (this `workspace.json`) holds the epics, the milestones, the portfolio board,
+the wiki and the ORCHESTRATOR queue (Hermes). It has no code. Each coder has its repo, its board,
+its queue and its agent (Claude Code or Hermes), with its own harness. What ties them is the epic:
+a parent issue in management with a checklist of children, and one child issue per line in the
+coder's repo, linked to the parent (plugin/harness/forge.py).
 
-  init       el esqueleto de gestión: workspace.json, AGENTS.md del orquestador, wiki/, roadmap,
-             la plantilla de épica y el arnés instalado; en la forja, el repo, los milestones y el
-             tablero (`--local`: sólo los archivos).
-  add        un codificador: lo registra, le instala el arnés en `--dir` con su perfil, su forja y
-             su agente como `loop.agentCommand`, y le crea el tablero (`--crear`: también el repo).
-  despachar  los hijos de la épica `<n>` que todavía no salieron: un issue por línea en su repo,
-             vinculado al padre, encolado en el loop del codificador (`[issue: <repo>#<n>]`).
-  estado     el checklist de cada épica según la forja: `[x]` lo cerrado, `[!]` lo que el loop del
-             codificador escaló a un humano.
-  wiki       regenera wiki/Proyectos.md desde workspace.json y empuja wiki/ al repo de la wiki.
-  check      sin red: cada forja con sus ejemplos, cada operación clasificada por su integración, el
-             pipeline de cada forja y un despacho de punta a punta contra la forja simulada. Señal
-             del gate.
+  init      the management skeleton: workspace.json, the orchestrator AGENTS.md, wiki/, the
+            roadmap, the epic template and the harness installed; in the forge, the repo, the
+            milestones and the board (`--local`: only the files).
+  add       a coder: registers it, installs the harness in `--dir` with its profile, its forge and
+            its agent as `loop.agentCommand`, and creates its board (`--create`: the repo too).
+  epic      an epic in the management repo: its checklist of children (`--child project:task`), its
+            milestone, on the portfolio board.
+  dispatch  the children of epic `<n>` not yet out: one issue per line in its repo, linked to the
+            parent, queued in the coder's loop (`[issue: <repo>#<n>]`).
+  status    each epic's checklist from the forge: `[x]` closed, `[!]` what the coder's loop
+            escalated to a human.
+  wiki      regenerates wiki/Proyectos.md from workspace.json and pushes wiki/ to the wiki repo.
+  check     no network: workspace.json and every forge against their schemas, each forge with its
+            examples, each operation classified by its integration, the forge's pipeline and a
+            dispatch end to end against the simulated forge. A gate signal.
 
-DRY-RUN por defecto (P9): las LECTURAS van a la forja de verdad (el plan sale con la épica real) y
-lo que escribe se imprime y se simula. `--apply` publica. `--simulado`: todo contra la forja de
-juguete, sin red. El loop nunca publica (P13): con `--apply` esto lo corre o lo aprueba un humano
-(regla `terminal.ask` `workspace-publica`).
+DRY-RUN by default (P9): READS go to the real forge (the plan comes out with the real epic) and
+what writes is printed and simulated. `--apply` publishes. `--simulated`: everything against the
+toy forge, no network. The loop never publishes (P13): with `--apply` a human runs or approves this
+(`terminal.ask` rule `workspace-publica`).
 """
 from __future__ import annotations
 
@@ -46,419 +49,443 @@ import sys
 import tempfile
 from pathlib import Path
 
-HOME = Path(__file__).resolve().parent.parent  # el repo del arnés (o una copia instalada)
+HOME = Path(__file__).resolve().parent.parent  # the harness repo (or an installed copy)
 PLANT = HOME / "plantillas"
-GESTION = PLANT / "workspace" / "gestion"
+MANAGEMENT = PLANT / "workspace" / "management"
+WS_SCHEMA = PLANT / "workspace" / "workspace.schema.json"
+FORGE_SCHEMA = PLANT / "forges" / "forge.schema.json"
 WS = "workspace.json"
 sys.path.insert(0, str(HOME / "plugin"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import forja as fj  # noqa: E402
+from harness import forge as fg  # noqa: E402
 from harness import integ as nucleo  # noqa: E402
+import schema_check  # noqa: E402
 
-SEÑAL = {"name": "workspace (manifiesto y forjas)", "command": ["python3", ".hermes/harness/scripts/workspace.py", "check"],
-         "why": "un workspace.json que nombra un proyecto, una forja o un agente que no existe, o una forja cuyo comando ya no "
-                "es el que su integración clasifica, falla recién al despachar, con la mitad de los hijos ya publicados"}
+SIGNAL = {"name": "workspace (manifest and forges)", "command": ["python3", ".hermes/harness/scripts/workspace.py", "check"],
+          "why": "a workspace.json naming a project, a forge or an agent that does not exist, or a forge whose command is no longer "
+                 "what its integration classifies, fails only when dispatching, with half the children already published"}
 
 
 def _json(p: Path) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def forjas() -> dict[str, dict]:
-    return {f.stem: _json(f) for f in sorted((PLANT / "forjas").glob("*.json"))}
+def forges() -> dict[str, dict]:
+    return {f.stem: _json(f) for f in sorted((PLANT / "forges").glob("*.json")) if not f.name.endswith(".schema.json")}
 
 
-def integraciones() -> dict[str, dict]:
+def integrations() -> dict[str, dict]:
     return {f.stem: _json(f) for f in sorted((PLANT / "integraciones").glob("*.json"))}
 
 
-def buscar_ws(desde: Path) -> Path | None:
-    for d in (desde, *desde.parents):
+def find_ws(start: Path) -> Path | None:
+    for d in (start, *start.parents):
         if (d / WS).is_file():
             return d
     return None
 
 
-def leer_ws(d: Path) -> dict:
+def read_ws(d: Path) -> dict:
     return _json(d / WS)
 
 
-def escribir_ws(d: Path, ws: dict) -> None:
+def write_ws(d: Path, ws: dict) -> None:
     (d / WS).write_text(json.dumps(ws, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def proyectos(ws: dict) -> dict[str, dict]:
-    return {p["id"]: p for p in ws.get("proyectos") or [] if isinstance(p, dict) and p.get("id")}
+def projects(ws: dict) -> dict[str, dict]:
+    return {p["id"]: p for p in ws.get("projects") or [] if isinstance(p, dict) and p.get("id")}
 
 
-def forja_de(ws: dict, p: dict | None = None) -> dict:
-    fid = (p or {}).get("forja") or ws.get("forja") or "github"
-    m = forjas().get(fid)
+def forge_of(ws: dict, p: dict | None = None) -> dict:
+    fid = (p or {}).get("forge") or ws.get("forge") or "github"
+    m = forges().get(fid)
     if m is None:
-        raise fj.ForjaError(f"la forja `{fid}` no existe (plantillas/forjas/)")
+        raise fg.ForgeError(f"forge `{fid}` does not exist (plantillas/forges/)")
     return m
 
 
-def de_repo(ws: dict, repo: str) -> dict | None:
-    if (ws.get("gestion") or {}).get("repo") == repo:
-        return ws["gestion"]
-    return next((p for p in proyectos(ws).values() if p.get("repo") == repo), None)
+def by_repo(ws: dict, repo: str) -> dict | None:
+    if (ws.get("management") or {}).get("repo") == repo:
+        return ws["management"]
+    return next((p for p in projects(ws).values() if p.get("repo") == repo), None)
 
 
-def a_forja(m: dict, texto: str) -> str:
-    """Azure guarda la descripción como HTML: cada salto de línea, un `<br>`."""
-    s = m.get("saltoDeLinea")
-    return texto.replace("\n", s) if s else texto
+def to_forge(m: dict, text: str) -> str:
+    """Azure stores the description as HTML: each line break, a `<br>`."""
+    br = m.get("lineBreak")
+    return text.replace("\n", br) if br else text
 
 
-def de_forja(m: dict, texto: str) -> str:
-    s = m.get("saltoDeLinea")
-    return texto.replace(s, "\n") if s else texto
+def from_forge(m: dict, text: str) -> str:
+    br = m.get("lineBreak")
+    return text.replace(br, "\n") if br else text
 
 
-def problemas_de_ws(ws: dict) -> list[str]:
-    out, fs = [], forjas()
-    agentes = ws.get("agentes") or {}
-    if ws.get("forja") not in fs:
-        out.append(f"`forja` {ws.get('forja')!r} no es una de {', '.join(fs)}")
-    g = ws.get("gestion") or {}
-    try:
-        fj.vars_de_repo(g.get("repo", ""))
-    except fj.ForjaError as e:
-        out.append(f"gestion.repo: {e}")
-    if g.get("agente") and g["agente"] not in agentes:
-        out.append(f"gestion.agente `{g['agente']}` no está en `agentes`")
-    vistos = set()
-    for i, p in enumerate(ws.get("proyectos") or []):
-        donde = f"proyectos[{i}] ({p.get('id')})"
-        if not re.fullmatch(r"[\w.-]+", str(p.get("id") or "")):
-            out.append(f"{donde}: `id` en letras, dígitos, `.`, `_` o `-`")
-        if p.get("id") in vistos:
-            out.append(f"{donde}: `id` repetido")
-        vistos.add(p.get("id"))
-        if p.get("rol", "codificador") != "codificador":
-            out.append(f"{donde}: `rol` es `codificador` (la gestión es una sola: `gestion`)")
-        try:
-            fj.vars_de_repo(p.get("repo", ""))
-        except fj.ForjaError as e:
-            out.append(f"{donde}: {e}")
-        if p.get("repo") == g.get("repo"):
-            out.append(f"{donde}: es el repo de gestión: el código no va ahí")
-        if p.get("forja") and p["forja"] not in fs:
-            out.append(f"{donde}: la forja `{p['forja']}` no existe")
-        if p.get("agente") and p["agente"] not in agentes:
-            out.append(f"{donde}: el agente `{p['agente']}` no está en `agentes`")
-        if p.get("perfil") and not (PLANT / "perfiles" / f"{p['perfil']}.json").is_file():
-            out.append(f"{donde}: el perfil `{p['perfil']}` no existe")
-    for nombre, argv in agentes.items():
-        if not (isinstance(argv, list) and argv and any("{prompt}" in str(a) for a in argv)):
-            out.append(f"agentes.{nombre}: argv sin `{{prompt}}`: el loop no tendría cómo pasarle la tarea")
+def ws_problems(ws: dict) -> list[str]:
+    """The schema first; then what it cannot say: forges, agents and profiles that exist, unique ids,
+    and no coder on the management repo."""
+    out = [f"{WS} {e}" for e in schema_check.validate(ws, _json(WS_SCHEMA))]
+    fs = forges()
+    agents = ws.get("agents") or {}
+    if ws.get("forge") not in fs:
+        out.append(f"`forge` {ws.get('forge')!r} is not one of {', '.join(fs)}")
+    m = ws.get("management") or {}
+    if m.get("agent") and m["agent"] not in agents:
+        out.append(f"management.agent `{m['agent']}` is not in `agents`")
+    seen = set()
+    for i, p in enumerate(ws.get("projects") or []):
+        where = f"projects[{i}] ({p.get('id')})"
+        if p.get("id") in seen:
+            out.append(f"{where}: repeated `id`")
+        seen.add(p.get("id"))
+        if p.get("repo") and p.get("repo") == m.get("repo"):
+            out.append(f"{where}: it is the management repo: code does not go there")
+        if p.get("forge") and p["forge"] not in fs:
+            out.append(f"{where}: forge `{p['forge']}` does not exist")
+        if p.get("agent") and p["agent"] not in agents:
+            out.append(f"{where}: agent `{p['agent']}` is not in `agents`")
+        if p.get("profile") and not (PLANT / "perfiles" / f"{p['profile']}.json").is_file():
+            out.append(f"{where}: profile `{p['profile']}` does not exist")
+    for name, argv in agents.items():
+        if not any("{prompt}" in str(a) for a in argv or []):
+            out.append(f"agents.{name}: argv without `{{prompt}}`: the loop would have no way to pass it the task")
     return out
 
 
-# ── ejecutar contra la forja ─────────────────────────────────────────────────
+# ── running against the forge ────────────────────────────────────────────────
 
-class Simulada:
-    """La forja de juguete: issues, cuerpos y vínculos en memoria. Responde con la MISMA forma que la
-    CLI de verdad (`simulado` del manifiesto), así que lo que lee la salida se prueba igual."""
+class SimulatedForge:
+    """The toy forge: issues, bodies and links in memory. It answers in the SAME shape as the real
+    CLI (`simulated` in the manifest), so what reads the output is tested the same way."""
 
     def __init__(self):
         self.issues: dict[tuple[str, str], dict] = {}
-        self.vinculos: list[tuple[str, str]] = []
-        self._cont: dict[str, int] = {}
+        self.links: list[tuple[str, str]] = []
+        self._count: dict[str, int] = {}
 
-    def _n(self, clave: str) -> int:
-        self._cont[clave] = self._cont.get(clave, 0) + 1
-        return self._cont[clave]
+    def _next(self, key: str) -> int:
+        self._count[key] = self._count.get(key, 0) + 1
+        return self._count[key]
 
-    def conoce(self, vars_: dict) -> bool:
+    def knows(self, vars_: dict) -> bool:
         return (vars_.get("repo", ""), str(vars_.get("n", ""))) in self.issues
 
     @staticmethod
-    def crudo(m: dict, estado: str) -> str:
-        return next((k for k, v in (m.get("estados") or {}).items() if v == estado), estado)
+    def raw(m: dict, state: str) -> str:
+        return next((k for k, v in (m.get("states") or {}).items() if v == state), state)
 
-    def sembrar(self, m: dict, repo: str, cuerpo: str, n: str | None = None) -> str:
-        n = str(n or self._n(repo))
-        self.issues[(repo, n)] = {"cuerpo": cuerpo, "crudo": self.crudo(m, "abierto")}
+    def seed(self, m: dict, repo: str, body: str, n: str | None = None) -> str:
+        n = str(n or self._next(repo))
+        self.issues[(repo, n)] = {"body": body, "raw": self.raw(m, "open")}
         return n
 
-    def cerrar(self, m: dict, repo: str, n: str) -> None:
-        self.issues[(repo, str(n))]["crudo"] = self.crudo(m, "cerrado")
+    def close(self, m: dict, repo: str, n: str) -> None:
+        self.issues[(repo, str(n))]["raw"] = self.raw(m, "closed")
 
-    def hacer(self, m: dict, op: str, vars_: dict) -> str:
+    def do(self, m: dict, op: str, vars_: dict) -> str:
         repo, n = vars_.get("repo", ""), str(vars_.get("n", ""))
         val: dict = {"repo": repo, "n": n}
-        if op == "issue.crear":
-            val["n"] = self.sembrar(m, repo, vars_.get("cuerpo", ""))
-        elif op in ("issue.estado", "issue.cuerpo", "issue.id"):
+        if op == "issue.create":
+            val["n"] = self.seed(m, repo, vars_.get("body", ""))
+        elif op in ("issue.state", "issue.body", "issue.id"):
             i = self.issues.get((repo, n))
             if i is None:
-                raise fj.ForjaError(f"la forja simulada no tiene {repo}#{n}")
-            val.update(crudo=i["crudo"], cuerpo=i["cuerpo"], id=f"9{n}", json_cuerpo=json.dumps({"description": i["cuerpo"]}))
-        elif op == "issue.editar":
-            self.issues.setdefault((repo, n), {"crudo": self.crudo(m, "abierto")})["cuerpo"] = vars_.get("cuerpo", "")
-        elif op == "issue.vincular":
-            self.vinculos.append((f"{vars_.get('repo_padre')}#{vars_.get('n_padre')}", str(vars_.get("id_hijo") or n)))
-        elif op == "tablero.crear":
-            val["n"] = self._n("tablero")
-        return fj.rellenar((m.get("simulado") or {}).get(op, ""), val)
+                raise fg.ForgeError(f"the simulated forge has no {repo}#{n}")
+            val.update(raw=i["raw"], body=i["body"], id=f"9{n}", json_body=json.dumps({"description": i["body"]}))
+        elif op == "issue.edit":
+            self.issues.setdefault((repo, n), {"raw": self.raw(m, "open")})["body"] = vars_.get("body", "")
+        elif op == "issue.link":
+            self.links.append((f"{vars_.get('parent_repo')}#{vars_.get('parent_n')}", str(vars_.get("child_id") or n)))
+        elif op == "board.create":
+            val["n"] = self._next("board")
+        return fg.fill((m.get("simulated") or {}).get(op, ""), val)
 
 
-class Ejecutor:
-    """`apply`: todo de verdad · `seco`: las lecturas de verdad, lo demás simulado · `simulado`: nada sale."""
+class Runner:
+    """`apply`: everything for real · `dry`: reads for real, the rest simulated · `simulated`: nothing goes out."""
 
-    def __init__(self, modo: str, sim: Simulada | None = None, log=print):
-        self.modo, self.sim, self.log = modo, sim or Simulada(), log
+    def __init__(self, mode: str, sim: SimulatedForge | None = None, log=print):
+        self.mode, self.sim, self.log = mode, sim or SimulatedForge(), log
 
     def __call__(self, m: dict, op: str, vars_: dict) -> str | None:
-        argv = fj.comando(m, op, vars_)
+        argv = fg.command(m, op, vars_)
         if argv is None:
             return None
-        lee = (m.get("clases") or {}).get(op) == "read"
-        if self.modo == "apply" or (self.modo == "seco" and lee and not self.sim.conoce(vars_)):
+        reads = (m.get("classes") or {}).get(op) == "read"
+        if self.mode == "apply" or (self.mode == "dry" and reads and not self.sim.knows(vars_)):
             self.log(f"  $ {shlex.join(argv)}")
             try:
                 p = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
             except FileNotFoundError:
-                raise fj.ForjaError(f"no está `{argv[0]}` en el PATH. Setup de la forja `{m['id']}`: "
+                raise fg.ForgeError(f"`{argv[0]}` is not on the PATH. Setup of forge `{m['id']}`: "
                                     + " · ".join(m.get("setup") or [])) from None
             if p.returncode != 0:
-                raise fj.ForjaError(f"`{shlex.join(argv[:4])} …` salió {p.returncode}: {(p.stderr or p.stdout).strip()[:400]}")
-            if self.modo == "seco" and op == "issue.cuerpo":
-                # Lo que se leyó de verdad, la simulación lo recuerda: lo que sigue (editarlo) es en seco.
-                self.sim.sembrar(m, vars_.get("repo", ""), fj.leer_salida(m, op, p.stdout), vars_.get("n"))
+                raise fg.ForgeError(f"`{shlex.join(argv[:4])} …` exited {p.returncode}: {(p.stderr or p.stdout).strip()[:400]}")
+            if self.mode == "dry" and op == "issue.body":
+                # What was read for real, the simulation remembers: what follows (editing it) is dry.
+                self.sim.seed(m, vars_.get("repo", ""), fg.read_output(m, op, p.stdout), vars_.get("n"))
             return p.stdout
-        self.log(f"  {'·' if lee else '+'} {shlex.join(argv)}")
-        return self.sim.hacer(m, op, vars_)
+        self.log(f"  {'·' if reads else '+'} {shlex.join(argv)}")
+        return self.sim.do(m, op, vars_)
 
 
-def vars_repo(repo: str, **extra) -> dict:
-    return {**fj.vars_de_repo(repo), **{k: v for k, v in extra.items() if v is not None}}
+def repo_vars(repo: str, **extra) -> dict:
+    return {**fg.repo_vars(repo), **{k: v for k, v in extra.items() if v is not None}}
 
 
-# ── el despacho y el estado (lo que prueba `check` contra la simulada) ─────
+# ── dispatch and status (what `check` tests against the simulated forge) ────
 
-def leer_cuerpo(ws: dict, n, ej: Ejecutor) -> str:
-    m = forja_de(ws)
-    return de_forja(m, fj.leer_salida(m, "issue.cuerpo", ej(m, "issue.cuerpo", vars_repo(ws["gestion"]["repo"], n=n)) or ""))
-
-
-def linea_de_cola(titulo: str, r: str) -> str:
-    return f"- [ ] {titulo} [issue: {r}]"
+def read_body(ws: dict, n, run: Runner) -> str:
+    m = forge_of(ws)
+    return from_forge(m, fg.read_output(m, "issue.body", run(m, "issue.body", repo_vars(ws["management"]["repo"], n=n)) or ""))
 
 
-def cola_de(ws_dir: Path | None, p: dict) -> Path | None:
+def queue_line(title: str, r: str) -> str:
+    return f"- [ ] {title} [issue: {r}]"
+
+
+def queue_of(ws_dir: Path | None, p: dict) -> Path | None:
     if ws_dir is None or not p.get("dir"):
         return None
-    cola = (ws_dir / p["dir"]).resolve() / ".hermes" / "loop" / "tasks.md"
-    return cola if cola.is_file() else None
+    q = (ws_dir / p["dir"]).resolve() / ".hermes" / "loop" / "tasks.md"
+    return q if q.is_file() else None
 
 
-def despachar(ws: dict, n, ej: Ejecutor, ws_dir: Path | None = None, escribir: bool = False, log=print) -> tuple[list[str], list[str]]:
-    """(referencias creadas, problemas). Todo o nada: con un problema en el checklist no se crea ninguno."""
-    mg, gestion = forja_de(ws), ws["gestion"]["repo"]
-    cuerpo = leer_cuerpo(ws, n, ej)
-    crear, problemas = fj.plan_despacho(cuerpo, proyectos(ws))
-    if not fj.hijos(cuerpo):
-        problemas.append(f"la épica {gestion}#{n} no tiene checklist de hijos (`- [ ] [<proyecto>] <título>`)")
-    if problemas or not crear:
-        return [], problemas
-    padre = fj.ref(gestion, n)
-    padre_vars = vars_repo(gestion)
-    creados = []
-    for h in crear:
-        p = proyectos(ws)[h["proyecto"]]
-        m = forja_de(ws, p)
-        salida = ej(m, "issue.crear", vars_repo(p["repo"], titulo=h["titulo"], cuerpo=a_forja(m, fj.cuerpo_hijo(m, padre)),
-                                               etiqueta=p.get("etiqueta")))
-        nh = fj.leer_salida(m, "issue.crear", salida or "")
-        r = fj.ref(p["repo"], nh)
+def dispatch(ws: dict, n, run: Runner, ws_dir: Path | None = None, write: bool = False, log=print) -> tuple[list[str], list[str]]:
+    """(references created, problems). All or nothing: with one problem in the checklist, none is created."""
+    mg, management = forge_of(ws), ws["management"]["repo"]
+    body = read_body(ws, n, run)
+    create, problems = fg.plan_dispatch(body, projects(ws))
+    if not fg.children(body):
+        problems.append(f"epic {management}#{n} has no checklist of children (`- [ ] [<project>] <title>`)")
+    if problems or not create:
+        return [], problems
+    parent = fg.ref(management, n)
+    parent_vars = repo_vars(management)
+    created = []
+    for c in create:
+        p = projects(ws)[c["project"]]
+        m = forge_of(ws, p)
+        out = run(m, "issue.create", repo_vars(p["repo"], title=c["title"], body=to_forge(m, fg.child_body(m, parent)), label=p.get("label")))
+        nc = fg.read_output(m, "issue.create", out or "")
+        r = fg.ref(p["repo"], nc)
         if m["id"] == mg["id"]:
-            # El vínculo nativo, sólo dentro de la misma forja. Entre forjas queda el del texto del hijo.
-            idh = fj.leer_salida(m, "issue.id", ej(m, "issue.id", vars_repo(p["repo"], n=nh)) or "") if (m.get("ops") or {}).get("issue.id") else nh
-            ej(m, "issue.vincular", vars_repo(p["repo"], n=nh, id_hijo=idh, repo_padre=gestion, n_padre=n,
-                                              repo_padre_enc=padre_vars["repo_enc"]))
+            # The native link, only within the same forge. Across forges the child's body carries it.
+            cid = fg.read_output(m, "issue.id", run(m, "issue.id", repo_vars(p["repo"], n=nc)) or "") if (m.get("ops") or {}).get("issue.id") else nc
+            run(m, "issue.link", repo_vars(p["repo"], n=nc, child_id=cid, parent_repo=management, parent_n=n,
+                                           parent_repo_enc=parent_vars["repo_enc"]))
         else:
-            log(f"  · {r} está en otra forja ({m['id']}): el vínculo con {padre} queda en el cuerpo del issue")
-        url = (salida or "").strip()
-        if p.get("tablero") and url.startswith("http"):
-            ej(m, "tablero.agregar", vars_repo(p["repo"], tablero=p["tablero"], url=url))
-        cuerpo = fj.con_ref(cuerpo, h["linea"], r)
-        cola = cola_de(ws_dir, p)
-        if cola is not None:
-            log(f"  + {cola}: {linea_de_cola(h['titulo'], r)}")
-            if escribir:
-                texto = cola.read_text(encoding="utf-8")
-                cola.write_text(texto + ("" if texto.endswith("\n") else "\n") + linea_de_cola(h["titulo"], r) + "\n", encoding="utf-8")
-        creados.append(r)
-    ej(mg, "issue.editar", vars_repo(gestion, n=n, cuerpo=a_forja(mg, cuerpo)))
-    return creados, []
+            log(f"  · {r} is on another forge ({m['id']}): its link to {parent} lives in the issue body")
+        url = (out or "").strip()
+        if p.get("board") and url.startswith("http"):
+            run(m, "board.add", repo_vars(p["repo"], board=p["board"], url=url))
+        body = fg.with_ref(body, c["line"], r)
+        q = queue_of(ws_dir, p)
+        if q is not None:
+            log(f"  + {q}: {queue_line(c['title'], r)}")
+            if write:
+                text = q.read_text(encoding="utf-8")
+                q.write_text(text + ("" if text.endswith("\n") else "\n") + queue_line(c["title"], r) + "\n", encoding="utf-8")
+        created.append(r)
+    run(mg, "issue.edit", repo_vars(management, n=n, body=to_forge(mg, body)))
+    return created, []
 
 
-def escalado(ws_dir: Path | None, p: dict | None, r: str) -> bool:
-    cola = cola_de(ws_dir, p or {})
-    if cola is None:
+def escalated(ws_dir: Path | None, p: dict | None, r: str) -> bool:
+    q = queue_of(ws_dir, p or {})
+    if q is None:
         return False
-    return re.search(rf"^\s*[-*]\s+\[!\].*\[issue:\s*{re.escape(r)}\]", cola.read_text(encoding="utf-8"), re.M) is not None
+    return re.search(rf"^\s*[-*]\s+\[!\].*\[issue:\s*{re.escape(r)}\]", q.read_text(encoding="utf-8"), re.M) is not None
 
 
-def estado(ws: dict, n, ej: Ejecutor, ws_dir: Path | None = None) -> tuple[dict[str, str], bool]:
-    """({referencia: marca}, cambió). Cerrado en la forja → `x`; escalado en la cola → `!`; si no, ` `."""
-    mg = forja_de(ws)
-    cuerpo = leer_cuerpo(ws, n, ej)
-    marcas = {}
-    for h in fj.hijos(cuerpo):
-        if not h["ref"]:
+def status(ws: dict, n, run: Runner, ws_dir: Path | None = None) -> tuple[dict[str, str], bool]:
+    """({reference: mark}, changed). Closed in the forge → `x`; escalated in the queue → `!`; else ` `."""
+    mg = forge_of(ws)
+    body = read_body(ws, n, run)
+    marks = {}
+    for c in fg.children(body):
+        if not c["ref"]:
             continue
-        repo, nh = fj.partir_ref(h["ref"])
-        p = de_repo(ws, repo)
-        m = forja_de(ws, p)
-        e = fj.estado(m, fj.leer_salida(m, "issue.estado", ej(m, "issue.estado", vars_repo(repo, n=nh)) or ""))
-        marcas[h["ref"]] = "x" if e == "cerrado" else ("!" if escalado(ws_dir, p, h["ref"]) else " ")
-    nuevo = fj.con_marcas(cuerpo, marcas)
-    if nuevo != cuerpo:
-        ej(mg, "issue.editar", vars_repo(ws["gestion"]["repo"], n=n, cuerpo=a_forja(mg, nuevo)))
-    return marcas, nuevo != cuerpo
+        repo, nc = fg.split_ref(c["ref"])
+        p = by_repo(ws, repo)
+        m = forge_of(ws, p)
+        st = fg.state(m, fg.read_output(m, "issue.state", run(m, "issue.state", repo_vars(repo, n=nc)) or ""))
+        marks[c["ref"]] = "x" if st == "closed" else ("!" if escalated(ws_dir, p, c["ref"]) else " ")
+    new = fg.with_marks(body, marks)
+    if new != body:
+        run(mg, "issue.edit", repo_vars(ws["management"]["repo"], n=n, body=to_forge(mg, new)))
+    return marks, new != body
 
 
-# ── check: sin red ───────────────────────────────────────────────────────────
+def epic_body(goal: str, children_: list[tuple[str, str]]) -> str:
+    """The epic from its template (plantillas/workspace/management/epic.md) with its children."""
+    template = (MANAGEMENT / "epic.md").read_text(encoding="utf-8")
+    lines = "\n".join(f"- [ ] [{p}] {t}" for p, t in children_)
+    body = re.sub(r"(?m)^- \[ \] \[[\w.-]+\] .*$", lambda _: lines, template, count=1)
+    if goal:
+        body = re.sub(r"(## Objetivo\n\n).*?\n\n", lambda mm: mm.group(1) + goal.strip() + "\n\n", body, count=1, flags=re.S)
+    return body
 
-def _repos_de_ensayo(m: dict) -> tuple[str, str, str]:
-    """`partesRepo`: cuántas partes tiene el nombre de un repo en esa forja (Azure: org/proyecto/repo)."""
-    base = "/".join(["org", "plat", "x"][-int(m.get("partesRepo") or 2):][:-1])
-    return f"{base}/gestion", f"{base}/api", f"{base}/web"
+
+def create_epic(ws: dict, title: str, children_: list[tuple[str, str]], run: Runner, milestone: str | None = None,
+                goal: str = "") -> tuple[str, list[str]]:
+    """(the epic's reference, problems). Every child names a coder of the workspace, or nothing is created."""
+    body = epic_body(goal, children_)
+    _, problems = fg.plan_dispatch(body, projects(ws))
+    if not children_:
+        problems.append("an epic needs at least one child (`--child <project>:<task>`)")
+    if problems:
+        return "", problems
+    m, repo = forge_of(ws), ws["management"]["repo"]
+    out = run(m, "issue.create", repo_vars(repo, title=title, body=to_forge(m, body), milestone=milestone))
+    n = fg.read_output(m, "issue.create", out or "")
+    url = (out or "").strip()
+    if ws["management"].get("board") and url.startswith("http"):
+        run(m, "board.add", repo_vars(repo, board=ws["management"]["board"], url=url))
+    return fg.ref(repo, n), []
 
 
-def ensayo(m: dict) -> list[str]:
-    """Una épica de punta a punta contra la simulada: despachar, no repetir, cerrar un hijo, marcar."""
+# ── check: no network ────────────────────────────────────────────────────────
+
+def _rehearsal_repos(m: dict) -> tuple[str, str, str]:
+    """`repoParts`: how many parts a repo name has on this forge (Azure: org/project/repo)."""
+    base = "/".join(["org", "plat", "x"][-int(m.get("repoParts") or 2):][:-1])
+    return f"{base}/management", f"{base}/api", f"{base}/web"
+
+
+def rehearsal(m: dict) -> list[str]:
+    """An epic end to end against the simulated forge: create it, dispatch, do not repeat, close a child, mark."""
     out = []
-    rg, ra, rw = _repos_de_ensayo(m)
-    ws = {"nombre": "ensayo", "forja": m["id"], "gestion": {"repo": rg, "agente": "hermes"}, "epicas": [],
-          "proyectos": [{"id": "api", "repo": ra, "rol": "codificador"}, {"id": "web", "repo": rw, "rol": "codificador"}],
-          "agentes": {"hermes": ["hermes", "chat", "-q", "{prompt}"]}}
-    sim = Simulada()
-    ej = Ejecutor("simulado", sim, log=lambda *_: None)
-    n = sim.sembrar(m, rg, a_forja(m, "## Hijos\n\n- [ ] [api] Login\n- [ ] [web] Pantalla de login\n"))
+    rg, ra, rw = _rehearsal_repos(m)
+    ws = {"name": "rehearsal", "forge": m["id"], "management": {"repo": rg, "agent": "hermes"}, "epics": [],
+          "projects": [{"id": "api", "repo": ra, "role": "coder"}, {"id": "web", "repo": rw, "role": "coder"}],
+          "agents": {"hermes": ["hermes", "chat", "-q", "{prompt}"]}}
+    sim = SimulatedForge()
+    run = Runner("simulated", sim, log=lambda *_: None)
     try:
-        creados, prob = despachar(ws, n, ej, log=lambda *_: None)
-        if prob or len(creados) != 2:
-            return [f"el despacho de una épica con 2 hijos creó {len(creados)} ({'; '.join(prob)})"]
-        cuerpo = leer_cuerpo(ws, n, ej)
-        if [h["ref"] for h in fj.hijos(cuerpo)] != creados:
-            out.append("la épica no quedó con la referencia de cada hijo")
-        if (m.get("ops") or {}).get("issue.vincular") and len(sim.vinculos) != 2:
-            out.append(f"el vínculo nativo padre→hijo se hizo {len(sim.vinculos)} veces, no 2")
-        for r in creados:
-            repo, nh = fj.partir_ref(r)
-            if fj.ref(rg, n) not in de_forja(m, sim.issues[(repo, nh)]["cuerpo"]):
-                out.append(f"el hijo {r} no nombra a su padre en el cuerpo")
-        otra, prob = despachar(ws, n, ej, log=lambda *_: None)
-        if otra:
-            out.append(f"despachar dos veces la misma épica volvió a crear {otra}")
-        sim.cerrar(m, *fj.partir_ref(creados[0]))
-        marcas, cambio = estado(ws, n, ej)
-        if marcas != {creados[0]: "x", creados[1]: " "} or not cambio:
-            out.append(f"estado: con el primer hijo cerrado, las marcas son {marcas}")
-        if [h["marca"] for h in fj.hijos(leer_cuerpo(ws, n, ej))] != ["x", " "]:
-            out.append("estado no dejó el checklist de la épica marcado en la forja")
-        n2 = sim.sembrar(m, rg, a_forja(m, "- [ ] [api] Uno\n- [ ] [nadie] Otro\n"))
-        antes = len(sim.issues)
-        creados, prob = despachar(ws, n2, ej, log=lambda *_: None)
-        if creados or not prob or len(sim.issues) != antes:
-            out.append("una épica con un proyecto que no existe se despachó a medias: tiene que ser todo o nada")
-    except fj.ForjaError as e:
-        out.append(f"el ensayo revienta: {e}")
+        epic, problems = create_epic(ws, "Login", [("api", "Login"), ("web", "Login screen")], run)
+        if problems or not epic:
+            return [f"creating an epic with 2 children failed: {'; '.join(problems)}"]
+        n = fg.split_ref(epic)[1]
+        created, problems = dispatch(ws, n, run, log=lambda *_: None)
+        if problems or len(created) != 2:
+            return [f"dispatching an epic with 2 children created {len(created)} ({'; '.join(problems)})"]
+        body = read_body(ws, n, run)
+        if [c["ref"] for c in fg.children(body)] != created:
+            out.append("the epic was not left with each child's reference")
+        if (m.get("ops") or {}).get("issue.link") and len(sim.links) != 2:
+            out.append(f"the native parent→child link was made {len(sim.links)} times, not 2")
+        for r in created:
+            repo, nc = fg.split_ref(r)
+            if fg.ref(rg, n) not in from_forge(m, sim.issues[(repo, nc)]["body"]):
+                out.append(f"child {r} does not name its parent in the body")
+        again, problems = dispatch(ws, n, run, log=lambda *_: None)
+        if again:
+            out.append(f"dispatching the same epic twice created {again} again")
+        sim.close(m, *fg.split_ref(created[0]))
+        marks, changed = status(ws, n, run)
+        if marks != {created[0]: "x", created[1]: " "} or not changed:
+            out.append(f"status: with the first child closed, the marks are {marks}")
+        if [c["mark"] for c in fg.children(read_body(ws, n, run))] != ["x", " "]:
+            out.append("status did not leave the epic's checklist marked in the forge")
+        before = len(sim.issues)
+        _, problems = create_epic(ws, "Other", [("api", "One"), ("nobody", "Two")], run)
+        n2 = sim.seed(m, rg, to_forge(m, "- [ ] [api] One\n- [ ] [nobody] Two\n"))
+        created, problems2 = dispatch(ws, n2, run, log=lambda *_: None)
+        if not problems or created or not problems2 or len(sim.issues) != before + 1:
+            out.append("an epic with a project that does not exist was created or dispatched halfway: it has to be all or nothing")
+    except fg.ForgeError as e:
+        out.append(f"the rehearsal crashes: {e}")
     return out
 
 
-def problemas_de_forja(m: dict, integ: dict | None) -> list[str]:
-    """Una forja: su forma, sus ejemplos, cada operación clasificada por su integración como la forja
-    dice, su pipeline y un despacho de punta a punta contra la simulada."""
-    forma = fj.problemas_de_manifiesto(m)
-    if forma:
-        return forma
+def forge_problems(m: dict, integ: dict | None) -> list[str]:
+    """A forge: its schema, its shape, its examples, each operation classified by its integration as the
+    forge says, its pipeline and an epic end to end against the simulated forge."""
+    shape = [f"schema {e}" for e in schema_check.validate(m, _json(FORGE_SCHEMA))] + fg.manifest_problems(m)
+    if shape:
+        return shape
     out = []
-    for ej in m.get("examples") or []:
+    for ex in m.get("examples") or []:
         try:
-            hizo = fj.comando(m, ej["op"], ej.get("vars") or {})
-        except fj.ForjaError as e:
-            hizo = str(e)
-        if hizo != ej.get("argv"):
-            out.append(f"ejemplo `{ej['op']}` ({ej.get('why')}): arma {hizo}, se esperaba {ej.get('argv')}")
+            did = fg.command(m, ex["op"], ex.get("vars") or {})
+        except fg.ForgeError as e:
+            did = str(e)
+        if did != ex.get("argv"):
+            out.append(f"example `{ex['op']}` ({ex.get('why')}): builds {did}, expected {ex.get('argv')}")
     if integ is None:
-        out.append(f"la integración `{m.get('integracion')}` no está en plantillas/integraciones: nada gobierna su CLI")
-    for op, plantilla in (m.get("ops") or {}).items():
-        if plantilla is None or integ is None:
+        out.append(f"integration `{m.get('integration')}` is not in plantillas/integraciones: nothing governs its CLI")
+    for op, template in (m.get("ops") or {}).items():
+        if template is None or integ is None:
             continue
-        texto = " ".join(fj.comando(m, op, {v: "v1" for v in fj.variables(plantilla)}) or [])
-        esperada = (m.get("clases") or {}).get(op)
-        hay = nucleo.clase(integ, texto)
-        if not re.search(integ.get("command") or "(?!)", texto):
-            out.append(f"`{op}` ({texto}) no es un comando de la integración `{integ.get('id')}`")
-        elif hay == "deny":
-            out.append(f"`{op}` es una clase `deny` para su integración: el agente nunca podría correrlo")
-        elif hay != esperada:
-            out.append(f"`{op}`: la integración lo clasifica `{hay}` y la forja declara `{esperada}`")
-    hay_gate = False
+        text = " ".join(fg.command(m, op, {v: "v1" for v in fg.variables(template)}) or [])
+        expected = (m.get("classes") or {}).get(op)
+        got = nucleo.clase(integ, text)
+        if not re.search(integ.get("command") or "(?!)", text):
+            out.append(f"`{op}` ({text}) is not a command of integration `{integ.get('id')}`")
+        elif got == "deny":
+            out.append(f"`{op}` is a `deny` class for its integration: the agent could never run it")
+        elif got != expected:
+            out.append(f"`{op}`: the integration classifies it `{got}` and the forge declares `{expected}`")
+    has_gate = False
     for e in m.get("ci") or []:
-        f = PLANT / e["de"]
+        f = PLANT / e["from"]
         if not f.is_file():
-            out.append(f"el pipeline `{e['de']}` no existe")
+            out.append(f"pipeline `{e['from']}` does not exist")
             continue
-        texto = f.read_text(encoding="utf-8")
-        hay_gate = hay_gate or "scripts/gate.py" in texto
-        if e.get("runner") == "drift" and "scripts/drift.py" not in texto:
-            out.append(f"`{e['de']}` es el runner de la deriva y no corre drift.py: encendido y nadie que lo corra")
-    if not hay_gate:
-        out.append("ningún pipeline de la forja corre el gate: CI verde sin gate es CI que no mira")
-    return out + [f"ensayo: {e}" for e in ensayo(m)]
+        text = f.read_text(encoding="utf-8")
+        has_gate = has_gate or "scripts/gate.py" in text
+        if e.get("runner") == "drift" and "scripts/drift.py" not in text:
+            out.append(f"`{e['from']}` is the drift runner and does not run drift.py: switched on and nobody runs it")
+    if not has_gate:
+        out.append("no pipeline of the forge runs the gate: green CI without the gate is CI that does not look")
+    return out + [f"rehearsal: {e}" for e in rehearsal(m)]
 
 
-def problemas_de_forjas() -> list[str]:
-    ints = integraciones()
-    return [f"{fid}: {e}" for fid, m in forjas().items() for e in problemas_de_forja(m, ints.get(m.get("integracion") or ""))]
+def all_forge_problems() -> list[str]:
+    ints = integrations()
+    return [f"{fid}: {e}" for fid, m in forges().items() for e in forge_problems(m, ints.get(m.get("integration") or ""))]
 
 
-def config_del_repo(d: Path) -> dict | None:
-    p = d / ".hermes" / "harness.config.json"
+def repo_config(d: Path) -> dict | None:
     try:
-        return _json(p)
+        return _json(d / ".hermes" / "harness.config.json")
     except (OSError, ValueError):
         return None
 
 
-def problemas_de_gestion(ws_dir: Path) -> list[str]:
-    """El repo de gestión no es destino de código: su config no declara código que el loop toque."""
-    cfg = config_del_repo(ws_dir)
-    if cfg is None or (cfg.get("workspace") or {}).get("rol") != "gestion":
+def management_problems(ws_dir: Path) -> list[str]:
+    """The management repo is not a code target: its config declares no stack code."""
+    cfg = repo_config(ws_dir)
+    if cfg is None or (cfg.get("workspace") or {}).get("role") != "management":
         return []
-    propias = set(_json(GESTION / "perfil.json").get("codeExtensions") or [])
-    otras = sorted(set((cfg.get("gate") or {}).get("codeExtensions") or []) - propias)
-    if otras:
-        return [f"el config del repo de gestión declara código de un stack ({', '.join(otras)}): el código va a un codificador"]
+    own = set(_json(MANAGEMENT / "profile.json").get("codeExtensions") or [])
+    others = sorted(set((cfg.get("gate") or {}).get("codeExtensions") or []) - own)
+    if others:
+        return [f"the management repo config declares stack code ({', '.join(others)}): code goes to a coder"]
     return []
 
 
-# ── los comandos ─────────────────────────────────────────────────────────────
+# ── commands ─────────────────────────────────────────────────────────────────
 
-def _instalar(d: Path, perfil: str | None, forja: str, ajustes, propios: dict[Path, str], apply: bool) -> int:
-    """El instalador de siempre (install.plan), con los archivos propios del workspace primero y el
-    config ajustado. Nunca sobreescribe."""
+def _install(d: Path, profile: str | None, forge: str, adjust, own: dict[Path, str], apply: bool) -> int:
+    """The usual installer (install.plan), with the workspace's own files first and the config
+    adjusted. It never overwrites."""
     import install as ins
 
-    items = [(a, dst, src) for a, dst, src in ins.plan(d, perfil, False, forja) if dst not in propios]
+    items = [(a, dst, src) for a, dst, src in ins.plan(d, profile, False, forge) if dst not in own]
     for a, dst, src in items:
-        if isinstance(src, dict) and dst.name == "harness.config.json":
-            ajustes(src)
-    todos = [("=" if dst.exists() else "+", dst, texto) for dst, texto in propios.items()] + items
-    for a, dst, _ in todos:
+        if isinstance(src, dict) and dst == d / ".hermes" / "harness.config.json":
+            adjust(src)
+    every = [("=" if dst.exists() else "+", dst, text) for dst, text in own.items()] + items
+    for a, dst, _ in every:
         if "/.hermes/harness/" not in dst.as_posix():
             print(f"{a}  {os.path.relpath(dst, d)}")
-    codigo = sum(1 for a, dst, _ in todos if a == "+" and "/.hermes/harness/" in dst.as_posix())
-    print(f"+  .hermes/harness/  ({codigo} archivos del arnés)")
+    code = sum(1 for a, dst, _ in every if a == "+" and "/.hermes/harness/" in dst.as_posix())
+    print(f"+  .hermes/harness/  ({code} harness files)")
     if apply:
-        for a, dst, src in todos:
+        for a, dst, src in every:
             if a == "=":
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -470,265 +497,303 @@ def _instalar(d: Path, perfil: str | None, forja: str, ajustes, propios: dict[Pa
                 shutil.copy2(src, dst)
                 if dst.parent.name == ".githooks":
                     dst.chmod(0o755)
-    return sum(1 for a, *_ in todos if a != "=")
+    return sum(1 for a, *_ in every if a != "=")
 
 
-def agents_gestion(nombre: str) -> str:
+def management_agents(name: str) -> str:
     base = (PLANT / "AGENTS.md").read_text(encoding="utf-8")
-    propio = (GESTION / "AGENTS-gestion.md").read_text(encoding="utf-8").replace("{workspace}", nombre)
-    nuevo = re.sub(r"(## Qué es este repo\n\n)<!--[^>]*-->\n", lambda mm: mm.group(1) + propio, base, count=1)
-    return nuevo if nuevo != base else base + "\n## El proyecto de gestión\n\n" + propio
+    own = (MANAGEMENT / "AGENTS-management.md").read_text(encoding="utf-8").replace("{workspace}", name)
+    new = re.sub(r"(## Qué es este repo\n\n)<!--[^>]*-->\n", lambda mm: mm.group(1) + own, base, count=1)
+    return new if new != base else base + "\n## El proyecto de gestión\n\n" + own
 
 
-def proyectos_md(ws: dict) -> str:
-    filas = [f"| gestión | `{ws['gestion']['repo']}` | {ws.get('forja')} | {ws['gestion'].get('agente') or '—'} | "
-             f"{ws['gestion'].get('tablero') or '—'} |"]
-    for p in ws.get("proyectos") or []:
-        filas.append(f"| {p['id']} | `{p['repo']}` | {p.get('forja') or ws.get('forja')} | {p.get('agente') or '—'} | "
-                     f"{p.get('tablero') or '—'} |")
+def projects_md(ws: dict) -> str:
+    """wiki/Proyectos.md (a Spanish doc page) from workspace.json."""
+    rows = [f"| gestión | `{ws['management']['repo']}` | {ws.get('forge')} | {ws['management'].get('agent') or '—'} | "
+            f"{ws['management'].get('board') or '—'} |"]
+    for p in ws.get("projects") or []:
+        rows.append(f"| {p['id']} | `{p['repo']}` | {p.get('forge') or ws.get('forge')} | {p.get('agent') or '—'} | "
+                    f"{p.get('board') or '—'} |")
     return ("# Proyectos\n\nLo regenera `workspace.py wiki` desde `workspace.json`: no se edita a mano.\n\n"
-            "| Proyecto | Repo | Forja | Agente | Tablero |\n|---|---|---|---|---|\n" + "\n".join(filas) + "\n")
+            "| Proyecto | Repo | Forja | Agente | Tablero |\n|---|---|---|---|---|\n" + "\n".join(rows) + "\n")
 
 
-def cmd_init(a, ej: Ejecutor, apply: bool) -> int:
+def cmd_init(a, run: Runner, apply: bool) -> int:
     d = Path(a.dir).expanduser().resolve()
     if (d / WS).exists():
-        print(f"workspace: {d} ya es un workspace ({WS} existe). Para sumar un proyecto: `workspace.py add`.")
+        print(f"workspace: {d} is already a workspace ({WS} exists). To add a project: `workspace.py add`.")
         return 1
-    m = forjas().get(a.forja)
+    m = forges().get(a.forge)
     if m is None:
-        print(f"workspace: no existe la forja `{a.forja}`. Son: {', '.join(forjas())}")
+        print(f"workspace: forge `{a.forge}` does not exist. Available: {', '.join(forges())}")
         return 1
-    nombre = a.nombre or d.name
-    repo = a.repo or (f"{a.org}/{nombre}" if a.org else "")
-    ws = _json(GESTION / WS)
-    ws.update(nombre=nombre, forja=a.forja)
-    ws["gestion"]["repo"] = repo
-    prob = problemas_de_ws(ws)
-    if prob:
-        print("workspace: " + "\n  ".join(prob) + ("\n  (pasá --org o --repo)" if not repo else ""))
+    name = a.name or d.name
+    repo = a.repo or (f"{a.org}/{name}" if a.org else "")
+    ws = _json(MANAGEMENT / WS)
+    ws["$schema"] = ".hermes/harness/plantillas/workspace/workspace.schema.json"
+    ws.update(name=name, forge=a.forge)
+    ws["management"]["repo"] = repo
+    problems = ws_problems(ws)
+    if problems:
+        print("workspace: " + "\n  ".join(problems) + ("\n  (pass --org or --repo)" if not repo else ""))
         return 1
-    print(f"{'Creando' if apply else 'DRY-RUN (--apply para ejecutar)'} el proyecto de gestión `{nombre}` en {d} · forja {a.forja}\n")
-    propios = {d / WS: json.dumps(ws, indent=2, ensure_ascii=False) + "\n",
-               d / "AGENTS.md": agents_gestion(nombre),
-               d / ".hermes" / "loop" / "tasks.md": (GESTION / "tasks.md").read_text(encoding="utf-8"),
-               d / "roadmap.json": (GESTION / "roadmap.json").read_text(encoding="utf-8"),
-               d / "wiki" / "Proyectos.md": proyectos_md(ws)}
-    for f in sorted((GESTION / "wiki").glob("*.md")):
-        propios[d / "wiki" / f.name] = f.read_text(encoding="utf-8").replace("{workspace}", nombre)
-    if m.get("plantillaIssue"):
-        propios[d / m["plantillaIssue"]["ruta"]] = m["plantillaIssue"].get("encabezado", "") + (GESTION / "epica.md").read_text(encoding="utf-8")
+    print(f"{'Creating' if apply else 'DRY-RUN (--apply to run)'} the management project `{name}` in {d} · forge {a.forge}\n")
+    own = {d / WS: json.dumps(ws, indent=2, ensure_ascii=False) + "\n",
+           d / "AGENTS.md": management_agents(name),
+           d / ".hermes" / "loop" / "tasks.md": (MANAGEMENT / "tasks.md").read_text(encoding="utf-8"),
+           d / "roadmap.json": (MANAGEMENT / "roadmap.json").read_text(encoding="utf-8"),
+           d / "wiki" / "Proyectos.md": projects_md(ws)}
+    for f in sorted((MANAGEMENT / "wiki").glob("*.md")):
+        own[d / "wiki" / f.name] = f.read_text(encoding="utf-8").replace("{workspace}", name)
+    if m.get("issueTemplate"):
+        own[d / m["issueTemplate"]["path"]] = m["issueTemplate"].get("header", "") + (MANAGEMENT / "epic.md").read_text(encoding="utf-8")
 
-    def ajustes(cfg: dict) -> None:
+    def adjust(cfg: dict) -> None:
         import install as ins
 
-        cfg.update(ins.merge_profile(cfg, _json(GESTION / "perfil.json")))
-        cfg["workspace"] = {"rol": "gestion", "manifiesto": WS}
-        cfg.setdefault("loop", {})["agentCommand"] = ws["agentes"][ws["gestion"]["agente"]]
-        cfg.setdefault("gate", {}).setdefault("signals", []).append(SEÑAL)
+        cfg.update(ins.merge_profile(cfg, _json(MANAGEMENT / "profile.json")))
+        cfg["workspace"] = {"role": "management", "manifest": WS}
+        cfg.setdefault("loop", {})["agentCommand"] = ws["agents"][ws["management"]["agent"]]
+        cfg.setdefault("gate", {}).setdefault("signals", []).append(SIGNAL)
 
     if apply:
         d.mkdir(parents=True, exist_ok=True)
-    _instalar(d, None, a.forja, ajustes, propios, apply)
+    _install(d, None, a.forge, adjust, own, apply)
     if not a.local:
-        print(f"\nEn la forja ({m['id']}):")
-        ej(m, "repo.crear", vars_repo(repo, descripcion=f"Gestión del workspace {nombre}: épicas, milestones, tablero y wiki"))
-        for ms in _json(GESTION / "roadmap.json").get("milestones") or []:
-            ej(m, "milestone.crear", vars_repo(repo, titulo=ms["titulo"], descripcion=ms.get("descripcion"), fecha=ms.get("fecha")))
-        salida = ej(m, "tablero.crear", vars_repo(repo, titulo=f"{nombre} · portafolio"))
-        if salida is not None:
-            ws["gestion"]["tablero"] = fj.leer_salida(m, "tablero.crear", salida)
+        print(f"\nIn the forge ({m['id']}):")
+        run(m, "repo.create", repo_vars(repo, description=f"Management of workspace {name}: epics, milestones, board and wiki"))
+        for ms in _json(MANAGEMENT / "roadmap.json").get("milestones") or []:
+            run(m, "milestone.create", repo_vars(repo, title=ms["title"], description=ms.get("description"), date=ms.get("date")))
+        out = run(m, "board.create", repo_vars(repo, title=f"{name} · portfolio"))
+        if out is not None:
+            ws["management"]["board"] = fg.read_output(m, "board.create", out)
             if apply:
-                escribir_ws(d, ws)
+                write_ws(d, ws)
     print(f"""
-Siguiente (lo hace el humano):
+Next (a human does it):
   1. cd {d} && git init && python3 .hermes/harness/scripts/githooks.py install
-  2. git remote add origin <la URL de {repo}> y el primer push
-  3. {m.get('wikiNota') or 'la wiki: `workspace.py wiki --apply`'}
-  4. Cada codificador: python3 .hermes/harness/scripts/workspace.py add <id> --repo <org/repo> --dir <ruta> --perfil <stack> --agente claude-code
-  5. Una épica: un issue con la plantilla «Épica» y su checklist; después `workspace.py despachar <n>`""")
+  2. git remote add origin <the URL of {repo}> and the first push
+  3. {m.get('wikiNote') or 'the wiki: `workspace.py wiki --apply`'}
+  4. Each coder: python3 .hermes/harness/scripts/workspace.py add <id> --repo <org/repo> --dir <path> --profile <stack> --agent claude-code
+  5. An epic: python3 .hermes/harness/scripts/workspace.py epic "<title>" --child <id>:"<task>"; then `workspace.py dispatch <n>`""")
     return 0
 
 
 def _ws_dir(a) -> Path:
-    d = Path(a.ws).expanduser().resolve() if a.ws else buscar_ws(Path.cwd())
+    d = Path(a.ws).expanduser().resolve() if a.ws else find_ws(Path.cwd())
     if d is None or not (d / WS).is_file():
-        sys.exit("workspace: no encuentro workspace.json (corré desde el repo de gestión o pasá --ws)")
+        sys.exit("workspace: no workspace.json found (run from the management repo or pass --ws)")
     return d
 
 
-def cmd_add(a, ej: Ejecutor, apply: bool) -> int:
+def _valid_ws(a) -> tuple[Path, dict] | None:
     d = _ws_dir(a)
-    ws = leer_ws(d)
-    if a.id in proyectos(ws) or a.id == "gestion":
-        print(f"workspace: el proyecto `{a.id}` ya existe")
+    ws = read_ws(d)
+    problems = ws_problems(ws)
+    if problems:
+        print("workspace: " + "\n  ".join(problems))
+        return None
+    return d, ws
+
+
+def cmd_add(a, run: Runner, apply: bool) -> int:
+    d = _ws_dir(a)
+    ws = read_ws(d)
+    if a.id in projects(ws) or a.id == "management":
+        print(f"workspace: project `{a.id}` already exists")
         return 1
-    p = {"id": a.id, "repo": a.repo, "rol": "codificador", "perfil": a.perfil, "agente": a.agente,
-         "dir": os.path.relpath(Path(a.dir).expanduser().resolve(), d) if a.dir else None, "tablero": None}
-    if a.forja:
-        p["forja"] = a.forja
-    p = {k: v for k, v in p.items() if v is not None or k == "tablero"}
-    nuevo = {**ws, "proyectos": [*(ws.get("proyectos") or []), p]}
-    prob = problemas_de_ws(nuevo)
-    if prob:
-        print("workspace: " + "\n  ".join(prob))
+    p = {"id": a.id, "repo": a.repo, "role": "coder", "profile": a.profile, "agent": a.agent,
+         "dir": os.path.relpath(Path(a.dir).expanduser().resolve(), d) if a.dir else None, "board": None}
+    if a.forge:
+        p["forge"] = a.forge
+    p = {k: v for k, v in p.items() if v is not None or k == "board"}
+    problems = ws_problems({**ws, "projects": [*(ws.get("projects") or []), p]})
+    if problems:
+        print("workspace: " + "\n  ".join(problems))
         return 1
-    m = forja_de(ws, p)
-    print(f"{'Sumando' if apply else 'DRY-RUN (--apply para ejecutar)'} el codificador `{a.id}` ({a.repo}) · forja {m['id']}"
-          f" · agente {a.agente or '—'}\n")
+    m = forge_of(ws, p)
+    print(f"{'Adding' if apply else 'DRY-RUN (--apply to run)'} the coder `{a.id}` ({a.repo}) · forge {m['id']}"
+          f" · agent {a.agent or '—'}\n")
     if a.dir:
-        destino = Path(a.dir).expanduser().resolve()
+        target = Path(a.dir).expanduser().resolve()
         if apply:
-            destino.mkdir(parents=True, exist_ok=True)
+            target.mkdir(parents=True, exist_ok=True)
 
-        def ajustes(cfg: dict) -> None:
-            cfg["workspace"] = {"rol": "codificador", "id": a.id, "gestion": ws["gestion"]["repo"]}
-            if a.agente:
-                cfg.setdefault("loop", {})["agentCommand"] = ws["agentes"][a.agente]
+        def adjust(cfg: dict) -> None:
+            cfg["workspace"] = {"role": "coder", "id": a.id, "management": ws["management"]["repo"]}
+            if a.agent:
+                cfg.setdefault("loop", {})["agentCommand"] = ws["agents"][a.agent]
 
-        _instalar(destino, a.perfil, m["id"], ajustes, {}, apply)
+        _install(target, a.profile, m["id"], adjust, {}, apply)
 
-    def registrar() -> None:
-        # Antes de la forja y después del tablero: si la forja falla, el proyecto ya quedó registrado.
+    def register() -> None:
+        # Before the forge, and again after the board: if the forge fails, the project is already registered.
         if apply:
-            escribir_ws(d, {**ws, "proyectos": [*(ws.get("proyectos") or []), p]})
+            write_ws(d, {**ws, "projects": [*(ws.get("projects") or []), p]})
             (d / "wiki").mkdir(exist_ok=True)
-            (d / "wiki" / "Proyectos.md").write_text(proyectos_md(leer_ws(d)), encoding="utf-8")
+            (d / "wiki" / "Proyectos.md").write_text(projects_md(read_ws(d)), encoding="utf-8")
 
-    registrar()
-    print(f"\n{'' if apply else '(en seco) '}{WS}: + proyectos[{a.id}] · wiki/Proyectos.md al día")
+    register()
+    print(f"\n{'' if apply else '(dry) '}{WS}: + projects[{a.id}] · wiki/Proyectos.md up to date")
     if a.local:
         return 0
-    print(f"\nEn la forja ({m['id']}):")
-    if a.crear:
-        ej(m, "repo.crear", vars_repo(a.repo, descripcion=f"{ws.get('nombre')} · {a.id}"))
-    salida = ej(m, "tablero.crear", vars_repo(a.repo, titulo=f"{ws.get('nombre')} · {a.id}"))
-    if salida is not None:
-        p["tablero"] = fj.leer_salida(m, "tablero.crear", salida)
-        registrar()
+    print(f"\nIn the forge ({m['id']}):")
+    if a.create:
+        run(m, "repo.create", repo_vars(a.repo, description=f"{ws.get('name')} · {a.id}"))
+    out = run(m, "board.create", repo_vars(a.repo, title=f"{ws.get('name')} · {a.id}"))
+    if out is not None:
+        p["board"] = fg.read_output(m, "board.create", out)
+        register()
     return 0
 
 
-def cmd_despachar(a, ej: Ejecutor, apply: bool) -> int:
-    d = _ws_dir(a)
-    ws = leer_ws(d)
-    prob = problemas_de_ws(ws)
-    if prob:
-        print("workspace: " + "\n  ".join(prob))
+def cmd_epic(a, run: Runner, apply: bool) -> int:
+    valid = _valid_ws(a)
+    if valid is None:
         return 1
-    print(f"{'Despachando' if apply else 'DRY-RUN (--apply para publicar)'} la épica {ws['gestion']['repo']}#{a.n}\n")
-    creados, prob = despachar(ws, a.n, ej, d, escribir=apply)
-    if prob:
-        print("workspace: no se despacha nada (todo o nada):\n  " + "\n  ".join(prob))
+    d, ws = valid
+    kids = []
+    for spec in a.child or []:
+        project, sep, task = spec.partition(":")
+        if not sep or not project.strip() or not task.strip():
+            print(f"workspace: `--child {spec}` is not `<project>:<task>`")
+            return 1
+        kids.append((project.strip(), task.strip()))
+    print(f"{'Creating' if apply else 'DRY-RUN (--apply to publish)'} an epic in {ws['management']['repo']}: {a.title}\n")
+    r, problems = create_epic(ws, a.title, kids, run, a.milestone, a.goal or "")
+    if problems:
+        print("workspace: nothing created:\n  " + "\n  ".join(problems))
         return 1
-    if not creados:
-        print("  (nada que despachar: cada hijo ya tiene su issue)")
-    if apply and int(a.n) not in (ws.get("epicas") or []):
-        ws["epicas"] = [*(ws.get("epicas") or []), int(a.n)]
-        escribir_ws(d, ws)
-    print(f"\n{len(creados)} hijo(s): {', '.join(creados) or '—'}")
+    print(f"\nepic {r}" + ("" if apply else " (dry: the number is simulated)") + f" · next: `workspace.py dispatch {fg.split_ref(r)[1]}`")
     return 0
 
 
-def cmd_estado(a, ej: Ejecutor, apply: bool) -> int:
-    d = _ws_dir(a)
-    ws = leer_ws(d)
-    epicas = a.n or ws.get("epicas") or []
-    if not epicas:
-        print("workspace: no hay épicas despachadas (`workspace.py despachar <n>` las registra)")
+def cmd_dispatch(a, run: Runner, apply: bool) -> int:
+    valid = _valid_ws(a)
+    if valid is None:
+        return 1
+    d, ws = valid
+    print(f"{'Dispatching' if apply else 'DRY-RUN (--apply to publish)'} epic {ws['management']['repo']}#{a.n}\n")
+    created, problems = dispatch(ws, a.n, run, d, write=apply)
+    if problems:
+        print("workspace: nothing dispatched (all or nothing):\n  " + "\n  ".join(problems))
+        return 1
+    if not created:
+        print("  (nothing to dispatch: every child already has its issue)")
+    if apply and int(a.n) not in (ws.get("epics") or []):
+        ws["epics"] = [*(ws.get("epics") or []), int(a.n)]
+        write_ws(d, ws)
+    print(f"\n{len(created)} child(ren): {', '.join(created) or '—'}")
+    return 0
+
+
+def cmd_status(a, run: Runner, apply: bool) -> int:
+    valid = _valid_ws(a)
+    if valid is None:
+        return 1
+    d, ws = valid
+    epics = a.n or ws.get("epics") or []
+    if not epics:
+        print("workspace: no epics dispatched yet (`workspace.py dispatch <n>` records them)")
         return 0
     rc = 0
-    for n in epicas:
-        print(f"\n{ws['gestion']['repo']}#{n}")
+    for n in epics:
+        print(f"\n{ws['management']['repo']}#{n}")
         try:
-            marcas, cambio = estado(ws, n, ej, d)
-        except fj.ForjaError as e:
+            marks, changed = status(ws, n, run, d)
+        except fg.ForgeError as e:
             print(f"  ✗ {e}")
             rc = 1
             continue
-        hechos = sum(1 for v in marcas.values() if v == "x")
-        escalados = [r for r, v in marcas.items() if v == "!"]
-        print(f"  {hechos}/{len(marcas)} cerrados" + (f" · escalados a un humano: {', '.join(escalados)}" if escalados else "")
-              + ("" if cambio else " · el checklist ya estaba al día"))
+        done = sum(1 for v in marks.values() if v == "x")
+        up = [r for r, v in marks.items() if v == "!"]
+        print(f"  {done}/{len(marks)} closed" + (f" · escalated to a human: {', '.join(up)}" if up else "")
+              + ("" if changed else " · the checklist was already up to date"))
     return rc
 
 
-def cmd_wiki(a, ej: Ejecutor, apply: bool) -> int:
-    d = _ws_dir(a)
-    ws = leer_ws(d)
-    m = forja_de(ws)
-    remoto = fj.rellenar(m.get("wiki") or "", fj.vars_de_repo(ws["gestion"]["repo"]))
-    print(f"{'Publicando' if apply else 'DRY-RUN (--apply para publicar)'} la wiki en {remoto}\n  + wiki/Proyectos.md (desde {WS})")
+def cmd_wiki(a, run: Runner, apply: bool) -> int:
+    valid = _valid_ws(a)
+    if valid is None:
+        return 1
+    d, ws = valid
+    m = forge_of(ws)
+    remote = fg.fill(m.get("wiki") or "", fg.repo_vars(ws["management"]["repo"]))
+    print(f"{'Publishing' if apply else 'DRY-RUN (--apply to publish)'} the wiki to {remote}\n  + wiki/Proyectos.md (from {WS})")
     if apply:
         (d / "wiki").mkdir(exist_ok=True)
-        (d / "wiki" / "Proyectos.md").write_text(proyectos_md(ws), encoding="utf-8")
+        (d / "wiki" / "Proyectos.md").write_text(projects_md(ws), encoding="utf-8")
     with tempfile.TemporaryDirectory() as tmp:
-        pasos = [["git", "clone", "-q", remoto, tmp], ["copiar", str(d / "wiki"), tmp], ["git", "-C", tmp, "add", "-A"],
-                 ["git", "-C", tmp, "commit", "-q", "-m", "wiki: desde workspace.py"], ["git", "-C", tmp, "push", "-q"]]
-        for paso in pasos:
-            print(f"  {'$' if apply else '+'} {shlex.join(paso)}")
+        steps = [["git", "clone", "-q", remote, tmp], ["copy", str(d / "wiki"), tmp], ["git", "-C", tmp, "add", "-A"],
+                 ["git", "-C", tmp, "commit", "-q", "-m", "wiki: from workspace.py"], ["git", "-C", tmp, "push", "-q"]]
+        for step in steps:
+            print(f"  {'$' if apply else '+'} {shlex.join(step)}")
             if not apply:
                 continue
-            if paso[0] == "copiar":
-                for f in Path(paso[1]).glob("*.md"):
+            if step[0] == "copy":
+                for f in Path(step[1]).glob("*.md"):
                     shutil.copy2(f, Path(tmp) / f.name)
                 continue
-            p = subprocess.run(paso, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
-            if p.returncode != 0 and "commit" not in paso:
-                print(f"workspace: {(p.stderr or p.stdout).strip()[:400]}\n  {m.get('wikiNota') or ''}")
+            p = subprocess.run(step, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+            if p.returncode != 0 and "commit" not in step:
+                print(f"workspace: {(p.stderr or p.stdout).strip()[:400]}\n  {m.get('wikiNote') or ''}")
                 return 1
     return 0
 
 
 def cmd_check(a) -> int:
-    errores = problemas_de_forjas()
-    d = Path(a.ws).expanduser().resolve() if a.ws else buscar_ws(Path.cwd())
-    plantilla = problemas_de_ws(_json(GESTION / WS))
-    errores += [f"plantilla de {WS}: {e}" for e in plantilla]
+    errors = all_forge_problems()
+    d = Path(a.ws).expanduser().resolve() if a.ws else find_ws(Path.cwd())
+    errors += [f"template {WS}: {e}" for e in ws_problems(_json(MANAGEMENT / WS))]
     if d is not None and (d / WS).is_file():
-        errores += [f"{WS}: {e}" for e in problemas_de_ws(leer_ws(d)) + problemas_de_gestion(d)]
-    for e in errores:
+        errors += [f"{WS}: {e}" for e in ws_problems(read_ws(d)) + management_problems(d)]
+    for e in errors:
         print(f"  ✗ {e}")
-    if errores:
-        print(f"\nworkspace: {len(errores)} problema(s).")
+    if errors:
+        print(f"\nworkspace: {len(errors)} problem(s).")
         return 1
-    print(f"✓ workspace: {len(forjas())} forjas con sus ejemplos, sus operaciones clasificadas por su integración, su "
-          f"pipeline y un despacho de punta a punta contra la simulada" + (f" · {d / WS} válido" if d else ""))
+    print(f"✓ workspace: {len(forges())} forges against their schema and examples, each operation classified by its integration, "
+          f"their pipeline and an epic end to end against the simulated forge" + (f" · {d / WS} valid" if d else ""))
     return 0
 
 
 def main(argv: list[str]) -> int:
     import argparse
 
-    ap = argparse.ArgumentParser(description="El workspace: gestión + codificadores sobre una forja (dry-run por defecto).")
-    ap.add_argument("--ws", help="el repo de gestión (por defecto, el que contiene workspace.json desde el cwd)")
+    ap = argparse.ArgumentParser(description="The workspace: management + coders on a forge (dry-run by default).")
+    ap.add_argument("--ws", help="the management repo (default: the one holding workspace.json from the cwd)")
     sub = ap.add_subparsers(dest="cmd")
-    comunes = argparse.ArgumentParser(add_help=False)
-    comunes.add_argument("--apply", action="store_true")
-    comunes.add_argument("--simulado", action="store_true", help="todo contra la forja de juguete, sin red")
-    comunes.add_argument("--ws", default=argparse.SUPPRESS)
-    p = sub.add_parser("init", parents=[comunes])
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--apply", action="store_true")
+    common.add_argument("--simulated", action="store_true", help="everything against the toy forge, no network")
+    common.add_argument("--ws", default=argparse.SUPPRESS)
+    p = sub.add_parser("init", parents=[common])
     p.add_argument("dir")
-    p.add_argument("--forja", default="github")
+    p.add_argument("--forge", default="github")
     p.add_argument("--org")
-    p.add_argument("--nombre")
+    p.add_argument("--name")
     p.add_argument("--repo")
-    p.add_argument("--local", action="store_true", help="sólo los archivos; nada en la forja")
-    p = sub.add_parser("add", parents=[comunes])
+    p.add_argument("--local", action="store_true", help="only the files; nothing in the forge")
+    p = sub.add_parser("add", parents=[common])
     p.add_argument("id")
     p.add_argument("--repo", required=True)
     p.add_argument("--dir")
-    p.add_argument("--perfil")
-    p.add_argument("--agente")
-    p.add_argument("--forja")
-    p.add_argument("--crear", action="store_true", help="crear también el repo en la forja")
-    p.add_argument("--local", action="store_true", help="registrar e instalar; nada en la forja")
-    p = sub.add_parser("despachar", parents=[comunes])
+    p.add_argument("--profile")
+    p.add_argument("--agent")
+    p.add_argument("--forge")
+    p.add_argument("--create", action="store_true", help="also create the repo in the forge")
+    p.add_argument("--local", action="store_true", help="register and install; nothing in the forge")
+    p = sub.add_parser("epic", parents=[common])
+    p.add_argument("title")
+    p.add_argument("--child", action="append", help="<project>:<task> (repeatable)")
+    p.add_argument("--milestone")
+    p.add_argument("--goal", help="the epic's goal (its `## Objetivo` section)")
+    p = sub.add_parser("dispatch", parents=[common])
     p.add_argument("n")
-    p = sub.add_parser("estado", parents=[comunes])
+    p = sub.add_parser("status", parents=[common])
     p.add_argument("n", nargs="*")
-    sub.add_parser("wiki", parents=[comunes])
-    sub.add_parser("check", parents=[comunes])
+    sub.add_parser("wiki", parents=[common])
+    sub.add_parser("check", parents=[common])
     if not argv:
         print(__doc__)
         return 1
@@ -736,21 +801,21 @@ def main(argv: list[str]) -> int:
     if a.cmd == "check":
         return cmd_check(a)
     apply = bool(getattr(a, "apply", False))
-    ej = Ejecutor("apply" if apply else ("simulado" if a.simulado else "seco"))
-    if apply and a.simulado:
-        print("workspace: --apply y --simulado no van juntos")
+    if apply and a.simulated:
+        print("workspace: --apply and --simulated do not go together")
         return 1
+    run = Runner("apply" if apply else ("simulated" if a.simulated else "dry"))
     try:
-        return {"init": cmd_init, "add": cmd_add, "despachar": cmd_despachar, "estado": cmd_estado,
-                "wiki": cmd_wiki}[a.cmd](a, ej, apply)
-    except fj.ForjaError as e:
+        return {"init": cmd_init, "add": cmd_add, "epic": cmd_epic, "dispatch": cmd_dispatch, "status": cmd_status,
+                "wiki": cmd_wiki}[a.cmd](a, run, apply)
+    except fg.ForgeError as e:
         print(f"workspace: {e}")
         return 1
 
 
 if __name__ == "__main__":
-    # Windows: la consola y los pipes son cp1252 por defecto, y `▶ ✓ ✗` o una `ñ` revientan el
-    # print ANTES de verificar nada — el gate no fallaba, desaparecía (lo cazó la matriz de CI).
+    # Windows: console and pipes default to cp1252, and `▶ ✓ ✗` or an `ñ` crash print BEFORE
+    # anything is verified — the gate did not fail, it vanished (the CI matrix caught it).
     for _s in (sys.stdin, sys.stdout, sys.stderr):
         if hasattr(_s, "reconfigure"):
             _s.reconfigure(encoding="utf-8", errors="replace")

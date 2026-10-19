@@ -1,7 +1,0 @@
-{
-  "$comment": "Los milestones del proyecto de gestión. `workspace.py init --apply` los crea en la forja; las épicas se cuelgan de uno con `--milestone`. Editá títulos y fechas antes de aplicar.",
-  "milestones": [
-    {"titulo": "M1 · Cimientos", "descripcion": "Repos creados, arnés instalado en cada uno y gate verde en CI."},
-    {"titulo": "M2 · Primera entrega", "descripcion": "La primera épica de punta a punta: despachada, trabajada y cerrada."}
-  ]
-}

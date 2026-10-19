@@ -41,10 +41,11 @@ scripts/integ.py             las integraciones: catálogo, `add` prueba ANTES de
 scripts/integ_run.py         el lanzador de un servidor MCP: secretos `secret://` sólo en su entorno, límites, `--probe` contra el servidor real
 scripts/casos.py             22 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
 scripts/hermes_fuente.py     Hermes desde su código fuente, en el commit verificado (CI: job hermes-real)
+scripts/evals_page.py        la página pública de la evaluación (docs/evaluacion.html): gráficos, intervalos y rúbrica; `--check` en el gate
 scripts/schema_check.py      un validador de JSON Schema (draft 2020-12) de la biblioteca estándar: los esquemas de evals/schema/
 scripts/evals.py             las evaluaciones: `deterministic` (guías · reglas · señales contra un copiloto recién instalado) e `inferential` (revisor de diffs y modelo como agente, P25); las dos en el gate
 scripts/workspace.py         varios proyectos: gestión que orquesta y codificadores sobre una forja (`check` en el gate)
-plugin/harness/forja.py      núcleo puro del workspace: plantillas de la CLI de cada forja y el checklist de la épica
+plugin/harness/forge.py      núcleo puro del workspace: plantillas de la CLI de cada forja y el checklist de la épica
 .hermes/loop/tasks.md        la cola del loop autónomo
 .hermes/skills/              gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
 plantillas/                  lo que se copia al repo destino, los perfiles de stack, el catálogo de integraciones, las forjas y el esqueleto de gestión

@@ -569,104 +569,114 @@ def seccion_autonomia(config: dict, ctx) -> None:
                 os.environ["HARNESS_NIVEL_PRUEBA"] = prueba
 
 
-def seccion_workspace(config: dict) -> None:
-    """El workspace (ADR 0013): cada forja con sus ejemplos y su ensayo, y lo que ninguna forja sana
-    prueba sola: que una adulterada se vea, que en seco no se publique, que el despacho sea todo o
-    nada, que el repo de gestión no acepte código y que el instalador elija el pipeline de la forja."""
+def workspace_section(config: dict) -> None:
+    """The workspace (ADR 0013): every forge against its schema, examples and rehearsal, and what no
+    healthy forge proves on its own: that a tampered one shows, that dry-run does not publish, that
+    an epic and its dispatch are all or nothing, that the management repo takes no code and that the
+    installer picks the forge's pipeline."""
     sys.path.insert(0, str(HARNESS_HOME / "scripts"))
     import install as ins  # noqa: E402
     import loop as lp  # noqa: E402
     import workspace as wsp  # noqa: E402
-    from harness import forja as fj  # noqa: E402
+    from harness import forge as fg  # noqa: E402
 
-    errores = wsp.problemas_de_forjas()
-    check(not errores, "las forjas no pasan sus propios ejemplos o su ensayo:\n    " + "\n    ".join(errores[:8]))
-    fs = wsp.forjas()
-    check({"github", "gitlab", "azure"} <= set(fs), "el catálogo de forjas perdió una de github · gitlab · azure")
+    errors = wsp.all_forge_problems()
+    check(not errors, "the forges do not pass their own schema, examples or rehearsal:\n    " + "\n    ".join(errors[:8]))
+    fs = wsp.forges()
+    check({"github", "gitlab", "azure"} <= set(fs), "the forge catalog lost one of github · gitlab · azure")
     gh = fs.get("github") or {}
-    ints = wsp.integraciones()
+    ints = wsp.integrations()
 
-    # Las plantillas: un grupo opcional entra entero o no entra; una variable que falta fuera de un grupo es error.
-    sin = fj.comando(gh, "issue.crear", {"repo": "o/r", "titulo": "t", "cuerpo": "c"})
-    con = fj.comando(gh, "issue.crear", {"repo": "o/r", "titulo": "t", "cuerpo": "c", "milestone": "v1"})
-    check("--milestone" not in sin and con[-2:] == ["--milestone", "v1"], f"el grupo opcional del milestone: {sin} · {con}")
+    # Templates: an optional group goes in whole or not at all; a variable missing outside a group is an error.
+    without = fg.command(gh, "issue.create", {"repo": "o/r", "title": "t", "body": "c"})
+    with_ms = fg.command(gh, "issue.create", {"repo": "o/r", "title": "t", "body": "c", "milestone": "v1"})
+    check("--milestone" not in without and with_ms[-2:] == ["--milestone", "v1"], f"the milestone optional group: {without} · {with_ms}")
     try:
-        fj.comando(gh, "issue.crear", {"repo": "o/r", "titulo": "t"})
-        falta = "pasó"
-    except Exception as e:  # noqa: BLE001 — se mira QUÉ lanza
-        falta = type(e).__name__
-    check(falta == "ForjaError", f"una variable obligatoria que falta tiene que ser ForjaError, no `{falta}` (un argumento vacío publica un issue sin cuerpo)")
-    check(fj.comando(fs.get("azure") or {}, "tablero.crear", {}) is None, "una operación `null` (Azure Boards viene con el proyecto) tiene que saltearse")
+        fg.command(gh, "issue.create", {"repo": "o/r", "title": "t"})
+        missing = "passed"
+    except Exception as e:  # noqa: BLE001 — what is raised is what is checked
+        missing = type(e).__name__
+    check(missing == "ForgeError", f"a missing required variable has to be ForgeError, not `{missing}` (an empty argument publishes an issue without body)")
+    check(fg.command(fs.get("azure") or {}, "board.create", {}) is None, "a `null` operation (Azure Boards comes with the project) has to be skipped")
 
-    # Una forja adulterada se ve: la clase de la operación contra su integración, y el pipeline sin gate.
-    mala = copy.deepcopy(gh)
-    mala["clases"]["issue.crear"] = "read"
-    check(any("issue.crear" in e for e in wsp.problemas_de_forja(mala, ints.get("github"))),
-          "una forja que declara `read` lo que su integración clasifica `send` pasó: el freno y el plan dirían cosas distintas")
-    mala = copy.deepcopy(gh)
-    mala["ci"] = [{"de": "drift.yml", "a": "x.yml"}]
-    check(any("gate" in e for e in wsp.problemas_de_forja(mala, ints.get("github"))), "una forja cuyo pipeline no corre el gate pasó")
+    # A tampered forge shows: the operation's class against its integration, the pipeline without the gate, the schema.
+    bad = copy.deepcopy(gh)
+    bad["classes"]["issue.create"] = "read"
+    check(any("issue.create" in e for e in wsp.forge_problems(bad, ints.get("github"))),
+          "a forge declaring `read` what its integration classifies `send` passed: the brake and the plan would disagree")
+    bad = copy.deepcopy(gh)
+    bad["ci"] = [{"from": "drift.yml", "to": "x.yml"}]
+    check(any("gate" in e for e in wsp.forge_problems(bad, ints.get("github"))), "a forge whose pipeline does not run the gate passed")
+    bad = copy.deepcopy(gh)
+    bad["unknownKey"] = 1
+    check(any(e.startswith("schema") for e in wsp.forge_problems(bad, ints.get("github"))), "a forge manifest off its schema passed")
 
-    # El checklist de la épica.
-    cuerpo = "- [ ] [api] Uno\n- [ ] [nadie] Dos\n- [x] [api] Tres → o/api#3\n- [ ] sin proyecto\n"
-    crear, prob = fj.plan_despacho(cuerpo, {"api": {"repo": "o/api"}})
-    check([h["titulo"] for h in crear] == ["Uno"] and len(prob) == 1, f"plan_despacho: crear {crear} · problemas {prob}")
-    check(fj.con_marcas("- [ ] [api] Uno → o/api#1\n", {"o/api#1": "x"}) == "- [x] [api] Uno → o/api#1\n", "con_marcas no marcó lo cerrado")
+    # The epic's checklist.
+    body = "- [ ] [api] One\n- [ ] [nobody] Two\n- [x] [api] Three → o/api#3\n- [ ] no project\n"
+    create, problems = fg.plan_dispatch(body, {"api": {"repo": "o/api"}})
+    check([c["title"] for c in create] == ["One"] and len(problems) == 1, f"plan_dispatch: create {create} · problems {problems}")
+    check(fg.with_marks("- [ ] [api] One → o/api#1\n", {"o/api#1": "x"}) == "- [x] [api] One → o/api#1\n", "with_marks did not tick what is closed")
+    epic = wsp.epic_body("Login for customers", [("api", "Endpoint"), ("web", "Screen")])
+    check([c["project"] for c in fg.children(epic)] == ["api", "web"] and "Login for customers" in epic,
+          "epic_body does not carry its children and its goal from the template")
 
-    # En seco no se publica: con una CLI que no existe, lo que escribe se simula y lo que lee se intenta de verdad.
-    falsa = {**copy.deepcopy(gh), "id": "falsa", "cli": "no-existe-esta-cli"}
-    falsa["ops"] = {op: ([falsa["cli"], *p[1:]] if p else p) for op, p in gh["ops"].items()}
-    seco = wsp.Ejecutor("seco", log=lambda *_: None)
+    # Dry-run does not publish: with a CLI that does not exist, what writes is simulated and what reads is tried for real.
+    fake = {**copy.deepcopy(gh), "id": "fake", "cli": "no-such-cli"}
+    fake["ops"] = {op: ([fake["cli"], *t[1:]] if t else t) for op, t in gh["ops"].items()}
+    dry = wsp.Runner("dry", log=lambda *_: None)
     try:
-        salida = seco(falsa, "issue.crear", {"repo": "o/r", "titulo": "t", "cuerpo": "c"})
-        publica = "/issues/" not in (salida or "")
-    except fj.ForjaError:
-        publica = True
-    check(not publica, "en seco, crear un issue intentó correr la CLI: el dry-run publicaba")
+        out = dry(fake, "issue.create", {"repo": "o/r", "title": "t", "body": "c"})
+        publishes = "/issues/" not in (out or "")
+    except fg.ForgeError:
+        publishes = True
+    check(not publishes, "in dry-run, creating an issue tried to run the CLI: the dry-run published")
     try:
-        seco(falsa, "issue.estado", {"repo": "o/otro", "n": "9"})
-        lee = False
-    except fj.ForjaError:
-        lee = True
-    check(lee, "en seco, una lectura de algo que la simulación no creó no fue a la forja de verdad (el plan saldría inventado)")
+        dry(fake, "issue.state", {"repo": "o/other", "n": "9"})
+        reads = False
+    except fg.ForgeError:
+        reads = True
+    check(reads, "in dry-run, a read of something the simulation did not create did not go to the real forge (the plan would be made up)")
 
-    # El manifiesto del workspace y el repo de gestión.
-    plantilla = wsp._json(wsp.GESTION / wsp.WS)
-    check(not wsp.problemas_de_ws(plantilla), "la plantilla de workspace.json no es válida")
-    malo = {**plantilla, "proyectos": [{"id": "x", "repo": plantilla["gestion"]["repo"]}, {"id": "y", "repo": "o/y", "agente": "nadie"}]}
-    check(len(wsp.problemas_de_ws(malo)) >= 2, "workspace.json acepta un codificador en el repo de gestión o un agente que no existe")
+    # The manifest and the management repo.
+    template = wsp._json(wsp.MANAGEMENT / wsp.WS)
+    check(not wsp.ws_problems(template), f"the workspace.json template is not valid: {wsp.ws_problems(template)[:2]}")
+    bad_ws = {**template, "projects": [{"id": "x", "repo": template["management"]["repo"], "role": "coder"},
+                                       {"id": "y", "repo": "o/y", "role": "coder", "agent": "nobody"}]}
+    check(len(wsp.ws_problems(bad_ws)) >= 2, "workspace.json accepts a coder on the management repo or an agent that does not exist")
+    check(bool(wsp.ws_problems({**template, "projects": [{"id": "z", "repo": "o/z", "role": "management"}]})),
+          "workspace.json accepts a second management project (the schema allows only coders)")
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)
         (t / ".hermes").mkdir()
-        (t / ".hermes" / "harness.config.json").write_text(json.dumps({"workspace": {"rol": "gestion"}, "gate": {"codeExtensions": [".py"]}}), encoding="utf-8")
-        check(bool(wsp.problemas_de_gestion(t)), "un repo de gestión con código de un stack (.py) pasó: el código va a un codificador")
-        # init --local --apply: el esqueleto, su AGENTS.md sin nada que el escáner de Hermes descarte.
+        (t / ".hermes" / "harness.config.json").write_text(json.dumps({"workspace": {"role": "management"}, "gate": {"codeExtensions": [".py"]}}), encoding="utf-8")
+        check(bool(wsp.management_problems(t)), "a management repo with stack code (.py) passed: code goes to a coder")
+        # init --local --apply: the skeleton, its AGENTS.md with nothing Hermes' scanner would drop.
         p = subprocess.run([sys.executable, str(HARNESS_HOME / "scripts" / "workspace.py"), "init", str(t / "g"), "--org", "o",
                             "--local", "--apply"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
                            env={**os.environ, "HARNESS_NESTED": "1"})
         g = t / "g"
         check(p.returncode == 0 and (g / wsp.WS).is_file() and (g / "wiki" / "Proyectos.md").is_file(),
-              f"workspace.py init --local --apply no dejó el esqueleto: {p.stdout[-300:]}{p.stderr[-300:]}")
+              f"workspace.py init --local --apply did not leave the skeleton: {p.stdout[-300:]}{p.stderr[-300:]}")
         if (g / "AGENTS.md").is_file():
-            texto = (g / "AGENTS.md").read_text(encoding="utf-8")
-            check("orquestador" in texto, "el AGENTS.md de gestión no tiene el rol del orquestador")
-            check(not rules.lint_one(config, "AGENTS.md", texto), f"el AGENTS.md de gestión no pasa el lint: {rules.lint_one(config, 'AGENTS.md', texto)[:2]}")
-        cfg_g = wsp.config_del_repo(g) or {}
-        check((cfg_g.get("workspace") or {}).get("rol") == "gestion" and not wsp.problemas_de_gestion(g),
-              "el config del repo de gestión no dice su rol o declara código")
+            text = (g / "AGENTS.md").read_text(encoding="utf-8")
+            check("orquestador" in text, "the management AGENTS.md lacks the orchestrator role")
+            check(not rules.lint_one(config, "AGENTS.md", text), f"the management AGENTS.md does not pass the lint: {rules.lint_one(config, 'AGENTS.md', text)[:2]}")
+        cfg_g = wsp.repo_config(g) or {}
+        check((cfg_g.get("workspace") or {}).get("role") == "management" and not wsp.management_problems(g),
+              "the management repo config does not say its role or declares code")
         check(any("workspace.py" in " ".join(s.get("command") or []) for s in (cfg_g.get("gate") or {}).get("signals") or []),
-              "el gate del repo de gestión no corre `workspace.py check`")
-        # El instalador elige el pipeline de la forja.
-        nombres = {d.relative_to(t).as_posix() for _, d, _ in ins.plan(t, None, False, "gitlab")}
-        check(".gitlab-ci.yml" in nombres and not any(n.startswith(".github/") for n in nombres),
-              "install --forja gitlab no instala .gitlab-ci.yml (o sigue instalando GitHub Actions)")
+              "the management repo gate does not run `workspace.py check`")
+        # The installer picks the forge's pipeline.
+        names = {d.relative_to(t).as_posix() for _, d, _ in ins.plan(t, None, False, "gitlab")}
+        check(".gitlab-ci.yml" in names and not any(n.startswith(".github/") for n in names),
+              "install --forge gitlab does not install .gitlab-ci.yml (or still installs GitHub Actions)")
         cfg_gl = next(src for _, d, src in ins.plan(t, None, False, "gitlab") if d == t / ".hermes" / "harness.config.json")
-        check((cfg_gl.get("drift") or {}).get("runner") == ".gitlab-ci.yml", "con la forja gitlab, la deriva apunta a un runner que no se instala")
+        check((cfg_gl.get("drift") or {}).get("runner") == ".gitlab-ci.yml", "with the gitlab forge, drift points to a runner that is not installed")
 
-    # La cola del codificador lleva el issue de la épica.
-    check(lp.issue_de("- [ ] Login [issue: o/api#5]") == "o/api#5" and lp.issue_de("- [ ] Login") == "", "loop.issue_de no lee `[issue: …]`")
+    # The coder's queue carries the epic's issue.
+    check(lp.issue_de("- [ ] Login [issue: o/api#5]") == "o/api#5" and lp.issue_de("- [ ] Login") == "", "loop.issue_de does not read `[issue: …]`")
     check(lp.entorno_agente({}, REPO_ROOT, "Login [issue: o/api#5]").get("HARNESS_ISSUE") == "o/api#5",
-          "el agente no recibe HARNESS_ISSUE: no sabe qué issue cierra su PR")
+          "the agent does not get HARNESS_ISSUE: it does not know which issue its PR closes")
 
 
 def eval_section() -> None:
@@ -766,6 +776,20 @@ def eval_section() -> None:
           "a message with what, why and what to do did not count as explained")
     check(not evals.explains("CRON RECHAZADO: esa tarea no se crea. Motivo: publicar sin humano mirando del todo.", criteria),
           "a message without a next step counted as explained: the agent retries blindly")
+
+    # The published page's statistics: Wilson at the edges, Newcombe around a difference.
+    import evals_page  # noqa: E402
+
+    lo, hi = evals_page.wilson(85, 85)
+    check(abs(lo - 0.9568) < 1e-3 and hi == 1.0, f"wilson(85, 85) is [{lo:.4f}, {hi:.4f}], expected [0.9568, 1]")
+    lo, hi = evals_page.wilson(0, 32)
+    check(lo == 0.0 and abs(hi - 0.1072) < 1e-3, f"wilson(0, 32) is [{lo:.4f}, {hi:.4f}], expected [0, 0.1072]")
+    d, dlo, dhi = evals_page.newcombe(41, 41, 41, 41)
+    check(d == 0 and dlo < 0 < dhi, f"newcombe of two equal rates has to contain 0: {d}, [{dlo}, {dhi}]")
+    check(evals_page.newcombe(40, 40, 20, 40)[1] > 0, "newcombe of 100 % vs 50 % over 40 cases has to exclude 0")
+    page_facts = evals_page.embedded_facts(evals_page.PAGE.read_text(encoding="utf-8")) if evals_page.PAGE.is_file() else None
+    check(bool(page_facts) and len(page_facts.get("rubric") or []) == 12,
+          "docs/evaluacion.html has no embedded facts with its 12-dimension rubric (regenerate: python3 scripts/evals_page.py)")
 
     # Guides and signals: hits, what did not act and what acted when it should not.
     rows = [{"type": "response", "hit": True, "extra": False, "missed": False},
@@ -2194,8 +2218,8 @@ def main() -> int:
     seccion_autonomia(config, ctx)
 
     # ── 16. Workspace: gestión + codificadores sobre una forja ───────────────
-    section("16. workspace: forjas, despacho de épicas, seco sin publicar, repo de gestión (ADR 0013)")
-    seccion_workspace(config)
+    section("16. workspace: forges, epics and their dispatch, dry-run without publishing, the management repo (ADR 0013)")
+    workspace_section(config)
 
     # ── 17. Deterministic evaluation: the counting, with a fake plugin ──────
     section("17. deterministic evaluation: the cases and how guides, rules and signals are counted")

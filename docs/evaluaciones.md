@@ -16,6 +16,17 @@ El código, las claves y los valores de los JSON están en inglés; los docs, en
 que los textos que se comparan contra su salida (`contains`, `reasonCriteria.nextStepWords`) quedan
 en español.
 
+La medición se publica en [`evaluacion.html`](evaluacion.html) (GitHub Pages), con:
+
+- gráficos e intervalos de confianza de Wilson al 95 %;
+- el desglose por categoría, tipo, idioma y stack;
+- la latencia y el historial;
+- la rúbrica de doce dimensiones;
+- las amenazas a la validez.
+
+La genera `python3 scripts/evals_page.py` con corridas reales en los ocho perfiles, y `--check`,
+señal del gate, falla si la página dice otra cosa que una corrida nueva.
+
 ## La estructura y los esquemas
 
 ```
