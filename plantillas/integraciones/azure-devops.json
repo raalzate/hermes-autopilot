@@ -1,0 +1,104 @@
+{
+  "id": "azure-devops",
+  "titulo": "Azure DevOps por CLI (`az repos|boards|pipelines`)",
+  "descripcion": "`az` con la extensión azure-devops trae su autenticación (`az login`). Se clasifica cada comando de repos, boards y pipelines: leer work items, crear, relacionar, borrar. Es la integración que gobierna lo que hace la forja `azure` del workspace.",
+  "verificado": "2026-10-19 · az 2.x + azure-devops: `repos`, `boards work-item|iteration|query`, `pipelines`, `devops`",
+  "kind": "cli",
+  "command": "(^|[;&|]\\s*)az\\s+(repos|boards|pipelines|devops)\\b",
+  "classes": {
+    "deny": "\\baz\\s+(repos\\s+delete|devops\\s+(security|user|login)|pipelines\\s+variable(-group)?\\s+(create|update)\\b.*--secret)",
+    "destructive": "\\baz\\s+(boards\\s+work-item\\s+delete|repos\\s+pr\\s+update\\b.*--status\\s+abandoned|pipelines\\s+(delete|runs\\s+tag\\s+delete)|boards\\s+iteration\\s+project\\s+delete)\\b",
+    "send": "\\baz\\s+(boards\\s+work-item\\s+create|repos\\s+pr\\s+create)\\b",
+    "read": "\\baz\\s+(boards\\s+(work-item\\s+show|query|iteration\\s+project\\s+list)|repos\\s+(list|show|pr\\s+(list|show))|pipelines\\s+(list|show|runs\\s+(list|show)))\\b"
+  },
+  "thirdParty": "\\baz\\s+(boards\\s+(work-item\\s+show|query)|repos\\s+pr\\s+show)\\b",
+  "policy": {},
+  "budget": {
+    "maxPerHour": {
+      "send": 15
+    }
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "send": "ask",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "send": "allow",
+      "destructive": "ask"
+    }
+  },
+  "perfilPorDefecto": "asistente",
+  "reasons": {
+    "deny": "borrar un repo, tocar permisos o usuarios de la organización o escribir secretos de un pipeline no lo hace el agente.",
+    "destructive": "borrar work items, abandonar PRs o borrar pipelines lo decide un humano."
+  },
+  "setup": [
+    "az extension add --name azure-devops",
+    "az login   # una vez, fuera del agente"
+  ],
+  "requires": [
+    {
+      "kind": "system",
+      "command": "az",
+      "min": "2.50",
+      "hint": {
+        "darwin": "brew install azure-cli",
+        "win32": "winget install Microsoft.AzureCLI",
+        "default": "https://learn.microsoft.com/cli/azure/install-azure-cli"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "command": "az boards work-item show --id 40 --org https://dev.azure.com/org",
+      "expect": "allow",
+      "why": "ver un work item es lectura"
+    },
+    {
+      "command": "az repos delete --id 123 --org https://dev.azure.com/org --yes",
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "borrar un repo no es del agente"
+    },
+    {
+      "command": "az boards work-item create --type Issue --title x --project p --org https://dev.azure.com/org",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-send",
+      "why": "lectura no crea work items"
+    },
+    {
+      "command": "az boards work-item create --type Issue --title x --project p --org https://dev.azure.com/org",
+      "perfil": "asistente",
+      "expect": "approve",
+      "regla": "pide-send",
+      "why": "en asistente, crear un work item lo aprueba un humano"
+    },
+    {
+      "command": "az boards work-item delete --id 40 --yes --org https://dev.azure.com/org",
+      "perfil": "autonomo",
+      "expect": "approve",
+      "regla": "pide-destructive",
+      "why": "borrar un work item lo aprueba un humano"
+    },
+    {
+      "command": "az boards work-item relation add --id 41 --relation-type parent --target-id 40 --org https://dev.azure.com/org",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "relacionar work items escribe"
+    }
+  ]
+}

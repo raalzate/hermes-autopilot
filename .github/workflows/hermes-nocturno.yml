@@ -1,35 +1,58 @@
-# El revisor inferencial, medido con un modelo de verdad (scripts/revision.py, `review` en el
-# config). Nocturno y no en cada PR: cada corrida gasta tokens. Sin el secreto HERMES_ENV la
-# medición no corre y el job lo avisa (anotación), nunca da por verde lo que no midió.
+# The inferential evaluation, measured with a real model (scripts/evals.py inferential,
+# evals/inferential/suite.json). Nightly and not on every PR: every run spends tokens. Without the
+# HERMES_ENV secret nothing is measured and the job says so (annotation): it never reports green
+# what it did not measure.
 #
-# HERMES_ENV: el contenido del `.env` de Hermes (la key del proveedor, p.ej. OPENROUTER_API_KEY=…).
-# HERMES_MODEL (opcional, variable del repo): el modelo con el que revisa.
+# HERMES_ENV: the content of Hermes' `.env` (the provider key, e.g. OPENROUTER_API_KEY=…).
+# HERMES_MODEL (optional, repo variable): the model that reviews and works the cases.
+#
+# reviewer: every night. agent: only on demand (workflow_dispatch with `agent: true`): a model
+# working replicable cases inside the loop costs far more than reviewing a diff.
 name: hermes-nocturno
 on:
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
+    inputs:
+      agent:
+        description: "Also run the agent group (a model works replicable cases inside the loop)"
+        type: boolean
+        default: false
 jobs:
-  revisor:
+  inferential:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Hermes desde el código fuente
+      - name: Hermes from source
         run: python scripts/hermes_fuente.py "$RUNNER_TEMP/hermes"
-      - name: Revisor inferencial
+      - name: Inferential evaluation
         env:
           HERMES_HOME: ${{ runner.temp }}/hermes-home
           HERMES_ENV: ${{ secrets.HERMES_ENV }}
           HERMES_MODEL: ${{ vars.HERMES_MODEL }}
+          RUN_AGENT: ${{ github.event.inputs.agent }}
         run: |
           if [ -z "$HERMES_ENV" ]; then
-            echo "::warning::sin el secreto HERMES_ENV no hay modelo: el revisor inferencial NO se midió esta noche"
+            echo "::warning::no HERMES_ENV secret, no model: the inferential evaluation was NOT measured tonight"
             exit 0
           fi
-          mkdir -p "$HERMES_HOME"
+          mkdir -p "$HERMES_HOME/plugins"
           printf '%s\n' "$HERMES_ENV" > "$HERMES_HOME/.env"
           if [ -n "$HERMES_MODEL" ]; then hermes config set model "$HERMES_MODEL"; fi
-          HARNESS_REVIEW=1 python scripts/revision.py
+          if [ "$RUN_AGENT" = "true" ]; then
+            # Without the repo-harness plugin no brake bites inside the session: the agent group checks it.
+            ln -s "$PWD/plugin" "$HERMES_HOME/plugins/repo-harness"
+            hermes plugins enable repo-harness
+            export HARNESS_EVAL_AGENT=1
+          fi
+          HARNESS_REVIEW=1 python scripts/evals.py inferential --json "$RUNNER_TEMP/inferential.json"
+      - name: Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inferential-report
+          path: ${{ runner.temp }}/inferential.json
+          if-no-files-found: ignore

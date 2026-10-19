@@ -1,0 +1,111 @@
+{
+  "id": "gitlab",
+  "titulo": "GitLab por CLI (`glab`)",
+  "descripcion": "`glab` trae su autenticación (`glab auth login`). Se clasifica cada comando como `gh`: leer issues y MRs, comentar, crear, cerrar, borrar. Es la integración que gobierna lo que hace la forja `gitlab` del workspace.",
+  "verificado": "2026-10-19 · glab 1.x: subcomandos `mr|issue|ci|release|repo|api|snippet|variable` y banderas `-X`, `-f`, `-F`, `--input`",
+  "kind": "cli",
+  "command": "(^|[;&|]\\s*)glab\\s",
+  "classes": {
+    "deny": "\\bglab\\s+(repo\\s+delete|variable\\s+(set|update|delete)|ssh-key\\s+add|gpg-key\\s+add|auth\\s+status\\b.*(-t|--show-token))|\\bglab\\s+api\\b.*\\s(-X|--method)\\s*DELETE",
+    "destructive": "\\bglab\\s+(mr\\s+close|issue\\s+(close|delete)|release\\s+delete|repo\\s+(archive|transfer)|ci\\s+(cancel|delete)|label\\s+delete)\\b",
+    "send": "\\bglab\\s+((mr|issue)\\s+(note|create)|release\\s+create|snippet\\s+create)\\b",
+    "read": "\\bglab\\s+((mr|issue|ci|release|repo)\\s+(view|list|status|diff)|auth\\s+status)\\b(?!.*(-t|--show-token))|\\bglab\\s+api\\b(?!.*\\s(-X|--method)\\s*(POST|PUT|PATCH|DELETE))(?!.*\\s(-f|-F|--field|--raw-field|--input)\\s)"
+  },
+  "thirdParty": "\\bglab\\s+((mr|issue)\\s+view|api\\s+\\S*(issues|merge_requests|notes))",
+  "filePattern": "(?:--input)[=\\s]+(\\S+)|\\s-F\\s+\\w+=@(\\S+)",
+  "policy": {},
+  "budget": {
+    "maxPerHour": {
+      "send": 15
+    }
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "send": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "send": "ask",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "send": "allow",
+      "destructive": "ask"
+    }
+  },
+  "perfilPorDefecto": "asistente",
+  "reasons": {
+    "deny": "borrar un proyecto, tocar las variables de CI (los secretos) o mostrar el token no lo hace el agente.",
+    "destructive": "cerrar, borrar o archivar en GitLab lo decide un humano."
+  },
+  "setup": [
+    "glab auth login   # una vez, fuera del agente"
+  ],
+  "requires": [
+    {
+      "kind": "system",
+      "command": "glab",
+      "min": "1.40",
+      "hint": {
+        "darwin": "brew install glab",
+        "win32": "winget install GLab.GLab",
+        "default": "https://gitlab.com/gitlab-org/cli"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "command": "glab issue list -R grupo/web",
+      "expect": "allow",
+      "why": "listar issues es lectura"
+    },
+    {
+      "command": "glab repo delete grupo/web --yes",
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "borrar un proyecto no es del agente"
+    },
+    {
+      "command": "glab variable set TOKEN abc",
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "las variables de CI son los secretos del proyecto"
+    },
+    {
+      "command": "glab issue create -R grupo/web --title x --description y --yes",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-send",
+      "why": "lectura no publica issues"
+    },
+    {
+      "command": "glab issue create -R grupo/web --title x --description y --yes",
+      "perfil": "asistente",
+      "expect": "approve",
+      "regla": "pide-send",
+      "why": "en asistente, publicar un issue lo aprueba un humano"
+    },
+    {
+      "command": "glab issue close 7 -R grupo/web",
+      "perfil": "autonomo",
+      "expect": "approve",
+      "regla": "pide-destructive",
+      "why": "cerrar lo aprueba un humano"
+    },
+    {
+      "command": "glab api projects/grupo%2Fweb/milestones -X POST -f title=v1",
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "un POST por `glab api` no es lectura"
+    }
+  ]
+}

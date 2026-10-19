@@ -373,7 +373,8 @@ def cron_guard(ev: Event, config: dict, root: Path) -> Decision:
     if hit:
         return Decision.deny(
             "CRON RECHAZADO: esa tarea programada no se crea desde el agente.\n"
-            f"Motivo: {hit.get('reason', '(sin motivo declarado)')}",
+            f"Motivo: {hit.get('reason', '(sin motivo declarado)')}\n"
+            "Si hace falta, dejá el pedido en la respuesta: la programa un humano.",
             hit,
         )
     minimo = cr.get("minIntervalMinutes")
@@ -383,7 +384,8 @@ def cron_guard(ev: Event, config: dict, root: Path) -> Decision:
         if cada is not None and cada < minimo:
             return Decision.deny(
                 f"CRON RECHAZADO: `{sched}` corre cada {cada:g} min y el mínimo del repo es {minimo}.\n"
-                "Cada corrida es un turno completo del modelo: se paga en tokens aunque no haga nada.",
+                "Cada corrida es un turno completo del modelo: se paga en tokens aunque no haga nada.\n"
+                f"Usá un intervalo de al menos {minimo} min, o pedíle al humano que cambie `cron.minIntervalMinutes`.",
                 {"id": "cron-intervalo-minimo"},  # sin id, el registro y el panel no saben qué mordió
             )
     return Decision.allow()

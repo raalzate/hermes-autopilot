@@ -43,6 +43,6 @@ Tres se habían dado por imposibles con un argumento sobre Hermes que el código
   una inyección, si un mensaje permitido es correcto, un programa no-Python fuera del loop, y el
   loop con un modelo real como agente (necesita una key).
 - El revisor inferencial se midió una vez con un modelo real (Claude Sonnet 5.5 por `claude -p`):
-  recall 100 %, precisión 91 %. La medición queda en `evals/mediciones/` y es repetible con el
+  recall 100 %, precisión 91 %. La medición queda en `evals/measurements/` y es repetible con el
   comando que trae en la cabecera.
 - El plugin pasa de 4 a 6 hooks; `timing.py` mide los dos nuevos contra el mismo presupuesto.

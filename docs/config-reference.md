@@ -53,7 +53,8 @@ sin `example` es roja.
 | `incidents` | `{file, heading, requiredLines[]}` — formato de `docs/gotchas.md` |
 | `docs.pathRoots`, `externalPaths`, `ignoreFiles` | qué backticks cuentan como rutas del repo en el link-check |
 | `status.file`, `headLines`, `reminder` | lo que la sección de estado muestra al abrir la sesión |
-| `tracker.issuePattern`, `issueExample` | qué cuenta como referencia a un ítem de trabajo |
+| `tracker.kind`, `issuePattern`, `issueExample` | qué cuenta como referencia a un ítem de trabajo. `install.py --forja` lo fija desde `plantillas/forjas/<id>.json` |
+| `workspace.rol`, `manifiesto`, `id`, `gestion` | el rol del repo en un workspace ([`workspace.md`](workspace.md)): `gestion` (sin código de un stack; su gate corre `workspace.py check`) o `codificador` (su `id` en `workspace.json` y el repo de gestión). Lo escriben `workspace.py init` y `add` |
 | `commitMsg.codePattern`, `ignoreExtensions`, `escapeLine`, `skipSubjects` | qué commits piden registro y cómo se declara la excepción |
 | `lint.ignore[]` | rutas que el lint no barre |
 | `profiles.dir`, `requiredKeys`, `forbiddenKeys`, `reason` | regla `PERFIL`: un perfil de stack lleva hechos del lenguaje, no reglas (P17). Una clave con punto (`gate.signals`) es una ruta anidada |
@@ -67,7 +68,7 @@ sin `example` es roja.
 | `loop.defaultIntegrations[]` | las integraciones que una tarea puede usar si no las nombra (`[integraciones: a, b]` en su línea). `[]` = ninguna (plantilla); ausente = todas las habilitadas. El loop las pasa en `HARNESS_INTEGRACIONES` |
 | `loop.tasksFile`, `agentCommand`, `gateCommand`, `maxIterations`, `sameFailureLimit`, `maxMinutes`, `agentTimeoutMinutes`, `gateTimeoutMinutes`, `branchPrefix`, `stopFile`, `stateFile`, `prompt`, `retryPrompt`, `reason` | el loop autónomo (P21). Ver [`loop-autonomo.md`](loop-autonomo.md) |
 | `drift.statusDatePattern`, `statusMaxAgeDays`, `historyCommits`, `runner`, `command`, `reason` | el barrido de deriva (P20). `runner` es el pipeline que lo corre y `command` lo que ese pipeline tiene que invocar |
-| `review.command`, `dataset`, `minRecall`, `minPrecision`, `timeoutSeconds`, `requiresEnv`, `runner`, `runnerCommand`, `reason` | el revisor inferencial medido (`scripts/revision.py`): `command` es el revisor (`{prompt}` lleva el diff y la tarea), `dataset` los diffs etiquetados, los umbrales, y `requiresEnv` la variable que dice que hay un modelo (sin ella, OMITIDA) |
+| `review.suite`, `runner`, `runnerCommand`, `reason` | la evaluación inferencial (`scripts/evals.py inferential`, [`evaluaciones.md`](evaluaciones.md)): `suite` es `evals/inferential/suite.json`, donde viven el modelo de cada grupo (`command`), sus umbrales, sus prompts y la variable que dice que hay un modelo (`requiresEnv`; sin ella, OMITIDA). `runner` es el pipeline que la corre de verdad y `runnerCommand` lo que el self-test exige que ese pipeline invoque |
 | `autonomia.inicial`, `estado`, `comando` | el nivel de autonomía (P27, [`autonomia.md`](autonomia.md)): con qué nivel arranca un repo sin estado (`L0` en la plantilla), dónde vive el nivel firmado (`.git/` = gitdir común; ilegible vale L0) y el comando que nombran los mensajes |
 | `autonomia.niveles.{L0..L3}` | por nivel: `nombre`, `puede`, `noPuede`, y para cada familia `escribir`·`terminal`·`codigo`·`aprender`·`integraciones` = `allow`·`ask`·`deny`; `escribirPermitido[]` (rutas que se escriben igual), `terminalPermitida[]` (cada subcomando tiene que casar; sin `$(…)` ni redirecciones), `loop` (si trabaja desatendido) y `ejemplos{bloquea, pregunta, deja}` que el self-test pasa por el plugin (P2) |
 | `autonomia.ascenso."Ln->Lm"` | el umbral de cada paso, medido en el registro desde la última transición: `sesionesLimpias`, `intentosFueraDeNivel`, `recomendaciones`, `aceptadasMin`, `cambiosAprobados`, `denegadosMax`, `gatesMin`, `gateVerdeMin`, `tamperings`, `diasMin`. Una métrica desconocida no se da por cumplida |
@@ -115,7 +116,8 @@ Tocar una clave sin mirar esta tabla es la forma de romper algo lejos.
 | `invariants`, `incidents`, `lint` | `plugin/harness/rules.py`, `scripts/lint.py`, `scripts/selftest.py` |
 | `docs.*` | `scripts/linkcheck.py` |
 | `status.*` | `plugin/harness/turn.py` |
-| `tracker`, `commitMsg` | `scripts/githooks.py`, `scripts/selftest.py` |
+| `tracker`, `commitMsg` | `scripts/githooks.py`, `scripts/selftest.py`; `tracker` lo escribe `scripts/install.py` (`con_forja`) |
+| `workspace` | `scripts/workspace.py` (`problemas_de_gestion`), `scripts/selftest.py` (§16) |
 | `profiles` | `plugin/harness/rules.py` (`rule_perfil`), `scripts/lint.py`, `scripts/selftest.py` |
 | `coherence` | `plugin/harness/rules.py` (`rule_coherencia`, `es_guia`), `scripts/lint.py`, `scripts/selftest.py` |
 | `branches` | `scripts/githooks.py` (`pre_push`), `scripts/selftest.py` |

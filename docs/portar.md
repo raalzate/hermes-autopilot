@@ -11,6 +11,12 @@ derivado (lockfiles, `target/`, `node_modules/`), cómo se corren los tests— y
 otro repo. El self-test del repo destino falla si no quedó nada declarado como código: sin eso,
 el gate pendiente nunca se marca y `pre_verify` no frena nada.
 
+`--forja` (`plantillas/forjas/`: `github` por defecto, `gitlab`, `azure`) elige el pipeline que se
+instala (GitHub Actions, `.gitlab-ci.yml`, `azure-pipelines.yml`, todos con el mismo gate) y el
+formato de la referencia a un issue en los commits. Para varios repos con un proyecto de gestión
+que orquesta, no instales uno por uno: [`workspace.md`](workspace.md) (`workspace.py add` instala
+cada codificador con su perfil, su forja y su agente).
+
 ## Qué queda en el repo destino
 
 ```

@@ -1,6 +1,6 @@
 # Constitución — Hermes Autopilot
 
-**Versión 1.7.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
+**Versión 1.8.0** · Principios que no se negocian **en este repo**. Las convenciones operativas
 viven en `AGENTS.md`; el arnés que los hace cumplir, en `docs/arnes.md`.
 
 Cada principio dice su **fuerza**:
@@ -249,8 +249,9 @@ Un juicio de un modelo (`harness-review`) acierta a veces: no se prueba con un e
 se mide contra un conjunto etiquetado, con umbrales. Sin modelo, la medición sale OMITIDA —nunca
 verde— y la corre un pipeline que sí lo tiene.
 
-*Mecanismo:* `scripts/revision.py` (recall y precisión contra `evals/revision.json`, umbrales en
-`review`), señal del gate con `omitIfExit` y `hermes-nocturno.yml`.
+*Mecanismo:* `scripts/evals.py inferential` (recall y precisión del revisor contra
+`evals/inferential/cases/reviewer.json`, y cumplimiento de un modelo como agente en el loop; umbrales
+en `evals/inferential/suite.json`), señal del gate con `omitIfExit` y `hermes-nocturno.yml`.
 
 ## P26 — Lo que el agente hace afuera tiene clase, destinatario y tope · BLOCKING
 
@@ -325,3 +326,4 @@ Gana el más alto y **el agente para y escala**: 1) P8·P9, 2) P5, 3) P1, 4) el 
 | 1.5.0 | 2026-10-08 | Cierre de huecos: P8 suma la guardia de Python; P21, el loop aislado en worktree; P24 (lo que entra de un tercero no sale solo: sesión contaminada); P25 (un sensor inferencial se mide con una tasa: `revision.py`). |
 | 1.6.0 | 2026-10-09 | Integraciones: P26 (lo que el agente hace afuera tiene clase, destinatario y tope). Hermes conecta, el arnés gobierna: catálogo de manifiestos, perfiles, lanzador con secretos por referencia, dependencias aisladas con lock (ADR 0010). |
 | 1.7.0 | 2026-10-14 | Autonomía por evidencia: P27 (cuatro niveles —L0 observa, L1 recomienda, L2 con aprobación, L3 autonomía—, toda instalación arranca en L0, lo hace cumplir el plugin), P28 (subir con evidencia y firma humana, bajar automático) y P29 (la salud del agente se ve). ADR 0012. |
+| 1.8.0 | 2026-10-19 | Evaluaciones con esquema (`evals/schema/`) y bilingües: P25 se mide con `scripts/evals.py inferential` —el revisor de diffs y un modelo como agente dentro del loop, cada uno con su tasa y su umbral—, y la evaluación determinista (guías · reglas · señales contra un copiloto recién instalado) entra al gate. |

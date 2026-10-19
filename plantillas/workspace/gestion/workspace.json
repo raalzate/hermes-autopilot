@@ -1,0 +1,16 @@
+{
+  "$comment": "El workspace (docs/workspace.md, ADR 0013). `gestion` es este repo: épicas, milestones, tablero de portafolio, wiki y la cola del orquestador, sin código. Cada `proyectos[]` es un codificador con su repo, su forja (por defecto la del workspace), su perfil de stack, su agente y su `dir` local (para instalarle el arnés y encolarle los hijos). `agentes` es el `loop.agentCommand` que recibe cada codificador. Lo escriben `workspace.py init` y `workspace.py add`.",
+  "nombre": "mi-workspace",
+  "forja": "github",
+  "gestion": {
+    "repo": "mi-org/gestion",
+    "agente": "hermes",
+    "tablero": null
+  },
+  "proyectos": [],
+  "agentes": {
+    "hermes": ["hermes", "chat", "-q", "{prompt}"],
+    "claude-code": ["claude", "-p", "{prompt}"]
+  },
+  "epicas": []
+}

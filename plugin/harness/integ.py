@@ -278,9 +278,12 @@ def _decidir(ev, config, root, iid, integ, crudo, c, lectura, escritura, destino
     a = accion(integ, c)
     if a == "deny":
         perfil = integ.get("perfil", "?")
+        # El porqué del manifiesto Y qué hacer: con sólo el porqué, el agente no sabe cuál es la salida.
+        porque = (integ.get("reasons") or {}).get(c)
         return Decision.deny(_msg(iid, crudo, c, f"el perfil `{perfil}` no permite esta clase de acción.",
-                                  (integ.get("reasons") or {}).get(c) or
-                                  "Si hace falta de verdad, el humano cambia el perfil (`cli.py integ set`). No busques otra herramienta que haga lo mismo."),
+                                  (f"{porque}\n" if porque else "") +
+                                  "Si hace falta de verdad, pedíselo al humano: lo hace él, o cambia el perfil (`cli.py integ set`). "
+                                  "No busques otra herramienta que haga lo mismo."),
                              _regla(iid, f"clase-{c}"))
     # Archivos locales que la herramienta lee (subir, adjuntar) o escribe (descargar, capturar):
     # las mismas reglas que a read_file y write_file. Subir el `.env` por el navegador es leerlo.

@@ -1,0 +1,811 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evals/schema/case-file.schema.json",
+  "title": "Evaluation · case file",
+  "description": "One file of cases of a single group. Deterministic groups: guides, rules, signals. Inferential groups: reviewer, agent. Keys and enumerated values are English; the CONTENT of a case (a commit message, an AGENTS.md, a memory, a task, a response) is in the language its `lang` says. Validated by scripts/schema_check.py (stdlib) and by any editor that reads `$schema`.",
+  "type": "object",
+  "required": [
+    "group",
+    "cases"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "$comment": {
+      "type": "string"
+    },
+    "group": {
+      "enum": [
+        "guides",
+        "rules",
+        "signals",
+        "reviewer",
+        "agent"
+      ]
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "group": {
+            "const": "guides"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/$defs/guideCase"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "group": {
+            "const": "rules"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/$defs/ruleCase"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "group": {
+            "const": "signals"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/$defs/signalCase"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "group": {
+            "const": "reviewer"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/$defs/reviewerCase"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "group": {
+            "const": "agent"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/$defs/agentCase"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Unique across every case file. A Spanish twin of an English case ends in `-es`."
+    },
+    "lang": {
+      "enum": [
+        "en",
+        "es",
+        "neutral"
+      ],
+      "description": "The language of the case content. `neutral`: no natural language (a path, a command with no prose)."
+    },
+    "note": {
+      "type": "string",
+      "minLength": 3,
+      "description": "What the case proves, in English."
+    },
+    "level": {
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ],
+      "description": "Autonomy level of the call. Default L3: the rules are evaluated, not the level."
+    },
+    "text": {
+      "type": "string"
+    },
+    "repeat": {
+      "type": "object",
+      "required": [
+        "line",
+        "times"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "type": "string",
+          "minLength": 1
+        },
+        "times": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "description": "A long text built as `line` repeated `times` (long texts are not written by hand)."
+    },
+    "call": {
+      "type": "object",
+      "required": [
+        "tool"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "object"
+        }
+      },
+      "description": "A tool call the way Hermes sends it. In `args`, `content_parts` (a list of strings) is joined into `content`: it keeps a secret-shaped fixture from tripping the repo lint."
+    },
+    "step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "run"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "run": {
+              "$ref": "#/$defs/call"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "git"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "git": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "delete"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "delete": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "write"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "write": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "$ref": "#/$defs/text"
+            },
+            "repeat": {
+              "$ref": "#/$defs/repeat"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "gate"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "gate": {
+              "const": "green"
+            }
+          }
+        }
+      ],
+      "description": "Setup before the check: `run` a call (through the brake first), `git` a command, `delete` or `write` a file, or mark the `gate` green."
+    },
+    "ruleCase": {
+      "type": "object",
+      "required": [
+        "id",
+        "lang",
+        "category",
+        "variant",
+        "tool",
+        "expected",
+        "note"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "lang": {
+          "$ref": "#/$defs/lang"
+        },
+        "category": {
+          "enum": [
+            "secrets (read)",
+            "protected paths",
+            "destructive git",
+            "data out",
+            "remote code",
+            "disarm the harness",
+            "memory and skills",
+            "GitHub integration",
+            "third-party content",
+            "autonomy level"
+          ]
+        },
+        "variant": {
+          "enum": [
+            "direct",
+            "evasion",
+            "innocent"
+          ]
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "object"
+        },
+        "before": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/call"
+          },
+          "description": "Earlier calls in the same session (reading a third party taints it)."
+        },
+        "level": {
+          "$ref": "#/$defs/level"
+        },
+        "expected": {
+          "enum": [
+            "block",
+            "approve",
+            "allow"
+          ]
+        },
+        "knownGap": {
+          "type": "string",
+          "minLength": 3,
+          "description": "The attack passes and that is known: its row in docs/huecos.md."
+        },
+        "note": {
+          "$ref": "#/$defs/note"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "variant": {
+                "const": "innocent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "const": "allow"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "expected": {
+                "const": "allow"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "variant": {
+                "const": "innocent"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "knownGap"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "enum": [
+                  "block",
+                  "approve"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "guideCase": {
+      "type": "object",
+      "required": [
+        "id",
+        "lang",
+        "type",
+        "expected",
+        "note"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "lang": {
+          "$ref": "#/$defs/lang"
+        },
+        "type": {
+          "enum": [
+            "context",
+            "status",
+            "reason"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "repeat": {
+          "$ref": "#/$defs/repeat"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "contains": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Compared against the harness output, which is Spanish: stays in Spanish."
+        },
+        "level": {
+          "$ref": "#/$defs/level"
+        },
+        "expected": {
+          "type": "string"
+        },
+        "note": {
+          "$ref": "#/$defs/note"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "context"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "text"
+                ]
+              },
+              {
+                "required": [
+                  "repeat"
+                ]
+              }
+            ],
+            "properties": {
+              "expected": {
+                "enum": [
+                  "reaches",
+                  "dropped",
+                  "truncated",
+                  "contradicts"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "status"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "steps",
+              "contains"
+            ],
+            "properties": {
+              "expected": {
+                "enum": [
+                  "warns",
+                  "silent"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "reason"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "const": "explains"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "signalCase": {
+      "type": "object",
+      "required": [
+        "id",
+        "lang",
+        "type",
+        "expected",
+        "note"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "lang": {
+          "$ref": "#/$defs/lang"
+        },
+        "type": {
+          "enum": [
+            "turn-end",
+            "response",
+            "tool-result",
+            "commit"
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "before": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/call"
+          }
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "run": {
+          "$ref": "#/$defs/call"
+        },
+        "staged": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "description": "path → content (a list is joined: a secret-shaped fixture split in parts)."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "level": {
+          "$ref": "#/$defs/level"
+        },
+        "expected": {
+          "type": "string"
+        },
+        "note": {
+          "$ref": "#/$defs/note"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "turn-end"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "steps"
+            ],
+            "properties": {
+              "expected": {
+                "enum": [
+                  "asks-gate",
+                  "closes"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "response"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "expected": {
+                "enum": [
+                  "redacts",
+                  "warns",
+                  "passes"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "tool-result"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "run"
+            ],
+            "properties": {
+              "expected": {
+                "enum": [
+                  "warns",
+                  "passes"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "commit"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "staged",
+              "message"
+            ],
+            "properties": {
+              "expected": {
+                "enum": [
+                  "blocks",
+                  "passes"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "replicableCase": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "A replicable case under casos/<id>/ (its seed, its rules, its verify script)."
+    },
+    "contentLang": {
+      "enum": [
+        "en",
+        "es"
+      ],
+      "description": "The language of the task and the prompt. An inferential case always has natural language: never `neutral`."
+    },
+    "reviewerCase": {
+      "type": "object",
+      "required": [
+        "id",
+        "lang",
+        "case",
+        "task",
+        "expected",
+        "label",
+        "diff"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "lang": {
+          "$ref": "#/$defs/contentLang"
+        },
+        "case": {
+          "$ref": "#/$defs/replicableCase"
+        },
+        "task": {
+          "type": "string",
+          "minLength": 3,
+          "description": "The task the change was made for, in the case language: the reviewer judges against it."
+        },
+        "expected": {
+          "enum": [
+            "approve",
+            "reject"
+          ],
+          "description": "What a good reviewer decides. The reviewer never sees it."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Why the label is what it is, in English."
+        },
+        "diff": {
+          "type": "string",
+          "minLength": 3
+        }
+      }
+    },
+    "agentCase": {
+      "type": "object",
+      "required": [
+        "id",
+        "lang",
+        "case",
+        "task",
+        "expected",
+        "note"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "lang": {
+          "$ref": "#/$defs/contentLang"
+        },
+        "case": {
+          "$ref": "#/$defs/replicableCase"
+        },
+        "task": {
+          "type": "string",
+          "minLength": 3,
+          "description": "The task the agent gets in the loop queue, in the case language."
+        },
+        "expected": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "results": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "green",
+                  "escalate",
+                  "stopped"
+                ]
+              },
+              "description": "Loop outcomes a good agent may end with: solving it (green) or asking a human (escalate)."
+            },
+            "maxRepeats": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many times the same brake may bite again after the first time (the agent did not read its reason). Default 1."
+            }
+          }
+        },
+        "note": {
+          "$ref": "#/$defs/note"
+        }
+      }
+    }
+  }
+}

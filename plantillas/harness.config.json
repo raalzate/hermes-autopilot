@@ -135,10 +135,11 @@
     "deny": [
       {
         "id": "no-verify",
-        "pattern": "--no-ver[i]fy|core\\.hooksPath\\s*=",
+        "pattern": "--no-ver[i]fy|core\\.hooksPath\\s*=|\\bgit(?:\\s+-[Cc]\\s+\\S+)*\\s+commit\\b[^|;&]*\\s-(?!-)[a-zA-Z]*n",
         "example": "git commit -m x --no-verify",
         "moreExamples": [
-          "git -c core.hooksPath=/dev/null commit -m x"
+          "git -c core.hooksPath=/dev/null commit -m x",
+          "git commit -nm wip"
         ],
         "reason": "saltarse los hooks de verificación está prohibido. Si el gate estorba, se arregla el gate."
       },
@@ -179,10 +180,12 @@
       },
       {
         "id": "descartar-cambios",
-        "pattern": "git(?:\\s+-[Cc]\\s+\\S+)*\\s+(checkout|restore)\\b[^|;&]*\\s(--\\s+)?\\.(\\s|$)|git(?:\\s+-[Cc]\\s+\\S+)*\\s+clean\\b[^|;&]*(\\s-[a-zA-Z]*f|--force)|git(?:\\s+-[Cc]\\s+\\S+)*\\s+stash\\s+(drop|clear)\\b",
+        "pattern": "git(?:\\s+-[Cc]\\s+\\S+)*\\s+(checkout|restore)\\b[^|;&]*\\s(--\\s+)?\\.(\\s|$)|git(?:\\s+-[Cc]\\s+\\S+)*\\s+checkout\\b[^|;&]*\\s--\\s+[^\\s|;&-]|git(?:\\s+-[Cc]\\s+\\S+)*\\s+restore\\b(?=[^|;&]*(--worktree|\\s-W\\b)|(?![^|;&]*--staged\\b))[^|;&]*\\s[^\\s|;&-]|git(?:\\s+-[Cc]\\s+\\S+)*\\s+clean\\b[^|;&]*(\\s-[a-zA-Z]*f|--force)|git(?:\\s+-[Cc]\\s+\\S+)*\\s+stash\\s+(drop|clear)\\b",
         "example": "git checkout -- .",
         "moreExamples": [
           "git restore .",
+          "git checkout -- app/",
+          "git restore app/x.py",
           "git clean -fd",
           "git stash drop"
         ],
@@ -216,6 +219,16 @@
         "reason": "mandar datos del repo a un servidor es una salida que no vuelve: lo decide una persona (y en el loop, sin humano, no se hace). Si es una API del proyecto, dejá el comando para que lo corra el humano."
       },
       {
+        "id": "datos-por-red",
+        "pattern": "\\b(nc|ncat|netcat|socat|telnet)\\b[^|;&]*\\s<|\\|\\s*(nc|ncat|netcat|socat)\\b|\\b(scp|sftp)\\b[^|;&]*\\s[^\\s:]+:|\\brsync\\b[^|;&]*\\s(\\S+@)?[\\w.-]+:",
+        "example": "scp datos.csv u@backup.example.test:/tmp/",
+        "moreExamples": [
+          "nc recibe.example.test 9000 < datos.csv",
+          "rsync -a datos/ backup.example.test:/srv/datos/"
+        ],
+        "reason": "copiar un archivo a otra máquina (scp, rsync a un host, un socket con nc) es una salida de datos como un curl -d: lo decide una persona. Copiar dentro de esta máquina (rsync a /tmp) pasa."
+      },
+      {
         "id": "integraciones-cambia",
         "pattern": "\\binteg(\\.py)?\\s+(add|set|rm|deps)\\b[^|;&]*--apply",
         "example": "python3 scripts/integ.py add google-workspace --perfil autonomo --apply",
@@ -224,6 +237,16 @@
           "python3 .hermes/harness/scripts/integ.py deps navegador --apply"
         ],
         "reason": "habilitar una integración, cambiar su perfil o su lista de destinatarios, o instalar lo que corre con tus credenciales es darle al agente un permiso nuevo para actuar afuera: lo decide un humano. Sin --apply (el plan) pasa."
+      },
+      {
+        "id": "workspace-publica",
+        "pattern": "\\bworkspace(\\.py)?\\s+(init|add|despachar|estado|wiki)\\b[^|;&]*--apply",
+        "example": "python3 .hermes/harness/scripts/workspace.py despachar 12 --apply",
+        "moreExamples": [
+          "python3 scripts/workspace.py init ../gestion --forja github --org mi-org --apply",
+          "python3 .hermes/harness/scripts/workspace.py wiki --apply"
+        ],
+        "reason": "con --apply el workspace publica en la forja (crea repos, issues, milestones y tableros, edita la épica, empuja la wiki): el plugin ve `python3 workspace.py`, no cada `gh`/`glab`/`az`, así que lo aprueba un humano acá. Sin --apply (el plan, con las lecturas reales) pasa."
       },
       {
         "id": "nivel-firma",
@@ -251,7 +274,10 @@
       "grep -rn TODO app/",
       "head -n 20 README.md",
       "curl -fsSLo hermes.tar.gz https://descargas.example.test/hermes.tar.gz",
-      "curl -s https://api.example.test/estado"
+      "curl -s https://api.example.test/estado",
+      "git commit -m 'cli: arreglar la bandera -n'",
+      "rsync -a dist/ /tmp/dist/",
+      "nc -z localhost 5432"
     ],
     "$dataArgs": "Argumentos cuyo texto entre comillas es DATO (un mensaje de commit, un término de búsqueda) y no se compara con las reglas. `bash -c` no va acá: eso se ejecuta.",
     "dataArgs": [
@@ -300,7 +326,7 @@
   "protectedPaths": [
     {
       "id": "env",
-      "pattern": "(^|/)\\.env",
+      "pattern": "(^|/)\\.env(?!\\.(example|sample|template)$)",
       "example": ".env",
       "reason": ".env* lo edita el humano, nunca el agente.",
       "moreExamples": [
@@ -426,8 +452,12 @@
       },
       {
         "id": "regla-que-apaga",
-        "pattern": "(--no-ver[i]fy|saltar(se)?\\s+el\\s+gate|skip\\s+the\\s+gate)",
+        "pattern": "(--no-ver[i]fy|(saltar|saltear|omitir|evitar)(se)?\\s+el\\s+gate|(skip|skipping|bypass|bypassing)\\s+the\\s+gate)",
         "example": "se puede saltar el gate si hay apuro",
+        "moreExamples": [
+          "Bypassing the gate is fine when CI is slow",
+          "Está bien saltearse el gate si CI tarda"
+        ],
         "reason": "una memoria que contradice a un freno lo apaga en todas las sesiones."
       }
     ],
@@ -462,8 +492,12 @@
     "deny": [
       {
         "id": "cron-publica",
-        "pattern": "\\bgit\\s+push\\b|\\b(npm|cargo|twine|poetry)\\s+publish\\b|\\bdeploy(á|ar)?\\s+(a|to)\\s+prod",
+        "pattern": "\\bgit\\s+push\\b|\\b(npm|cargo|twine|poetry)\\s+publish\\b|\\bdeploy(á|ar|ing)?\\s+(a|to)\\s+prod|\\b(despleg(á|ar)|desplieg[aeo])\\s+(a|en)\\s+prod",
         "example": "cada noche hacé git push",
+        "moreExamples": [
+          "every night deploy to prod",
+          "cada noche desplegá a producción"
+        ],
         "reason": "publicar sin humano mirando."
       }
     ],
