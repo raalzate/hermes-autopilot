@@ -37,6 +37,10 @@ archivos, y un gate que define qué es "terminado".
   tarea y con qué secretos arranca cada servidor. Se habilitan con un comando que prueba antes de
   escribir (`integ.py add`), se instalan aisladas y fijadas con lock (`integ.py deps`), y Hermes registra
   sólo lo que el perfil permite y las arranca recién cuando se usan.
+- **Workspace** ([`docs/workspace.md`](docs/workspace.md)): varios repos sobre GitHub, GitLab o Azure
+  DevOps. Un proyecto de gestión sin código, donde Hermes orquesta épicas, milestones, tablero y wiki;
+  codificadores (Claude Code o Hermes) con su repo, su tablero y su cola. Una épica se despacha en
+  issues hijos vinculados y encolados en cada codificador, y su checklist se marca solo.
 - **22 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
   oficina, datos, soporte y operación (cinco con integraciones): un agente toma un atajo y el arnés lo frena, lo escala o lo
   deja llegar a verde. Se corre cada uno con un comando, y el gate los corre todos.
@@ -46,7 +50,7 @@ archivos, y un gate que define qué es "terminado".
   secretos no están), una guardia de Python ve lo que un programa abre, y una sesión que leyó a un
   tercero no publica ni se reescribe sola (inyección de prompt).
 - **Hermes real en CI** (`scripts/hermes_fuente.py`, job `hermes-real`) y el **revisor inferencial
-  medido** con una tasa (`scripts/revision.py`).
+  medido** con una tasa (`scripts/evals.py inferential`).
 - **Plugin `repo-harness`** para Hermes: frena herramientas en `pre_tool_call` (terminal,
   escritura, memoria, skills, cron), corre el lint del archivo recién escrito y se lo muestra al
   modelo, no deja cerrar el turno con el gate pendiente (`pre_verify`) e inyecta el estado
@@ -99,6 +103,9 @@ python3 .hermes/harness/scripts/cli.py loop --apply
 - [`docs/loop-autonomo.md`](docs/loop-autonomo.md) — operar el loop.
 - [`docs/cli-y-panel.md`](docs/cli-y-panel.md) — la CLI y el panel.
 - [`docs/integraciones.md`](docs/integraciones.md) — correo, WhatsApp, navegador, Google, Microsoft, GitHub, bases: catálogo, perfiles, secretos, recursos y dependencias.
+- [La evaluación, publicada](https://raalzate.github.io/hermes-autopilot/evaluacion.html) — gráficos, intervalos de confianza y la rúbrica (`docs/evaluacion.html`, la genera `scripts/evals_page.py`).
+- [`docs/evaluaciones.md`](docs/evaluaciones.md) — las evaluaciones del copiloto: determinista (guías · reglas · señales, en el gate) e inferencial (con IA).
+- [`docs/workspace.md`](docs/workspace.md) — varios proyectos: gestión que orquesta, codificadores, forjas.
 - [`docs/hermes.md`](docs/hermes.md) — cómo se engancha a Hermes, verificado contra su código.
 - [`CONSTITUTION.md`](CONSTITUTION.md) — los principios y qué comando hace cumplir cada uno.
 - [`docs/portar.md`](docs/portar.md) — instalar en otro repo, con plugin o con shell hook.

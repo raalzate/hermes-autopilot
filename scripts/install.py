@@ -2,11 +2,14 @@
 """
 Instala el arnés en otro repo. DRY-RUN por defecto (P9): muestra la lista y no toca nada.
 
-    python3 scripts/install.py <repo> [--profile python] [--apply] [--upgrade] [--link-plugin]
+    python3 scripts/install.py <repo> [--profile python] [--forge github] [--apply] [--upgrade] [--link-plugin]
 
     --profile      hechos del stack (plantillas/perfiles/<nombre>.json): extensiones, lockfiles,
                    el comando de tests. Nunca reglas: las reglas del repo se escriben con sus
                    cicatrices, no se heredan de otro.
+    --forge        dónde vive el repo (plantillas/forges/<id>.json: github · gitlab · azure). Decide
+                   el pipeline que se instala (Actions, GitLab CI, Azure Pipelines) y el formato de
+                   la referencia a un issue en los commits (`tracker`). Por defecto, github.
     --apply        ejecuta el plan. Sin esto, sólo lo imprime.
     --upgrade      reemplaza el CÓDIGO del arnés (`.hermes/harness/`) por esta versión. Nunca toca
                    el config, AGENTS.md, las skills ni los docs del repo: ésos son del repo.
@@ -27,8 +30,12 @@ from pathlib import Path
 
 HOME = Path(__file__).resolve().parent.parent  # el repo del arnés (o una copia instalada)
 PLANT = HOME / "plantillas"
+# Los hooks de git y las skills viven en la RAÍZ del repo, no en el código del arnés: desde una copia
+# instalada (`<repo>/.hermes/harness/`, lo que usa `workspace.py add` en el repo de gestión) se
+# toman del repo que la contiene.
+RAIZ = HOME if (HOME / ".githooks").is_dir() else HOME.parent.parent
 CODE_FILES = ["gate.py", "lint.py", "linkcheck.py", "selftest.py", "hook.py", "githooks.py", "install.py", "doctor.py",
-              "drift.py", "map.py", "timing.py", "cli.py", "loop.py", "panel.py", "integ.py", "integ_run.py"]
+              "drift.py", "map.py", "timing.py", "cli.py", "loop.py", "panel.py", "integ.py", "integ_run.py", "workspace.py", "schema_check.py"]
 DEST_CODE = Path(".hermes") / "harness"
 
 
@@ -54,7 +61,27 @@ def merge_profile(base: dict, perfil: dict) -> dict:
     return cfg
 
 
-def plan(target: Path, profile: str | None, upgrade: bool) -> list[tuple[str, Path, object]]:
+def forge_of(name: str | None) -> dict:
+    name = name or "github"
+    f = PLANT / "forges" / f"{name}.json"
+    if not f.is_file():
+        available = ", ".join(p.stem for p in (PLANT / "forges").glob("*.json") if not p.name.endswith(".schema.json"))
+        sys.exit(f"install: forge `{name}` does not exist. Available: {available}")
+    return json.loads(f.read_text(encoding="utf-8"))
+
+
+def with_forge(cfg: dict, forge: dict) -> dict:
+    """The forge sets how an issue is referenced in a commit and who runs the scheduled sweep."""
+    cfg = json.loads(json.dumps(cfg))
+    cfg["tracker"] = {**(cfg.get("tracker") or {}), "kind": forge["id"], "issuePattern": forge["issuePattern"],
+                      "issueExample": forge["issueExample"]}
+    for e in forge.get("ci") or []:
+        if e.get("runner") and isinstance(cfg.get(e["runner"]), dict):
+            cfg[e["runner"]]["runner"] = e["to"]
+    return cfg
+
+
+def plan(target: Path, profile: str | None, upgrade: bool, forge: str | None = None) -> list[tuple[str, Path, object]]:
     """[(acción, destino, fuente)] — acción: '+' crear, '~' reemplazar código, '=' ya existe."""
     items: list[tuple[str, Path, object]] = []
 
@@ -83,19 +110,21 @@ def plan(target: Path, profile: str | None, upgrade: bool) -> list[tuple[str, Pa
             disponibles = ", ".join(p.stem for p in (PLANT / "perfiles").glob("*.json"))
             sys.exit(f"install: no existe el perfil `{profile}`. Disponibles: {disponibles}")
         base = merge_profile(base, json.loads(pf.read_text(encoding="utf-8")))
+    fg = forge_of(forge)
+    base = with_forge(base, fg)
     add(target / ".hermes" / "harness.config.json", base)
 
     add(target / "AGENTS.md", PLANT / "AGENTS.md")
     add(target / "STATUS.md", PLANT / "STATUS.md")
     add(target / "docs" / "gotchas.md", PLANT / "gotchas.md")
     add(target / ".hermes" / "loop" / "tasks.md", PLANT / "tasks.md")
-    add(target / ".github" / "workflows" / "harness.yml", PLANT / "ci.yml")
-    add(target / ".github" / "workflows" / "harness-drift.yml", PLANT / "drift.yml")
+    for e in fg.get("ci") or []:
+        add(target / e["to"], PLANT / e["from"])
     for h in ("pre-commit", "commit-msg", "pre-push"):
-        add(target / ".githooks" / h, HOME / ".githooks" / h)
-    for f in sorted((HOME / ".hermes" / "skills").rglob("*")):
+        add(target / ".githooks" / h, RAIZ / ".githooks" / h)
+    for f in sorted((RAIZ / ".hermes" / "skills").rglob("*")):
         if f.is_file():
-            add(target / ".hermes" / "skills" / f.relative_to(HOME / ".hermes" / "skills"), f)
+            add(target / ".hermes" / "skills" / f.relative_to(RAIZ / ".hermes" / "skills"), f)
     return items
 
 
@@ -126,6 +155,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Instala el arnés en otro repo (dry-run por defecto).")
     ap.add_argument("repo")
     ap.add_argument("--profile")
+    ap.add_argument("--forge", default="github")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--upgrade", action="store_true")
     ap.add_argument("--link-plugin", action="store_true")
@@ -147,9 +177,9 @@ def main(argv: list[str]) -> int:
         print(("" if apply else "DRY-RUN — ") + "plugin de Hermes:\n" + link_plugin(target, apply))
         return 0
 
-    items = plan(target, profile, upgrade)
+    items = plan(target, profile, upgrade, a.forge)
     print(f"{'Instalando' if apply else 'DRY-RUN (nada se escribe; --apply para ejecutar)'} en {target}"
-          f"{f' · perfil {profile}' if profile else ''}\n")
+          f"{f' · perfil {profile}' if profile else ''} · forja {a.forge}\n")
     for accion, dst, _ in items:
         print(f"{accion}  {dst.relative_to(target)}")
     if apply:

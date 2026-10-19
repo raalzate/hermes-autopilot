@@ -1,0 +1,26 @@
+{
+  "$schema": "../workspace.schema.json",
+  "$comment": "The workspace (docs/workspace.md, ADR 0013). `management` is this repo: epics, milestones, the portfolio board, the wiki and the orchestrator queue, no code. Each `projects[]` entry is a coder with its repo, its forge (the workspace one by default), its stack profile, its agent and its local `dir` (to install the harness and queue the children). `agents` are the `loop.agentCommand` a coder can get. Written by `workspace.py init` and `workspace.py add`.",
+  "name": "my-workspace",
+  "forge": "github",
+  "management": {
+    "repo": "my-org/management",
+    "agent": "hermes",
+    "board": null
+  },
+  "projects": [],
+  "agents": {
+    "hermes": [
+      "hermes",
+      "chat",
+      "-q",
+      "{prompt}"
+    ],
+    "claude-code": [
+      "claude",
+      "-p",
+      "{prompt}"
+    ]
+  },
+  "epics": []
+}

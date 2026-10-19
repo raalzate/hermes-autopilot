@@ -1,0 +1,249 @@
+{
+  "$schema": "forge.schema.json",
+  "id": "github",
+  "title": "GitHub (`gh`)",
+  "description": "Repo, issues with sub-issues (the native parent→child link), milestones, GitHub Projects as the board, the wiki as a separate git repo and GitHub Actions as the pipeline.",
+  "verified": "2026-10-19 · gh 2.x: `issue create|view|edit`, `api` (sub_issues, milestones), `project create|item-add`, `repo create`",
+  "cli": "gh",
+  "integration": "github",
+  "issuePattern": "#\\d+",
+  "issueExample": "#12",
+  "closes": "Closes #{n}",
+  "childBody": "Part of {parent}",
+  "wiki": "https://github.com/{repo}.wiki.git",
+  "wikiNote": "GitHub creates the wiki repo with its first page, from the web (Wiki tab → Create the first page); on a PRIVATE repo the wiki needs a paid plan (Pro, Team or Enterprise), and `has_wiki` stays false on a free one. After that, `workspace.py wiki --apply` pushes it.",
+  "issueTemplate": {
+    "path": ".github/ISSUE_TEMPLATE/epic.md",
+    "header": "---\nname: Epic\nabout: A workspace epic, with its checklist of children\nlabels: epic\n---\n\n"
+  },
+  "ci": [
+    {
+      "from": "ci.yml",
+      "to": ".github/workflows/harness.yml"
+    },
+    {
+      "from": "drift.yml",
+      "to": ".github/workflows/harness-drift.yml",
+      "runner": "drift"
+    }
+  ],
+  "ops": {
+    "repo.create": [
+      "gh",
+      "repo",
+      "create",
+      "{repo}",
+      "--private",
+      "--add-readme",
+      [
+        "--description",
+        "{description}"
+      ]
+    ],
+    "issue.create": [
+      "gh",
+      "issue",
+      "create",
+      "-R",
+      "{repo}",
+      "--title",
+      "{title}",
+      "--body",
+      "{body}",
+      [
+        "--milestone",
+        "{milestone}"
+      ],
+      [
+        "--label",
+        "{label}"
+      ]
+    ],
+    "issue.id": [
+      "gh",
+      "api",
+      "repos/{repo}/issues/{n}",
+      "--jq",
+      ".id"
+    ],
+    "issue.link": [
+      "gh",
+      "api",
+      "repos/{parent_repo}/issues/{parent_n}/sub_issues",
+      "-X",
+      "POST",
+      "-F",
+      "sub_issue_id={child_id}"
+    ],
+    "issue.state": [
+      "gh",
+      "issue",
+      "view",
+      "{n}",
+      "-R",
+      "{repo}",
+      "--json",
+      "state",
+      "--jq",
+      ".state"
+    ],
+    "issue.body": [
+      "gh",
+      "issue",
+      "view",
+      "{n}",
+      "-R",
+      "{repo}",
+      "--json",
+      "body",
+      "--jq",
+      ".body"
+    ],
+    "issue.edit": [
+      "gh",
+      "issue",
+      "edit",
+      "{n}",
+      "-R",
+      "{repo}",
+      "--body",
+      "{body}"
+    ],
+    "milestone.create": [
+      "gh",
+      "api",
+      "repos/{repo}/milestones",
+      "-X",
+      "POST",
+      "-f",
+      "title={title}",
+      [
+        "-f",
+        "description={description}"
+      ],
+      [
+        "-f",
+        "due_on={date}"
+      ]
+    ],
+    "board.create": [
+      "gh",
+      "project",
+      "create",
+      "--owner",
+      "{owner}",
+      "--title",
+      "{title}",
+      "--format",
+      "json"
+    ],
+    "board.add": [
+      "gh",
+      "project",
+      "item-add",
+      "{board}",
+      "--owner",
+      "{owner}",
+      "--url",
+      "{url}"
+    ]
+  },
+  "output": {
+    "issue.create": {
+      "regex": "/issues/(\\d+)"
+    },
+    "board.create": {
+      "json": "number"
+    }
+  },
+  "states": {
+    "OPEN": "open",
+    "CLOSED": "closed"
+  },
+  "simulated": {
+    "issue.create": "https://github.com/{repo}/issues/{n}",
+    "issue.id": "{id}",
+    "issue.state": "{raw}",
+    "issue.body": "{body}",
+    "board.create": "{\"number\": {n}}"
+  },
+  "classes": {
+    "repo.create": "write",
+    "issue.create": "send",
+    "issue.id": "read",
+    "issue.link": "write",
+    "issue.state": "read",
+    "issue.body": "read",
+    "issue.edit": "write",
+    "milestone.create": "write",
+    "board.create": "write",
+    "board.add": "write"
+  },
+  "setup": [
+    "gh auth login                  # once, outside the agent",
+    "gh auth refresh -s project     # the board (GitHub Projects) needs this scope"
+  ],
+  "examples": [
+    {
+      "op": "issue.create",
+      "vars": {
+        "repo": "org/api",
+        "title": "Login",
+        "body": "Parte de org/gestion#1"
+      },
+      "argv": [
+        "gh",
+        "issue",
+        "create",
+        "-R",
+        "org/api",
+        "--title",
+        "Login",
+        "--body",
+        "Parte de org/gestion#1"
+      ],
+      "why": "without milestone or label, the optional groups stay out"
+    },
+    {
+      "op": "issue.create",
+      "vars": {
+        "repo": "org/gestion",
+        "title": "Épica",
+        "body": "x",
+        "milestone": "v1"
+      },
+      "argv": [
+        "gh",
+        "issue",
+        "create",
+        "-R",
+        "org/gestion",
+        "--title",
+        "Épica",
+        "--body",
+        "x",
+        "--milestone",
+        "v1"
+      ],
+      "why": "with a milestone, the group goes in whole"
+    },
+    {
+      "op": "issue.link",
+      "vars": {
+        "parent_repo": "org/gestion",
+        "parent_n": "1",
+        "child_id": "900"
+      },
+      "argv": [
+        "gh",
+        "api",
+        "repos/org/gestion/issues/1/sub_issues",
+        "-X",
+        "POST",
+        "-F",
+        "sub_issue_id=900"
+      ],
+      "why": "the sub-issue hangs from the parent by its internal id, not by its number"
+    }
+  ]
+}

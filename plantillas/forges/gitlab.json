@@ -1,0 +1,209 @@
+{
+  "$schema": "forge.schema.json",
+  "id": "gitlab",
+  "title": "GitLab (`glab`)",
+  "description": "Repo, issues with a «relates to» link (issue links), milestones, one board per project, the wiki as a separate git repo and GitLab CI as the pipeline. Adapter: checked by `workspace.py check` and dry-run, not against a real GitLab.",
+  "verified": "2026-10-19 · glab 1.x: `repo create`, `issue create|view|update`, `api` (issues/:iid/links, milestones, boards). GitLab API v4 contract.",
+  "cli": "glab",
+  "integration": "gitlab",
+  "issuePattern": "#\\d+",
+  "issueExample": "#12",
+  "closes": "Closes #{n}",
+  "childBody": "Part of {parent}",
+  "wiki": "https://gitlab.com/{repo}.wiki.git",
+  "wikiNote": "On a self-hosted GitLab, change the host of `wiki`. The wiki exists as soon as the project has it enabled.",
+  "issueTemplate": {
+    "path": ".gitlab/issue_templates/Epic.md",
+    "header": ""
+  },
+  "ci": [
+    {
+      "from": "ci/gitlab-ci.yml",
+      "to": ".gitlab-ci.yml",
+      "runner": "drift"
+    }
+  ],
+  "ops": {
+    "repo.create": [
+      "glab",
+      "repo",
+      "create",
+      "{repo}",
+      "--private",
+      [
+        "--description",
+        "{description}"
+      ]
+    ],
+    "issue.create": [
+      "glab",
+      "issue",
+      "create",
+      "-R",
+      "{repo}",
+      "--title",
+      "{title}",
+      "--description",
+      "{body}",
+      [
+        "--milestone",
+        "{milestone}"
+      ],
+      [
+        "--label",
+        "{label}"
+      ],
+      "--yes"
+    ],
+    "issue.id": null,
+    "issue.link": [
+      "glab",
+      "api",
+      "projects/{repo_enc}/issues/{n}/links",
+      "-X",
+      "POST",
+      "-f",
+      "target_project_id={parent_repo_enc}",
+      "-f",
+      "target_issue_iid={parent_n}"
+    ],
+    "issue.state": [
+      "glab",
+      "issue",
+      "view",
+      "{n}",
+      "-R",
+      "{repo}",
+      "-F",
+      "json"
+    ],
+    "issue.body": [
+      "glab",
+      "issue",
+      "view",
+      "{n}",
+      "-R",
+      "{repo}",
+      "-F",
+      "json"
+    ],
+    "issue.edit": [
+      "glab",
+      "issue",
+      "update",
+      "{n}",
+      "-R",
+      "{repo}",
+      "--description",
+      "{body}"
+    ],
+    "milestone.create": [
+      "glab",
+      "api",
+      "projects/{repo_enc}/milestones",
+      "-X",
+      "POST",
+      "-f",
+      "title={title}",
+      [
+        "-f",
+        "description={description}"
+      ],
+      [
+        "-f",
+        "due_date={date}"
+      ]
+    ],
+    "board.create": [
+      "glab",
+      "api",
+      "projects/{repo_enc}/boards",
+      "-X",
+      "POST",
+      "-f",
+      "name={title}"
+    ],
+    "board.add": null
+  },
+  "output": {
+    "issue.create": {
+      "regex": "/issues/(\\d+)"
+    },
+    "issue.state": {
+      "json": "state"
+    },
+    "issue.body": {
+      "json": "description"
+    },
+    "board.create": {
+      "json": "id"
+    }
+  },
+  "states": {
+    "opened": "open",
+    "closed": "closed"
+  },
+  "simulated": {
+    "issue.create": "https://gitlab.com/{repo}/-/issues/{n}",
+    "issue.state": "{\"state\": \"{raw}\"}",
+    "issue.body": "{json_body}",
+    "board.create": "{\"id\": {n}}"
+  },
+  "classes": {
+    "repo.create": "write",
+    "issue.create": "send",
+    "issue.link": "write",
+    "issue.state": "read",
+    "issue.body": "read",
+    "issue.edit": "write",
+    "milestone.create": "write",
+    "board.create": "write"
+  },
+  "setup": [
+    "glab auth login                # once, outside the agent"
+  ],
+  "examples": [
+    {
+      "op": "issue.create",
+      "vars": {
+        "repo": "grupo/web",
+        "title": "Login",
+        "body": "Parte de grupo/gestion#1"
+      },
+      "argv": [
+        "glab",
+        "issue",
+        "create",
+        "-R",
+        "grupo/web",
+        "--title",
+        "Login",
+        "--description",
+        "Parte de grupo/gestion#1",
+        "--yes"
+      ],
+      "why": "`--yes` always: without it glab asks and the process hangs"
+    },
+    {
+      "op": "issue.link",
+      "vars": {
+        "repo_enc": "grupo%2Fweb",
+        "n": "4",
+        "parent_repo_enc": "grupo%2Fgestion",
+        "parent_n": "1"
+      },
+      "argv": [
+        "glab",
+        "api",
+        "projects/grupo%2Fweb/issues/4/links",
+        "-X",
+        "POST",
+        "-f",
+        "target_project_id=grupo%2Fgestion",
+        "-f",
+        "target_issue_iid=1"
+      ],
+      "why": "the GitLab API names the project by its encoded path"
+    }
+  ]
+}

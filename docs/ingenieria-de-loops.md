@@ -64,7 +64,7 @@ La auditoría completa —lo cerrado con su prueba y lo abierto con su porqué�
 
 | Hueco | Por qué importa | Estado |
 |---|---|---|
-| un sensor **inferencial** con tasa de acierto (`harness-review` no tiene prueba de vida) | lo que el gate no puede verificar (diseño, intención) queda a juicio sin medir | abierto: ver [`guias-y-sensores.md`](guias-y-sensores.md) §6 |
-| varias tareas **en paralelo** (worktrees) | el loop trabaja una tarea a la vez, en una rama | abierto |
+| un sensor **inferencial** con tasa de acierto (`harness-review` no tiene prueba de vida) | lo que el gate no puede verificar (diseño, intención) queda a juicio sin medir | cerrado: `scripts/evals.py inferential` mide recall y precisión ([hueco 22](huecos.md)) |
+| varias tareas **en paralelo** (worktrees) | el loop trabajaba una tarea a la vez | cerrado: `loop.py --paralelo N` ([hueco 17](huecos.md)) |
 | el loop **abre el PR** | hoy lo publica un humano, a propósito (P13) | decisión, no hueco |
 | calidad de las **pruebas** del repo destino | el lazo 4 es tan bueno como el gate que lo cierra: si las pruebas no prueban nada, el verde no significa nada | del repo destino |

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evals/schema/suite.schema.json",
+  "title": "Deterministic evaluation · suite",
+  "description": "What the test copilot is built with (files, integrations), the thresholds of each group and which case files make up the suite. Adding cases never touches this file unless a new case file is added.",
+  "type": "object",
+  "required": ["version", "files", "integrations", "groups", "caseFiles"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string"},
+    "$comment": {"type": "string"},
+    "version": {"const": 1},
+    "files": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "description": "path → content, written into the test copilot before the run."
+    },
+    "integrations": {
+      "type": "object",
+      "additionalProperties": {"enum": ["lectura", "asistente", "autonomo"]},
+      "description": "integration id → harness profile (the profile names are the harness's own)."
+    },
+    "groups": {
+      "type": "object",
+      "required": ["guides", "rules", "signals"],
+      "additionalProperties": false,
+      "properties": {
+        "guides": {
+          "type": "object",
+          "required": ["thresholds", "reasonCriteria"],
+          "additionalProperties": false,
+          "properties": {
+            "$comment": {"type": "string"},
+            "thresholds": {"$ref": "#/$defs/accuracyThresholds"},
+            "reasonCriteria": {
+              "type": "object",
+              "required": ["minChars", "nextStepWords"],
+              "additionalProperties": false,
+              "properties": {
+                "minChars": {"type": "integer", "minimum": 1},
+                "nextStepWords": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 2},
+                                  "description": "Compared against the harness messages, which are Spanish: they stay in Spanish."}
+              }
+            }
+          }
+        },
+        "rules": {
+          "type": "object",
+          "required": ["thresholds"],
+          "additionalProperties": false,
+          "properties": {
+            "$comment": {"type": "string"},
+            "thresholds": {
+              "type": "object",
+              "required": ["minRecall", "maxFpr"],
+              "additionalProperties": false,
+              "properties": {"minRecall": {"$ref": "#/$defs/rate"}, "maxFpr": {"$ref": "#/$defs/rate"}}
+            }
+          }
+        },
+        "signals": {
+          "type": "object",
+          "required": ["thresholds"],
+          "additionalProperties": false,
+          "properties": {"$comment": {"type": "string"}, "thresholds": {"$ref": "#/$defs/accuracyThresholds"}}
+        }
+      }
+    },
+    "caseFiles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9/._-]+\\.json$"},
+      "description": "Paths relative to the suite file. Each one is a case file (case-file.schema.json)."
+    }
+  },
+  "$defs": {
+    "rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "accuracyThresholds": {
+      "type": "object",
+      "required": ["minAccuracy"],
+      "additionalProperties": false,
+      "properties": {"minAccuracy": {"$ref": "#/$defs/rate"}}
+    }
+  }
+}

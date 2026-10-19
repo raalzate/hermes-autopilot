@@ -1,0 +1,39 @@
+# El MISMO gate que corre el agente, en CI. No se mergea en rojo.
+# La señal `hermes plugins doctor` sale OMITIDA acá (no hay Hermes): omitido no es verde.
+# El barrido de deriva (`drift.py`) depende del reloj: corre sólo en la corrida programada.
+trigger:
+  - "*"
+pr:
+  - "*"
+schedules:
+  - cron: "0 12 * * 1" # lunes, 12:00 UTC
+    displayName: deriva semanal
+    branches:
+      include: [main]
+    always: true
+
+jobs:
+  - job: gate
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    strategy:
+      matrix:
+        linux: {imageName: ubuntu-latest}
+        mac: {imageName: macOS-latest}
+        windows: {imageName: windows-latest}
+    pool:
+      vmImage: $(imageName)
+    steps:
+      - task: UsePythonVersion@0
+        inputs: {versionSpec: "3.12"}
+      - script: python .hermes/harness/scripts/gate.py
+
+  - job: deriva
+    condition: eq(variables['Build.Reason'], 'Schedule')
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - checkout: self
+        fetchDepth: 0 # el barrido de reglas lee el historial
+      - task: UsePythonVersion@0
+        inputs: {versionSpec: "3.12"}
+      - script: python .hermes/harness/scripts/drift.py

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plantillas/forges/forge.schema.json",
+  "title": "Workspace · forge manifest",
+  "description": "A forge (GitHub, GitLab, Azure DevOps…) as data: each workspace operation as argv of the forge CLI, how to read its output, its issue states, the integration that governs its CLI, its pipeline and its examples. Adding a forge is adding a manifest (ADR 0013). Validated by scripts/schema_check.py; `workspace.py check` adds what a schema cannot say (every operation classified by its integration, the examples, a dispatch end to end).",
+  "type": "object",
+  "required": ["id", "title", "description", "verified", "cli", "integration", "issuePattern", "issueExample", "closes", "childBody", "wiki", "ci", "ops", "states", "simulated", "classes", "setup", "examples"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string"},
+    "$comment": {"type": "string"},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "title": {"type": "string", "minLength": 3},
+    "description": {"type": "string", "minLength": 10},
+    "verified": {"type": "string", "minLength": 10, "description": "When and against which CLI version the commands were checked."},
+    "cli": {"type": "string", "minLength": 1, "description": "The executable every operation starts with."},
+    "integration": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "The integration (plantillas/integraciones/<id>.json) that classifies this CLI for the brakes."},
+    "issuePattern": {"type": "string", "minLength": 1, "description": "What counts as an issue reference in a commit message (`tracker.issuePattern`)."},
+    "issueExample": {"type": "string", "minLength": 1},
+    "closes": {"type": "string", "pattern": "\\{n\\}", "description": "How a PR or commit closes an issue in this forge."},
+    "childBody": {"type": "string", "pattern": "\\{parent\\}", "description": "The child issue body: always names the parent."},
+    "wiki": {"type": "string", "pattern": "^https://", "description": "The wiki git remote; `{repo}`, `{owner}`, `{project}` are replaced."},
+    "wikiNote": {"type": "string"},
+    "defaults": {"type": "object", "additionalProperties": {"type": "string"}},
+    "repoParts": {"type": "integer", "minimum": 2, "maximum": 3, "description": "Parts of a repo name: 2 (`owner/repo`) or 3 (`org/project/repo`, Azure)."},
+    "lineBreak": {"type": "string", "description": "When an issue body is HTML (Azure), the line break written in place of `\\n`."},
+    "issueTemplate": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object", "required": ["path", "header"], "additionalProperties": false,
+         "properties": {"path": {"type": "string", "minLength": 3}, "header": {"type": "string"}}}
+      ],
+      "description": "Where the forge reads an issue template from, and the header it needs. `null`: the forge has none."
+    },
+    "ci": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["from", "to"],
+        "additionalProperties": false,
+        "properties": {
+          "from": {"type": "string", "minLength": 3, "description": "Template under plantillas/."},
+          "to": {"type": "string", "minLength": 3, "description": "Path in the installed repo."},
+          "runner": {"enum": ["drift"], "description": "This file runs a scheduled control: its config key gets this path as `runner`."}
+        }
+      }
+    },
+    "ops": {
+      "type": "object",
+      "required": ["repo.create", "issue.create", "issue.id", "issue.link", "issue.state", "issue.body", "issue.edit", "milestone.create", "board.create", "board.add"],
+      "additionalProperties": false,
+      "patternProperties": {"^(repo|issue|milestone|board)\\.[a-z]+$": {"$ref": "#/$defs/template"}}
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "object", "required": ["regex"], "additionalProperties": false, "properties": {"regex": {"type": "string", "minLength": 3}}},
+          {"type": "object", "required": ["json"], "additionalProperties": false, "properties": {"json": {"type": "string", "minLength": 1}}}
+        ]
+      },
+      "description": "How to read what an operation printed: the first group of a regex, or a dotted JSON path."
+    },
+    "states": {"type": "object", "additionalProperties": {"enum": ["open", "closed"]}, "description": "The forge's raw issue state → the workspace's."},
+    "simulated": {"type": "object", "additionalProperties": {"type": "string"}, "description": "What the simulated forge prints for an operation, in the same shape as the real CLI."},
+    "classes": {"type": "object", "additionalProperties": {"enum": ["read", "write", "send", "destructive"]},
+                "description": "The class each operation has for the brakes; `check` requires the integration to classify it the same."},
+    "setup": {"type": "array", "items": {"type": "string"}, "description": "What a human does once, outside the agent."},
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["op", "vars", "argv", "why"],
+        "additionalProperties": false,
+        "properties": {
+          "op": {"type": "string"},
+          "vars": {"type": "object", "additionalProperties": {"type": "string"}},
+          "argv": {"type": "array", "items": {"type": "string"}},
+          "why": {"type": "string", "minLength": 3}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "template": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "array", "minItems": 1, "items": {"oneOf": [{"type": "string"}, {"type": "array", "minItems": 1, "items": {"type": "string"}}]}}
+      ],
+      "description": "argv; a sub-list is an optional group. `null`: the forge does not need this operation."
+    }
+  }
+}

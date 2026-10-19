@@ -40,11 +40,15 @@ scripts/panel.py             el panel en vivo (SSE, 127.0.0.1) sobre el registro
 scripts/integ.py             las integraciones: catálogo, `add` prueba ANTES de escribir, dependencias aisladas con lock, `check` en el gate
 scripts/integ_run.py         el lanzador de un servidor MCP: secretos `secret://` sólo en su entorno, límites, `--probe` contra el servidor real
 scripts/casos.py             22 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
-scripts/revision.py          el revisor inferencial medido: recall y precisión contra evals/revision.json (P25)
 scripts/hermes_fuente.py     Hermes desde su código fuente, en el commit verificado (CI: job hermes-real)
+scripts/evals_page.py        la página pública de la evaluación (docs/evaluacion.html): gráficos, intervalos y rúbrica; `--check` en el gate
+scripts/schema_check.py      un validador de JSON Schema (draft 2020-12) de la biblioteca estándar: los esquemas de evals/schema/
+scripts/evals.py             las evaluaciones: `deterministic` (guías · reglas · señales contra un copiloto recién instalado) e `inferential` (revisor de diffs y modelo como agente, P25); las dos en el gate
+scripts/workspace.py         varios proyectos: gestión que orquesta y codificadores sobre una forja (`check` en el gate)
+plugin/harness/forge.py      núcleo puro del workspace: plantillas de la CLI de cada forja y el checklist de la épica
 .hermes/loop/tasks.md        la cola del loop autónomo
 .hermes/skills/              gate · lesson · new-guardrail · harness-audit · harness-review · harness-port
-plantillas/                  lo que se copia al repo destino, los perfiles de stack y el catálogo de integraciones
+plantillas/                  lo que se copia al repo destino, los perfiles de stack, el catálogo de integraciones, las forjas y el esqueleto de gestión
 docs/                        lo que se lee
 ```
 
@@ -85,6 +89,9 @@ python3 scripts/drift.py         # ¿algo se degradó sin que nadie lo tocara? (
 python3 scripts/cli.py status    # todo lo anterior en una pantalla; `cli.py panel` lo muestra en vivo
 python3 scripts/casos.py         # los casos replicables (también en el gate)
 python3 scripts/integ.py check   # las integraciones: cada manifiesto con cada perfil, por el plugin (también en el gate)
+python3 scripts/evals.py deterministic  # ¿guías, reglas y señales aguantan lo que no está en sus ejemplos, en inglés y en español? (también en el gate)
+python3 scripts/evals.py validate       # ¿la suite y sus casos siguen evals/schema/?
+python3 scripts/workspace.py check  # las forjas y un despacho de punta a punta contra la simulada (también en el gate)
 python3 scripts/cli.py nivel     # el nivel de autonomía del agente y la evidencia para subir (P27–P29)
 ```
 
@@ -111,6 +118,8 @@ python3 scripts/cli.py nivel     # el nivel de autonomía del agente y la eviden
 | operar el loop autónomo | `docs/loop-autonomo.md` |
 | la CLI y el panel | `docs/cli-y-panel.md` |
 | integraciones: catálogo, perfiles, secretos, recursos, dependencias | `docs/integraciones.md` |
+| workspace: gestión + codificadores, épicas, forjas (GitHub, GitLab, Azure) | `docs/workspace.md` |
+| evaluaciones determinista e inferencial: conjuntos, métricas, umbrales | `docs/evaluaciones.md` |
 | autonomía por niveles: L0–L3, evidencia, firma y descenso | `docs/autonomia.md` |
 | el workshop de agentes autónomos | `docs/workshop/README.md` |
 | el workshop del agente desarrollador que se gana la autonomía | `docs/workshop/autonomia/README.md` |

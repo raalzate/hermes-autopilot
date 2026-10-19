@@ -195,11 +195,22 @@ def integraciones_de(tarea: str, spec: dict) -> list[str] | None:
     return list(d) if isinstance(d, list) else None
 
 
+def issue_de(tarea: str) -> str:
+    """El issue de la forja que la tarea trabaja: `[issue: org/api#12]`, lo que escribe
+    `workspace.py dispatch` en la cola del codificador. "" si la tarea no viene de una épica."""
+    m = re.search(r"\[issue:\s*([^\]\s]+#\d+)\s*\]", tarea or "")
+    return m.group(1) if m else ""
+
+
 def entorno_agente(config: dict, root: Path, tarea: str = "") -> dict:
     """El entorno del agente. Con `loop.guardiaPython`, cada proceso Python que lance carga la
     guardia del arnés (plugin/guardia): lo que ABRE se compara con las reglas del repo. Y el
-    alcance de la tarea (`HARNESS_INTEGRACIONES`): el plugin frena toda integración que no nombre."""
+    alcance de la tarea (`HARNESS_INTEGRACIONES`): el plugin frena toda integración que no nombre.
+    Si la tarea viene de una épica del workspace, `HARNESS_ISSUE` dice qué issue cierra su PR."""
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    env.pop("HARNESS_ISSUE", None)
+    if issue_de(tarea):
+        env["HARNESS_ISSUE"] = issue_de(tarea)
     permitidas = integraciones_de(tarea, config.get("loop") or {})
     if permitidas is not None:
         env["HARNESS_INTEGRACIONES"] = ",".join(permitidas)

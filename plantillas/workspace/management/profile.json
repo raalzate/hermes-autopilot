@@ -1,0 +1,13 @@
+{
+  "$comment": "Profile of the management project: no stack code. What the gate checks is the workspace manifest, the roadmap and the wiki (the `workspace.py check` signal). Applied by `workspace.py init`; `check` requires the management repo not to declare other extensions (code goes to a coder).",
+  "name": "management",
+  "codeExtensions": [
+    ".json",
+    ".md"
+  ],
+  "codeGlobs": [
+    "wiki/",
+    "workspace.json",
+    "roadmap.json"
+  ]
+}

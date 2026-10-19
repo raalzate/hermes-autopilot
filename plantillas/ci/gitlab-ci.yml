@@ -1,0 +1,24 @@
+# El MISMO gate que corre el agente, en CI. No se mergea en rojo.
+# La señal `hermes plugins doctor` sale OMITIDA acá (no hay Hermes): omitido no es verde.
+# El barrido de deriva (`drift.py`) depende del reloj: corre sólo en un pipeline programado
+# (CI/CD → Schedules, p. ej. los lunes 12:00 UTC).
+stages:
+  - gate
+
+gate:
+  stage: gate
+  image: python:3.12
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  script:
+    - python .hermes/harness/scripts/gate.py
+
+deriva:
+  stage: gate
+  image: python:3.12
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  variables:
+    GIT_DEPTH: "0" # el barrido de reglas lee el historial
+  script:
+    - python .hermes/harness/scripts/drift.py

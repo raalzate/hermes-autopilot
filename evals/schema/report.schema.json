@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evals/schema/report.schema.json",
+  "title": "Deterministic evaluation · report",
+  "description": "What `scripts/evals.py deterministic --json <file>` writes: the verdict, each group's summary, the breakdown by language and every case result. Stable so a panel, a CI step or a diff between runs can read it.",
+  "type": "object",
+  "required": ["schemaVersion", "date", "profile", "cases", "green", "reds", "groups", "byLang", "results"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "profile": {"type": "string", "minLength": 1},
+    "langFilter": {"type": "array", "items": {"enum": ["en", "es", "neutral"]}},
+    "cases": {"type": "integer", "minimum": 0},
+    "green": {"type": "boolean"},
+    "reds": {"type": "array", "items": {"type": "string"}},
+    "groups": {
+      "type": "object",
+      "required": ["guides", "rules", "signals"],
+      "additionalProperties": false,
+      "properties": {
+        "guides": {"$ref": "#/$defs/accuracySummary"},
+        "signals": {"$ref": "#/$defs/accuracySummary"},
+        "rules": {
+          "type": "object",
+          "required": ["attacks", "caught", "recall", "evasions", "evasionRecall", "exactness", "innocents", "falsePositives", "fpr", "knownGaps", "p50Ms", "p95Ms", "byCategory"],
+          "additionalProperties": false,
+          "properties": {
+            "attacks": {"type": "integer", "minimum": 0},
+            "caught": {"type": "integer", "minimum": 0},
+            "recall": {"$ref": "#/$defs/rate"},
+            "evasions": {"type": "integer", "minimum": 0},
+            "evasionRecall": {"$ref": "#/$defs/rate"},
+            "exactness": {"$ref": "#/$defs/rate"},
+            "innocents": {"type": "integer", "minimum": 0},
+            "falsePositives": {"type": "integer", "minimum": 0},
+            "fpr": {"$ref": "#/$defs/rate"},
+            "knownGaps": {"type": "integer", "minimum": 0},
+            "p50Ms": {"type": "number", "minimum": 0},
+            "p95Ms": {"type": "number", "minimum": 0},
+            "byCategory": {"type": "object", "additionalProperties": {
+              "type": "object",
+              "required": ["attacks", "caught", "evasions", "evasionsCaught", "innocents", "falsePositives", "knownGaps"],
+              "additionalProperties": false,
+              "properties": {
+                "attacks": {"type": "integer"}, "caught": {"type": "integer"}, "evasions": {"type": "integer"},
+                "evasionsCaught": {"type": "integer"}, "innocents": {"type": "integer"},
+                "falsePositives": {"type": "integer"}, "knownGaps": {"type": "integer"}}}}
+          }
+        }
+      }
+    },
+    "byLang": {
+      "type": "object",
+      "propertyNames": {"enum": ["en", "es", "neutral"]},
+      "additionalProperties": {
+        "type": "object",
+        "required": ["cases", "hits"],
+        "additionalProperties": false,
+        "properties": {"cases": {"type": "integer", "minimum": 0}, "hits": {"type": "integer", "minimum": 0}}
+      },
+      "description": "Per content language: cases and hits (a hit is a case whose outcome is the expected one; a known gap is not a hit)."
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "group", "lang", "expected", "did", "hit"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "group": {"enum": ["guides", "rules", "signals"]},
+          "lang": {"enum": ["en", "es", "neutral"]},
+          "type": {"type": "string"},
+          "category": {"type": "string"},
+          "variant": {"type": "string"},
+          "expected": {"type": "string"},
+          "did": {"type": "string"},
+          "hit": {"type": "boolean"},
+          "knownGap": {"type": "boolean"},
+          "ms": {"type": "number", "minimum": 0},
+          "detail": {"type": "string"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "accuracySummary": {
+      "type": "object",
+      "required": ["cases", "hits", "accuracy", "byType"],
+      "additionalProperties": false,
+      "properties": {
+        "cases": {"type": "integer", "minimum": 0},
+        "hits": {"type": "integer", "minimum": 0},
+        "accuracy": {"$ref": "#/$defs/rate"},
+        "byType": {"type": "object", "additionalProperties": {
+          "type": "object",
+          "required": ["cases", "hits", "missed", "extra"],
+          "additionalProperties": false,
+          "properties": {"cases": {"type": "integer"}, "hits": {"type": "integer"}, "missed": {"type": "integer"}, "extra": {"type": "integer"}}}}
+      }
+    }
+  }
+}

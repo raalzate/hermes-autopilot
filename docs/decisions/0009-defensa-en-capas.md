@@ -17,7 +17,7 @@ Cada hueco se cierra en la capa donde se puede **ver** lo que pasa, no donde ser
 | un programa lee un secreto | en el disco: si no está, no se lee | `loop.aislar` — cada tarea en un `git worktree`, que no trae lo ignorado |
 | un programa Python abre lo que no debe | en el intérprete: cada `open` tiene la ruta real | `plugin/guardia` — audit hook (PEP 578), cargado por `sitecustomize` en el entorno del agente |
 | una inyección hace daño | en el canal de salida, justo después de la entrada | sesión contaminada — tras leer a un tercero, publicar o persistir escala |
-| un juicio acierta a veces | en una tasa contra un conjunto etiquetado | `scripts/revision.py`, con `omitIfExit` en el gate y un pipeline nocturno |
+| un juicio acierta a veces | en una tasa contra un conjunto etiquetado | `scripts/evals.py inferential`, con `omitIfExit` en el gate y un pipeline nocturno |
 | el contrato con Hermes | en el Hermes real | `scripts/hermes_fuente.py` y el job `hermes-real` en cada PR |
 
 Y en ningún caso se finge: la guardia sólo cubre Python (lo dice), la sesión contaminada corta

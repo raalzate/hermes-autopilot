@@ -78,12 +78,12 @@ lo que el config describe.
 | Pregunta | Respuesta de este arnés | Estado |
 |---|---|---|
 | ¿Cómo mantener **coherentes** guías y frenos? | una sola fuente (el config, que leen el plugin y los hooks de git); los casos del self-test salen del `example` de cada regla; y la regla `COHERENCIA`: lo que una guía recomienda en un bloque de shell, o un `reason` ofrece como salida, no puede estar en `terminal.deny` (P18) | cubierto |
-| ¿Cómo medir la **cobertura** del arnés? | cada regla con su `example` por el plugin real (P2), inocentes que no deben frenar (P3), 97 mutaciones que tienen que poner rojo el self-test, y `scripts/map.py` con las etapas sin control | cubierto |
+| ¿Cómo medir la **cobertura** del arnés? | cada regla con su `example` por el plugin real (P2), inocentes que no deben frenar (P3), 150 mutaciones que tienen que poner rojo el self-test, y `scripts/map.py` con las etapas sin control | cubierto |
 | ¿Cómo se **ve** lo que el arnés hace? | registro de eventos y `scripts/panel.py` en vivo (P22); cuántas veces mordió cada regla se lee del registro | cubierto |
 | ¿Quién cierra el **lazo de la tarea**? | `scripts/loop.py`: el gate como salida, el mismo rojo escala (P16 → P21). Ver [`ingenieria-de-loops.md`](ingenieria-de-loops.md) | cubierto |
 | ¿Cuánto **cuesta**? | `scripts/timing.py`, en el gate | cubierto |
 | ¿Qué pasa cuando **dos instrucciones chocan**? | la precedencia de la constitución, y parar y escalar | declarado (REVIEW) |
-| ¿Cómo se prueba un control **inferencial**? | con una tasa, no con un ejemplo: `scripts/revision.py` mide recall y precisión del revisor contra 16 diffs etiquetados salidos de los casos (`evals/revision.json`), con umbrales en `review`. Sin modelo sale OMITIDA; lo corre `hermes-nocturno.yml` con la key como secreto | cubierto (se activa con el secreto `HERMES_ENV`) |
+| ¿Cómo se prueba un control **inferencial**? | con una tasa, no con un ejemplo: `scripts/evals.py inferential` mide recall y precisión del revisor contra 16 diffs etiquetados salidos de los casos (`evals/inferential/cases/reviewer.json`), con umbrales en `review`. Sin modelo sale OMITIDA; lo corre `hermes-nocturno.yml` con la key como secreto | cubierto (se activa con el secreto `HERMES_ENV`) |
 | **Deriva** continua | `scripts/drift.py` por `drift.yml`: un `STATUS.md` vencido es rojo; una regla que nunca cazó nada es aviso (P20) | cubierto para el arnés |
 | **Comportamiento** | la forma del proceso (gate, registro); que las pruebas prueben algo es del repo destino | a medias |
 
