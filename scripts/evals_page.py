@@ -137,21 +137,37 @@ def dataset() -> dict:
     extra += [(f.relative_to(HOME).as_posix(), "measurement") for f in sorted((HOME / "evals" / "measurements").glob("reviewer-*.txt"))]
     for path, role in extra:
         files.append({"path": path, "role": role, "cases": None, "schema": None})
+    lines: dict[str, list] = {}
+    for i, f in enumerate(files):
+        f["label"] = f"D{i + 1}"
+        if f["cases"]:
+            for n, line in enumerate((HOME / f["path"]).read_text(encoding="utf-8").splitlines(), 1):
+                m = re.match(r'\s*"id":\s*"([^"]+)"', line)
+                if m and m.group(1) not in lines:
+                    lines[m.group(1)] = [f["label"], f["path"], n]
     whole = hashlib.sha256()
     for f in files:
         # LF always: a Windows checkout with `core.autocrlf` must give the same fingerprint.
         digest = hashlib.sha256((HOME / f["path"]).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
         f["sha256"] = digest
         whole.update(f["path"].encode("utf-8") + b"\0" + digest.encode("ascii"))
-    return {"files": files, "fingerprint": whole.hexdigest()[:16],
+    return {"files": files, "fingerprint": whole.hexdigest()[:16], "lines": lines,
             "cases": sum(f["cases"] or 0 for f in files), "license": "Apache-2.0"}
 
 
 def dataset_row(d: dict) -> str:
     schema = (f'<a href="{REPO_URL}{e(d["schema"])}"><code>{e(Path(d["schema"]).name)}</code></a>' if d["schema"] else "—")
-    return (f'<tr><td><a href="{REPO_URL}{e(d["path"])}"><code>{e(d["path"])}</code></a></td>'
+    return (f'<tr id="d-{d["label"]}"><td><b>[{d["label"]}]</b></td><td><a href="{REPO_URL}{e(d["path"])}"><code>{e(d["path"])}</code></a></td>'
             f'<td>{e(DATA_ROLE_ES.get(d["role"], d["role"]))}</td><td>{d["cases"] if d["cases"] is not None else "—"}</td>'
             f'<td><code title="{d["sha256"]}">{d["sha256"][:12]}</code></td><td>{schema}</td></tr>')
+
+
+def source(f: dict, roles: list[str], n: int | str | None = None, note: str = "") -> str:
+    """«Fuente: [D3] rules.json · n = 85 · …»: every number on the page says which data it comes from."""
+    refs = [d for d in f["dataset"]["files"] if d["role"] in roles]
+    links = " · ".join(f'<a href="#d-{d["label"]}">[{d["label"]}]</a> <code>{e(Path(d["path"]).name)}</code>' for d in refs)
+    extra = (f" · n = {n}" if n is not None else "") + (f" · {note}" if note else "")
+    return f'<span class="src">Fuente: {links}{extra} · corrida <code>{f["signature"]}</code> · <a href="#casos">casos</a></span>'
 
 
 def measure() -> tuple[dict, dict]:
@@ -401,6 +417,34 @@ def svg_history(runs: list[dict], now: dict) -> str:
     return "".join(out)
 
 
+GROUP_ES = {"guides": "Guías", "rules": "Reglas", "signals": "Señales"}
+VARIANT_ES = {"direct": "directa", "evasion": "evasión", "innocent": "inocente"}
+
+
+def appendix(f: dict) -> str:
+    """One collapsible table per group: every case, linked to its line in the data file."""
+    out = []
+    for g in ("guides", "rules", "signals"):
+        rows = [r for r in f["results"] if r["group"] == g]
+        body = []
+        for r in rows:
+            label, path, line = f["dataset"]["lines"].get(r["id"], ["?", "", 0])
+            kind = CATEGORY_ES.get(r.get("category", ""), "") or TYPE_ES.get(r.get("type", ""), r.get("type", ""))
+            state = ("gap", "hueco") if r.get("knownGap") else (("ok", "✓") if r["hit"] else ("bad", "✗"))
+            body.append(f'<tr><td><a href="{REPO_URL}{e(path)}#L{line}"><code>{e(r["id"])}</code></a></td><td>[{label}]</td><td>{e(r["lang"])}</td>'
+                        f'<td>{e(kind)}</td><td>{e(VARIANT_ES.get(r.get("variant", ""), ""))}</td><td>{e(r["expected"])}</td><td>{e(r["did"])}</td>'
+                        f'<td class="{state[0]}">{state[1]}</td></tr>')
+        hits = sum(1 for r in rows if r["hit"])
+        gaps = sum(1 for r in rows if r.get("knownGap"))
+        misses = len(rows) - hits - gaps
+        summary = f"{GROUP_ES[g]} · {len(rows)} casos · {hits} como se esperaba" + (f" · {gaps} huecos conocidos" if gaps else "") \
+            + (f" · {misses} fallas" if misses else "")
+        out.append(f'<details class="cases"><summary>{summary}</summary><div class="tbl"><table>'
+                   '<thead><tr><th>Caso</th><th>Ref.</th><th>Idioma</th><th>Categoría o tipo</th><th>Variante</th><th>Esperado</th>'
+                   f'<th>Obtenido</th><th></th></tr></thead><tbody>{"".join(body)}</tbody></table></div></details>')
+    return "".join(out)
+
+
 def page(f: dict, lat: dict) -> str:
     gr = f["groups"]
     rv = f.get("reviewer")
@@ -432,6 +476,7 @@ def page(f: dict, lat: dict) -> str:
     if not rv:
         rev_block = "<p>Todavía no hay una medición real del revisor.</p>"
     dataset_rows = "".join(dataset_row(d) for d in f["dataset"]["files"])
+    cases_appendix = appendix(f)
     facts_json = json.dumps(f, ensure_ascii=False, sort_keys=True).replace("</", "<\\/")
     lat_json = json.dumps(lat, ensure_ascii=False).replace("</", "<\\/")
     return f"""<!doctype html>
@@ -525,6 +570,12 @@ td.g {{ color: var(--verde); font-weight: 600; }} td.r {{ color: var(--rojo); fo
 .rubric .what {{ display: block; font-weight: 400; font-size: .82rem; color: var(--ink-faint); }}
 .score {{ display: block; font-family: var(--f-display); font-size: 2.4rem; font-weight: 800; line-height: 1.1; margin: .2rem 0 .6rem; }}
 .score small {{ font-size: 1rem; font-weight: 600; color: var(--ink-soft); }}
+.src {{ display: block; font-family: var(--f-mono); font-size: .74rem; color: var(--ink-faint); margin-top: .35rem; overflow-wrap: anywhere; }}
+.src a {{ color: var(--accent-ink); }}
+details.cases {{ border: 1px solid var(--rule-soft); border-radius: 6px; background: var(--surface); margin: .6rem 0; }}
+details.cases > summary {{ cursor: pointer; padding: .7rem 1rem; font-family: var(--f-display); font-weight: 600; }}
+details.cases table {{ margin: 0; font-size: .84rem; }}
+td.ok {{ color: var(--verde); }} td.bad {{ color: var(--rojo); font-weight: 600; }} td.gap {{ color: var(--ocre); }}
 .cite {{ font-family: var(--f-mono); font-size: .82rem; background: var(--surface); border: 1px solid var(--rule-soft); border-radius: 4px; padding: .8rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }}
 .note {{ border-left: 3px solid var(--ocre); padding: .4rem .9rem; color: var(--ink-soft); background: var(--surface); margin: 1rem 0; }}
 ul {{ max-width: 72ch; }}
@@ -539,7 +590,7 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
   <nav class="nav" aria-label="Secciones">
     <a href="index.html">← Portada</a><a href="#resumen">Resumen</a><a href="#metodo">Método</a><a href="#resultados">Resultados</a><a href="#idiomas">Idiomas</a>
     <a href="#stacks">Stacks</a><a href="#costo">Costo</a><a href="#historia">Historia</a><a href="#inferencial">IA</a>
-    <a href="#rubrica">Rúbrica</a><a href="#validez">Validez</a><a href="#datos">Datos</a><a href="#reproducir">Reproducir</a>
+    <a href="#rubrica">Rúbrica</a><a href="#validez">Validez</a><a href="#datos">Datos</a><a href="#casos">Casos</a><a href="#reproducir">Reproducir</a>
   </nav>
   <button class="theme" id="theme" type="button" aria-label="Cambiar tema">tema</button>
 </div></div>
@@ -551,12 +602,12 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
     copiloto <b>recién instalado</b>, igual que los ve Hermes. Cada tasa va con su intervalo de confianza del 95 %: con un número
     finito de casos, un 100 % observado no prueba un 100 % real, y el intervalo dice cuánto más bajo podría ser.</p>
   <div class="stats">
-    <div class="stat"><span class="lbl">reglas · recall</span><b>{pct(gr["rulesRecall"]["p"], 0)}</b><span class="ci">IC95 [{pct(gr["rulesRecall"]["lo"])}, 100 %] · {gr["rulesRecall"]["k"]}/{gr["rulesRecall"]["n"]}</span></div>
-    <div class="stat"><span class="lbl">evasión · recall</span><b>{pct(gr["evasionRecall"]["p"], 0)}</b><span class="ci">IC95 [{pct(gr["evasionRecall"]["lo"])}, {pct(gr["evasionRecall"]["hi"])}] · {gr["evasionRecall"]["k"]}/{gr["evasionRecall"]["n"]}</span></div>
-    <div class="stat"><span class="lbl">falsos positivos</span><b>{pct(gr["fpr"]["p"], 0)}</b><span class="ci">IC95 [0 %, {pct(gr["fpr"]["hi"])}] · {gr["fpr"]["k"]}/{gr["fpr"]["n"]}</span></div>
-    <div class="stat"><span class="lbl">guías · señales</span><b>{gr["guides"]["k"] + gr["signals"]["k"]}/{gr["guides"]["n"] + gr["signals"]["n"]}</b><span class="ci">guías {gr["guides"]["k"]}/{gr["guides"]["n"]} · señales {gr["signals"]["k"]}/{gr["signals"]["n"]}</span></div>
-    <div class="stat"><span class="lbl">stacks en verde</span><b>{sum(1 for p in f["profiles"].values() if p["green"])}/{len(f["profiles"])}</b><span class="ci">resultados {"idénticos" if len({p["signature"] for p in f["profiles"].values()}) == 1 else "distintos"}</span></div>
-    <div class="stat"><span class="lbl">rúbrica</span><b>{score}/{top}</b><span class="ci">{pct(score / top, 0)} · 12 dimensiones, de 1 a 4</span></div>
+    <div class="stat"><span class="lbl">reglas · recall</span><b>{pct(gr["rulesRecall"]["p"], 0)}</b><span class="ci">IC95 [{pct(gr["rulesRecall"]["lo"])}, 100 %] · {gr["rulesRecall"]["k"]}/{gr["rulesRecall"]["n"]}</span>{source(f, ["rules"], gr["rulesRecall"]["n"])}</div>
+    <div class="stat"><span class="lbl">evasión · recall</span><b>{pct(gr["evasionRecall"]["p"], 0)}</b><span class="ci">IC95 [{pct(gr["evasionRecall"]["lo"])}, {pct(gr["evasionRecall"]["hi"])}] · {gr["evasionRecall"]["k"]}/{gr["evasionRecall"]["n"]}</span>{source(f, ["rules"], gr["evasionRecall"]["n"], "variant: evasion")}</div>
+    <div class="stat"><span class="lbl">falsos positivos</span><b>{pct(gr["fpr"]["p"], 0)}</b><span class="ci">IC95 [0 %, {pct(gr["fpr"]["hi"])}] · {gr["fpr"]["k"]}/{gr["fpr"]["n"]}</span>{source(f, ["rules"], gr["fpr"]["n"], "variant: innocent")}</div>
+    <div class="stat"><span class="lbl">guías · señales</span><b>{gr["guides"]["k"] + gr["signals"]["k"]}/{gr["guides"]["n"] + gr["signals"]["n"]}</b><span class="ci">guías {gr["guides"]["k"]}/{gr["guides"]["n"]} · señales {gr["signals"]["k"]}/{gr["signals"]["n"]}</span>{source(f, ["guides", "signals"], gr["guides"]["n"] + gr["signals"]["n"])}</div>
+    <div class="stat"><span class="lbl">stacks en verde</span><b>{sum(1 for p in f["profiles"].values() if p["green"])}/{len(f["profiles"])}</b><span class="ci">resultados {"idénticos" if len({p["signature"] for p in f["profiles"].values()}) == 1 else "distintos"}</span>{source(f, ["guides", "rules", "signals"], f"{f['cases']} × {len(f['profiles'])}")}</div>
+    <div class="stat"><span class="lbl">rúbrica</span><b>{score}/{top}</b><span class="ci">{pct(score / top, 0)} · 12 dimensiones, de 1 a 4</span>{source(f, ["guides", "rules", "signals", "reviewer", "agent", "measurement"])}</div>
   </div>
 </div></header>
 
@@ -585,26 +636,27 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
 <section id="resultados"><div class="wrap">
   <h2>Resultados</h2>
   <figure class="fig">{svg_forest(det_rows, .8, 1.0, "Tasas de acierto con IC95", "Cada grupo y cada idioma con su estimación puntual e intervalo de Wilson al 95 %, en un eje de 80 a 100 %.")}
-    <figcaption>Estimación puntual (●) e intervalo de Wilson al 95 %, en un eje de 80 a 100 %. Sin huecos conocidos. El intervalo se angosta con más casos, no con más aciertos.</figcaption></figure>
+    <figcaption>Estimación puntual (●) e intervalo de Wilson al 95 %, en un eje de 80 a 100 %. Sin huecos conocidos. El intervalo se angosta con más casos, no con más aciertos.<br>{source(f, ["guides", "rules", "signals"], f["cases"])}</figcaption></figure>
   <figure class="fig">{svg_forest([("Falsos positivos", gr["fpr"])], 0, .3, "Tasa de falsos positivos con IC95", "Inocentes frenados sobre el total, con su intervalo, en un eje de 0 a 30 %.")}
-    <figcaption>{gr["fpr"]["k"]} de {gr["fpr"]["n"]} inocentes frenados. Con cero eventos, el IC95 llega hasta {pct(gr["fpr"]["hi"])} y la regla del tres da {pct(gr["fprRuleOfThree"] or 0)}: harían falta más inocentes para afirmar una tasa baja con más precisión.</figcaption></figure>
+    <figcaption>{gr["fpr"]["k"]} de {gr["fpr"]["n"]} inocentes frenados. Con cero eventos, el IC95 llega hasta {pct(gr["fpr"]["hi"])} y la regla del tres da {pct(gr["fprRuleOfThree"] or 0)}: harían falta más inocentes para afirmar una tasa baja con más precisión.<br>{source(f, ["rules"], gr["fpr"]["n"], "variant: innocent")}</figcaption></figure>
   <h3>Reglas por categoría</h3>
   <figure class="fig">{svg_categories(f["byCategory"])}
-    <figcaption>Exactitud (cazado con la decisión esperada, bloquear o preguntar): {pct(gr["exactness"])}.</figcaption></figure>
+    <figcaption>Exactitud (cazado con la decisión esperada, bloquear o preguntar): {pct(gr["exactness"])}.<br>{source(f, ["rules"], gr["rulesRecall"]["n"] + len(f["knownGaps"]) + gr["fpr"]["n"], "campo category")}</figcaption></figure>
   <h3>Guías y señales por tipo</h3>
   <figure class="fig">{svg_forest(type_rows, .5, 1.0, "Guías y señales por tipo", "Acierto por tipo de caso con su IC95, en un eje de 50 a 100 %.")}
-    <figcaption>Con pocos casos por tipo, los intervalos son anchos: son los primeros lugares donde sumar casos.</figcaption></figure>
+    <figcaption>Con pocos casos por tipo, los intervalos son anchos: son los primeros lugares donde sumar casos.<br>{source(f, ["guides", "signals"], gr["guides"]["n"] + gr["signals"]["n"], "campo type")}</figcaption></figure>
   <h3>Huecos conocidos</h3>
   <p>Ataques que pasan y están documentados: el abierto de «lo que no se nombra en el comando».</p>
   <ul>{gaps}</ul>
-  <p>Fallas sin documentar en esta corrida: <b>{len(f["undocumentedFailures"])}</b>.</p>
+  <p>Fallas sin documentar en esta corrida: <b>{len(f["undocumentedFailures"])}</b>. {source(f, ["rules"], len(f["knownGaps"]), "campo knownGap")}</p>
 </div></section>
 
 <section id="idiomas"><div class="wrap">
   <h2>Inglés y español</h2>
   <p>Inglés: <b>{ci_text(f["byLang"]["en"])}</b>. Español: <b>{ci_text(f["byLang"]["es"])}</b>. Diferencia (inglés − español):
     <b>{f["langDiff"]["d"] * 100:+.1f} puntos</b>, IC95 [{f["langDiff"]["lo"] * 100:+.1f}, {f["langDiff"]["hi"] * 100:+.1f}]. El intervalo
-    contiene el cero: con estos casos, no hay evidencia de que el arnés funcione distinto en un idioma que en el otro.</p>
+    contiene el cero: con estos casos, no hay evidencia de que el arnés funcione distinto en un idioma que en el otro.
+    {source(f, ["guides", "rules", "signals"], f["byLang"]["en"]["n"] + f["byLang"]["es"]["n"], "campo lang, gemelos -es")}</p>
   <p class="note">Las dos asimetrías que encontró la primera corrida bilingüe ya están arregladas: una memoria con «bypassing the gate» o
     «saltearse el gate» y un cron que «desplegá a producción» pasaban. Lo que queda es del diseño de Hermes y está registrado como
     caso: su escáner de contexto sólo conoce inglés, así que una inyección en español en el AGENTS.md llega al agente.</p>
@@ -618,7 +670,8 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
     <thead><tr><th>Perfil</th><th>Veredicto</th><th>Guías</th><th>Reglas (cazados)</th><th>Falsos positivos</th><th>Señales</th><th>Firma</th></tr></thead>
     <tbody>{profile_rows}</tbody>
   </table></div>
-  <p>Determinismo: dos corridas seguidas del perfil <code>python</code> dieron {"resultados idénticos" if f["deterministic"] else "resultados DISTINTOS"} (firma <code>{f["signature"]}</code>).</p>
+  <p>Determinismo: dos corridas seguidas del perfil <code>python</code> dieron {"resultados idénticos" if f["deterministic"] else "resultados DISTINTOS"} (firma <code>{f["signature"]}</code>).
+    {source(f, ["guides", "rules", "signals"], f"{f['cases']} por perfil")}</p>
 </div></section>
 
 <section id="costo"><div class="wrap">
@@ -626,13 +679,13 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
   <figure class="fig">{svg_latency(lat)}
     <figcaption>{lat["n"]} llamadas a <code>pre_tool_call</code>: p50 {lat["p50"]:.2f} ms, p95 {lat["p95"]:.2f} ms, p99 {lat["p99"]:.2f} ms, máximo {lat["max"]:.2f} ms.
       El presupuesto del arnés es de 50 ms: en Hermes, un callback que se pasa de tiempo bloquea la herramienta. La latencia depende de la
-      máquina; los demás números no.</figcaption></figure>
+      máquina; los demás números no.<br>{source(f, ["rules"], lat["n"], "una llamada por caso de regla")}</figcaption></figure>
 </div></section>
 
 <section id="historia"><div class="wrap">
   <h2>Historia: lo que cada corrida encontró</h2>
   <figure class="fig">{svg_history(f["history"], {**gr, "cases": f["cases"]})}
-    <figcaption>Cada punto es una corrida que encontró algo y lo arregló antes de la siguiente.</figcaption></figure>
+    <figcaption>Cada punto es una corrida que encontró algo y lo arregló antes de la siguiente.<br>{source(f, ["history", "rules"], len(f["history"]) + 1, "las anteriores y esta")}</figcaption></figure>
   <div class="tbl"><table>
     <thead><tr><th>Corrida</th><th>Casos</th><th>Reglas</th><th>Falsos positivos</th><th>Lo que encontró</th></tr></thead>
     <tbody>{hist_rows}</tbody>
@@ -644,6 +697,7 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
   <p>Lo que juzga un modelo acierta a veces: se mide con una tasa contra casos etiquetados. Son dos grupos: el revisor de diffs
     (32 casos, 16 diffs con su tarea en inglés y en español) y un modelo como agente dentro del loop (12 casos sobre 6 casos replicables).</p>
   {rev_block}
+  <p>{source(f, ["reviewer", "agent", "measurement"], f["dataset"]["cases"] - f["cases"])}</p>
   <p class="note">Pendiente: los casos en inglés del revisor y todo el grupo del agente todavía no se midieron con un modelo real. La
     evaluación está lista (<code>scripts/evals.py inferential</code>) y corre en el pipeline nocturno cuando hay un modelo configurado.</p>
 </div></section>
@@ -675,7 +729,7 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
   <p>Lo que se midió, con qué versión exacta. Cada archivo sigue su JSON Schema y se valida antes de cada corrida; la huella del conjunto
     cambia si cambia un solo caso, y entonces esta página queda vieja y el gate lo marca.</p>
   <div class="tbl"><table>
-    <thead><tr><th>Archivo</th><th>Rol</th><th>Casos</th><th>SHA-256</th><th>Esquema</th></tr></thead>
+    <thead><tr><th>Ref.</th><th>Archivo</th><th>Rol</th><th>Casos</th><th>SHA-256</th><th>Esquema</th></tr></thead>
     <tbody>{dataset_rows}</tbody>
   </table></div>
   <p>Huella del conjunto: <code>{f["dataset"]["fingerprint"]}</code> · {f["dataset"]["cases"]} casos ({f["cases"]} deterministas y
@@ -685,6 +739,13 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
   <pre class="cite">Hermes Autopilot. Evaluación determinista e inferencial del arnés del copiloto (conjunto {f["dataset"]["fingerprint"]}),
 {f["cases"]} casos deterministas en inglés y en español, {e(date.today().isoformat())}.
 https://github.com/raalzate/hermes-autopilot/tree/main/evals</pre>
+</div></section>
+
+<section id="casos"><div class="wrap">
+  <h2>Anexo: cada caso</h2>
+  <p>El resultado de cada caso de esta corrida (perfil <code>python</code>, firma <code>{f["signature"]}</code>). El <code>id</code> lleva a su línea
+    en el conjunto de datos; la columna «Ref.» dice de qué archivo es ([D…] en <a href="#datos">Conjunto de datos</a>).</p>
+  {cases_appendix}
 </div></section>
 
 <section id="reproducir"><div class="wrap">
