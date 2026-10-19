@@ -494,7 +494,7 @@ footer {{ border-top: 1px solid var(--rule-soft); padding: 2rem 0 3rem; color: v
 <div class="bar"><div class="wrap">
   <a class="brand" href="index.html">Hermes <span>Autopilot</span></a>
   <nav class="nav" aria-label="Secciones">
-    <a href="#resumen">Resumen</a><a href="#metodo">Método</a><a href="#resultados">Resultados</a><a href="#idiomas">Idiomas</a>
+    <a href="index.html">← Portada</a><a href="#resumen">Resumen</a><a href="#metodo">Método</a><a href="#resultados">Resultados</a><a href="#idiomas">Idiomas</a>
     <a href="#stacks">Stacks</a><a href="#costo">Costo</a><a href="#historia">Historia</a><a href="#inferencial">IA</a>
     <a href="#rubrica">Rúbrica</a><a href="#validez">Validez</a><a href="#reproducir">Reproducir</a>
   </nav>

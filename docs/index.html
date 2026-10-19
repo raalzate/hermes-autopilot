@@ -65,10 +65,31 @@ code { font-family: var(--f-mono); font-size: .88em; background: var(--surface-2
 .bar .wrap { display: flex; align-items: center; gap: 1rem; height: 3.2rem; }
 .brand { font-family: var(--f-display); font-weight: 800; text-decoration: none; color: var(--ink); white-space: nowrap; }
 .brand span { color: var(--accent-ink); }
-.nav { display: flex; gap: 1rem; overflow-x: auto; scrollbar-width: none; font-family: var(--f-mono); font-size: var(--step--1); margin-left: auto; }
-.nav::-webkit-scrollbar { display: none; }
-.nav a { color: var(--ink-soft); text-decoration: none; white-space: nowrap; }
-.nav a:hover { color: var(--accent-ink); }
+/* Navegación: cuatro grupos desplegables (<details>: funcionan sin JS) y el informe de la
+   evaluación a mano. En el celular, un botón abre el panel con los grupos uno debajo del otro. */
+.nav { display: flex; align-items: center; gap: .25rem; margin-left: auto; font-family: var(--f-mono); font-size: var(--step--1); }
+.menu { position: relative; }
+.menu > summary { list-style: none; cursor: pointer; color: var(--ink-soft); padding: .35rem .6rem; border-radius: 3px; white-space: nowrap; user-select: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary::after { content: "▾"; margin-left: .35rem; font-size: .8em; color: var(--ink-faint); }
+.menu > summary:hover, .menu[open] > summary { color: var(--ink); background: var(--surface-2); }
+.menu.active > summary { color: var(--accent-ink); }
+.drop { position: absolute; right: 0; top: calc(100% + .4rem); min-width: 19rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 18px 40px -24px rgba(9,12,20,.6); padding: .4rem; display: grid; gap: 1px; }
+.drop a { display: grid; gap: .1rem; padding: .5rem .65rem; border-radius: 4px; text-decoration: none; color: var(--ink); }
+.drop a b { font-family: var(--f-display); font-weight: 600; font-size: .95rem; }
+.drop a span { color: var(--ink-faint); font-size: .74rem; }
+.drop a:hover, .drop a[aria-current="true"] { background: var(--surface-2); }
+.drop a[aria-current="true"] b { color: var(--accent-ink); }
+.nav-cta { color: var(--accent-ink); text-decoration: none; border: 1px solid var(--accent); border-radius: 3px; padding: .3rem .6rem; white-space: nowrap; margin-left: .35rem; }
+.nav-cta:hover { background: var(--accent); color: #fff; }
+.menu-btn { display: none; appearance: none; margin-left: auto; border: 1px solid var(--rule); background: var(--surface); color: var(--ink-soft); font-family: var(--f-mono); font-size: var(--step--1); border-radius: 3px; padding: .2rem .55rem; cursor: pointer; }
+@media (max-width: 56rem) {
+  .menu-btn { display: inline-block; }
+  .nav { display: none; position: absolute; left: 0; right: 0; top: 3.2rem; flex-direction: column; align-items: stretch; gap: 0; background: var(--paper); border-bottom: 1px solid var(--rule); padding: .5rem var(--pad) 1rem; max-height: calc(100vh - 3.2rem); overflow-y: auto; }
+  .bar.open .nav { display: flex; }
+  .drop { position: static; box-shadow: none; border: 0; min-width: 0; padding: 0 0 .4rem .5rem; }
+  .nav-cta { margin: .6rem 0 0; text-align: center; }
+}
 .theme { appearance: none; border: 1px solid var(--rule); background: var(--surface); color: var(--ink-soft); font-family: var(--f-mono); font-size: var(--step--1); border-radius: 3px; padding: .2rem .5rem; cursor: pointer; }
 
 /* secciones */
@@ -370,12 +391,39 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 <div class="bar">
   <div class="wrap">
     <a class="brand" href="#top">Hermes <span>Autopilot</span></a>
-    <nav class="nav" aria-label="Secciones">
-      <a href="#flujo">En conjunto</a><a href="#mapa">Mapa</a><a href="#acciones">Acción</a><a href="#niveles">Niveles</a><a href="#tesis">Tesis</a><a href="#autonomia">Autonomía</a><a href="#prueba">Prueba</a><a href="#huecos">Huecos</a><a href="#onboarding">Onboarding</a>
-      <a href="#piezas">Piezas</a><a href="#contrato">Contrato</a><a href="#aprende">Aprende</a>
-      <a href="#cicatrices">Cicatrices</a><a href="#portar">Portar</a><a href="#principios">Principios</a>
-      <a href="#docs">Docs</a><a href="evaluacion.html">Evaluación</a>
+    <nav class="nav" id="nav" aria-label="Secciones">
+      <details class="menu"><summary>Qué es</summary><div class="drop">
+        <a href="#flujo"><b>En conjunto</b><span>una tarea, de la petición al PR</span></a>
+        <a href="#mapa"><b>Mapa</b><span>alma, cerebro, manos y empresa</span></a>
+        <a href="#acciones"><b>Una acción</b><span>entre «el agente quiere» y «el agente hizo»</span></a>
+        <a href="#niveles"><b>Niveles</b><span>L0 observa · L3 autonomía</span></a>
+        <a href="#tesis"><b>La tesis</b><span>lazos de control, no un modelo mejor</span></a>
+      </div></details>
+      <details class="menu"><summary>Cómo funciona</summary><div class="drop">
+        <a href="#autonomia"><b>Autonomía</b><span>un loop con salida, tope y freno de mano</span></a>
+        <a href="#piezas"><b>Piezas</b><span>seis piezas contra seis fallas</span></a>
+        <a href="#freno"><b>Un freno</b><span>editás JSON, el agente lee el motivo</span></a>
+        <a href="#contrato"><b>Contrato</b><span>lo que Hermes promete, leído en su código</span></a>
+        <a href="#aprende"><b>Aprende</b><span>memoria y skills por los mismos frenos</span></a>
+        <a href="#workspace"><b>Workspace</b><span>varios repos, un orquestador, tres forjas</span></a>
+        <a href="#portar"><b>Portar</b><span>plugin o shell hook, ocho stacks</span></a>
+      </div></details>
+      <details class="menu"><summary>Evidencia</summary><div class="drop">
+        <a href="#prueba"><b>Prueba</b><span>cada número, un comando</span></a>
+        <a href="#evaluacion"><b>Evaluación</b><span>guías, reglas y señales, con IC95</span></a>
+        <a href="#huecos"><b>Huecos</b><span>lo que no puede prometer</span></a>
+        <a href="#cicatrices"><b>Cicatrices</b><span>lo que costó aprenderlo</span></a>
+        <a href="#principios"><b>Principios</b><span>cada uno con su comando</span></a>
+      </div></details>
+      <details class="menu"><summary>Empezar</summary><div class="drop">
+        <a href="#onboarding"><b>Onboarding</b><span>de cero, en ocho pasos</span></a>
+        <a href="#docs"><b>Docs</b><span>todo lo que esta página resume, en largo</span></a>
+        <a href="evaluacion.html"><b>Informe de evaluación</b><span>gráficos, intervalos y la rúbrica</span></a>
+        <a href="https://github.com/raalzate/hermes-autopilot"><b>GitHub</b><span>el código, los casos y los docs</span></a>
+      </div></details>
+      <a class="nav-cta" href="evaluacion.html">Evaluación →</a>
     </nav>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="nav">menú</button>
     <button class="theme" id="theme" type="button" aria-label="Cambiar tema">tema</button>
   </div>
 </div>
@@ -394,6 +442,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
         <span class="chip">plugin en proceso</span>
         <span class="chip">verificado en Hermes real</span>
         <span class="chip">Linux · macOS · Windows</span>
+        <span class="chip">multi-repo · GitHub · GitLab · Azure</span>
       </div>
       <div class="cta">
         <a class="btn btn-1" href="#flujo">Ver todo en conjunto</a>
@@ -583,8 +632,32 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
   </div>
 </div></section>
 
+<section id="evaluacion"><div class="wrap sec-inner">
+  <div class="rail"><b>04</b>evaluación</div>
+  <div>
+    <div class="col stack">
+      <h2>Los frenos, medidos con lo que no está en sus ejemplos</h2>
+      <p class="lede">El self-test prueba que cada regla caza su propio ejemplo: tautológico. La evaluación determinista pasa
+        <b data-cifra="eval-casos">180</b> casos independientes, en inglés y en español, por un copiloto recién instalado en ocho
+        stacks, y da cada tasa con su intervalo de confianza del 95 %.</p>
+    </div>
+    <div class="grid three">
+      <div class="cell stat"><span class="lbl">reglas · ataques</span><b data-cifra="eval-recall">85/85</b><span class="why">frenados o escalados a un humano, sin contar los huecos conocidos. Con este tamaño, el recall real está por encima de <span data-cifra="eval-recall-ic">95.7 %</span> con un 95 % de confianza.</span><span class="cmd">python3 scripts/evals.py deterministic</span></div>
+      <div class="cell stat"><span class="lbl">variantes de evasión</span><b data-cifra="eval-evasion">54/54</b><span class="why">el mismo ataque por otro camino: <code>cat app/../.env</code>, <code>git commit -nm</code>, un patch V4A, un <code>scp</code>.</span><span class="cmd">rules · variant: evasion</span></div>
+      <div class="cell stat"><span class="lbl">falsos positivos</span><b data-cifra="eval-fp">0/32</b><span class="why">inocentes que se parecen a un ataque y no lo son. Con cero eventos, la cota superior del IC95 es <span data-cifra="eval-fp-ic">10.7 %</span>.</span><span class="cmd">rules · variant: innocent</span></div>
+      <div class="cell stat"><span class="lbl">guías · señales</span><b><span data-cifra="eval-guias">23/23</span> · <span data-cifra="eval-senales">37/37</span></b><span class="why">si el AGENTS.md llega al agente y si cada freno dice qué hacer; si el fin del turno, la respuesta, el resultado y el commit avisan.</span><span class="cmd">guides · signals</span></div>
+      <div class="cell stat"><span class="lbl">inglés · español</span><b><span data-cifra="eval-en">41/41</span> · <span data-cifra="eval-es">41/41</span></b><span class="why">el mismo chequeo en los dos idiomas: encontró una memoria con «saltearse el gate» y un cron que «desplegá a producción» que pasaban.</span><span class="cmd">--lang es</span></div>
+      <div class="cell stat"><span class="lbl">rúbrica</span><b data-cifra="eval-rubrica">43/48</b><span class="why">doce dimensiones de 1 a 4, calculadas con los datos. Las dos de IA quedan bajas porque todavía no se midieron con un modelo en los dos idiomas.</span><span class="cmd">python3 scripts/evals_page.py</span></div>
+    </div>
+    <p class="col" style="margin-top:1.2rem">Stacks en verde: <b data-cifra="eval-perfiles">8/8</b>, con resultados idénticos. La parte inferencial
+      (un modelo que revisa diffs y un modelo como agente en el loop) tiene su propia suite y corre cuando hay un modelo configurado.</p>
+    <p class="cta"><a class="btn btn-1" href="evaluacion.html">Ver el informe completo: gráficos, intervalos y rúbrica</a>
+      <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/evaluaciones.md">Cómo se evalúa</a></p>
+  </div>
+</div></section>
+
 <section id="huecos"><div class="wrap sec-inner">
-  <div class="rail"><b>04</b>huecos</div>
+  <div class="rail"><b>05</b>huecos</div>
   <div>
     <div class="col stack">
       <h2>Lo que el arnés no puede prometer, escrito</h2>
@@ -610,7 +683,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
 </div></section>
 
 <section id="onboarding"><div class="wrap sec-inner">
-  <div class="rail"><b>05</b>onboarding</div>
+  <div class="rail"><b>06</b>onboarding</div>
   <div>
     <div class="col stack">
       <h2>De cero a un agente autónomo, en ocho pasos</h2>
@@ -647,7 +720,7 @@ python3 .hermes/harness/scripts/cli.py loop --apply</span></li>
 </div></section>
 
 <section id="piezas"><div class="wrap sec-inner">
-  <div class="rail"><b>06</b>piezas</div>
+  <div class="rail"><b>07</b>piezas</div>
   <div>
     <div class="col stack">
       <h2>Seis piezas, cada una contra una falla concreta</h2>
@@ -664,7 +737,7 @@ python3 .hermes/harness/scripts/cli.py loop --apply</span></li>
 </div></section>
 
 <section id="freno"><div class="wrap sec-inner">
-  <div class="rail"><b>07</b>freno</div>
+  <div class="rail"><b>08</b>freno</div>
   <div>
     <div class="col stack">
       <h2>Editás JSON. El agente lee el motivo.</h2>
@@ -694,7 +767,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="contrato"><div class="wrap sec-inner">
-  <div class="rail"><b>08</b>contrato</div>
+  <div class="rail"><b>09</b>contrato</div>
   <div>
     <div class="col stack">
       <h2>Lo que Hermes promete, leído en su código</h2>
@@ -718,7 +791,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="aprende"><div class="wrap sec-inner">
-  <div class="rail"><b>09</b>aprende</div>
+  <div class="rail"><b>10</b>aprende</div>
   <div>
     <div class="col stack">
       <h2>Lo aprendido pasa por los mismos frenos que lo ejecutado</h2>
@@ -733,7 +806,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="cicatrices"><div class="wrap sec-inner">
-  <div class="rail"><b>10</b>cicatrices</div>
+  <div class="rail"><b>11</b>cicatrices</div>
   <div class="stack col">
     <h2>Lo que costó aprenderlo</h2>
     <p class="lede">Cada una terminó en un mecanismo (y en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/gotchas.md">docs/gotchas.md</a>), no en una advertencia.</p>
@@ -745,7 +818,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="portar"><div class="wrap sec-inner">
-  <div class="rail"><b>11</b>portar</div>
+  <div class="rail"><b>12</b>portar</div>
   <div>
     <div class="col stack">
       <h2>Plugin o shell hook: el mismo núcleo, dos adaptadores</h2>
@@ -776,8 +849,40 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
   </div>
 </div></section>
 
+<section id="workspace"><div class="wrap sec-inner">
+  <div class="rail"><b>13</b>workspace</div>
+  <div>
+    <div class="col stack">
+      <h2>Varios repos, un orquestador</h2>
+      <p class="lede">Un repo de <b>gestión</b> sin código, donde Hermes parte épicas y las despacha, y <b>codificadores</b> con su repo, su
+        tablero, su cola y su agente (Claude Code o Hermes), cada uno con su arnés. Lo que los une es la épica.</p>
+    </div>
+    <div class="grid two">
+      <div class="cell"><span class="mark">gestión · Hermes orquesta</span><h3>Épicas, milestones, tablero y wiki</h3>
+        <p>Una épica es un issue con un checklist de hijos, una línea por tarea: <code>- [ ] [api] Endpoint de login</code>. <code>dispatch</code>
+          crea un issue hijo por línea en el repo de ese proyecto, vinculado al padre, y lo encola en el loop del codificador. Es todo o nada,
+          y despachar dos veces no repite.</p><span class="foot">workspace.py init · epic · dispatch · status · wiki</span></div>
+      <div class="cell"><span class="mark">codificador · su agente</span><h3>Su repo, su tablero, su cola</h3>
+        <p>El hijo llega con «Part of gestion#12» y a la cola como <code>[issue: org/api#5]</code>: el loop le pasa al agente qué issue cierra
+          su PR. <code>status</code> marca en la épica <code>[x]</code> lo cerrado y <code>[!]</code> lo que el loop escaló a un humano.</p><span class="foot">workspace.py add --profile python --agent claude-code</span></div>
+    </div>
+    <div class="tscroll"><table>
+      <thead><tr><th>Forja</th><th>CLI</th><th>Padre → hijo</th><th>Tablero</th><th>Pipeline</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>GitHub</td><td style="white-space:nowrap"><code>gh</code></td><td>sub-issue, también entre repos</td><td>GitHub Projects</td><td>Actions</td><td><b>probado en vivo</b>: repos, milestones, épica, sub-issues, tableros, <code>status</code></td></tr>
+        <tr><td>GitLab</td><td style="white-space:nowrap"><code>glab</code></td><td>issue link</td><td>board del proyecto</td><td><code>.gitlab-ci.yml</code></td><td>adaptador, en seco</td></tr>
+        <tr><td>Azure DevOps</td><td style="white-space:nowrap"><code>az</code></td><td>Parent</td><td>Azure Boards</td><td><code>azure-pipelines.yml</code></td><td>adaptador, en seco</td></tr>
+      </tbody>
+    </table></div>
+    <p class="col" style="margin-top:1rem;color:var(--ink-soft)">Una forja es un manifiesto (<code>plantillas/forges/&lt;id&gt;.json</code>, con su esquema): agregar una
+      es agregar un archivo. Sin <code>--apply</code> todo corre en seco, y con <code>--apply</code> publicar lo aprueba un humano: el loop nunca publica.</p>
+    <p class="cta"><a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workspace.md">El workspace, de cero</a>
+      <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/decisions/0013-workspace-y-forjas.md">ADR 0013</a></p>
+  </div>
+</div></section>
+
 <section id="principios"><div class="wrap sec-inner">
-  <div class="rail"><b>12</b>principios</div>
+  <div class="rail"><b>14</b>principios</div>
   <div>
     <div class="col stack">
       <h2><span data-cifra="principios">29</span> principios, cada uno con su comando</h2>
@@ -815,7 +920,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
 </div></section>
 
 <section id="docs"><div class="wrap sec-inner">
-  <div class="rail"><b>13</b>docs</div>
+  <div class="rail"><b>15</b>docs</div>
   <div>
     <div class="col stack"><h2>Todo lo que esta página resume, en largo</h2></div>
     <div class="grid three">
@@ -832,6 +937,9 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/README.md" style="text-decoration:none;color:inherit"><span class="mark">casos</span><h3><span data-cifra="casos">22</span> casos replicables</h3><p>Programación, infraestructura, oficina, datos, soporte y operación: el atajo del agente y cómo lo para el arnés.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/integraciones.md" style="text-decoration:none;color:inherit"><span class="mark">integraciones</span><h3>Integraciones</h3><p>Correo, WhatsApp, navegador headless, Google, Microsoft, GitHub y bases: perfiles, destinatarios, secretos, recursos y dependencias con lock.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md" style="text-decoration:none;color:inherit"><span class="mark">huecos</span><h3>Auditoría de huecos</h3><p>Lo que se cerró, con su prueba, y lo que sigue abierto.</p></a>
+      <a class="cell" href="evaluacion.html" style="text-decoration:none;color:inherit"><span class="mark">evaluación</span><h3>Informe de evaluación</h3><p>Gráficos, intervalos de confianza, los ocho stacks, el historial y la rúbrica.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/evaluaciones.md" style="text-decoration:none;color:inherit"><span class="mark">evaluar</span><h3>Cómo se evalúa</h3><p>Determinista e inferencial, los esquemas, los casos bilingües y cómo sumar uno.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workspace.md" style="text-decoration:none;color:inherit"><span class="mark">workspace</span><h3>Varios repos, un orquestador</h3><p>Gestión y codificadores, épicas, forjas (GitHub, GitLab, Azure).</p></a>
     </div>
   </div>
 </div></section>
@@ -915,6 +1023,28 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
   $("f-pausa").addEventListener("click", (e) => { pausa = !pausa; e.currentTarget.setAttribute("aria-pressed", pausa); e.currentTarget.textContent = pausa ? "▶ seguir" : "⏸ pausa"; });
   progreso(0); marcar(0); arnes(0, false);
   new IntersectionObserver((es, ob) => { if (es[0].isIntersecting) { ob.disconnect(); ir(0, quieto); } }, { threshold: 0.3 }).observe($("flujo"));
+})();
+
+(() => {
+  // La navegación: un solo grupo abierto a la vez, se cierra al elegir o al hacer clic afuera, y
+  // marca la sección que se está leyendo (y su grupo).
+  const bar = document.querySelector(".bar"), btn = document.getElementById("menu-btn");
+  const menus = [...document.querySelectorAll(".menu")];
+  menus.forEach((m) => m.addEventListener("toggle", () => { if (m.open) menus.forEach((o) => { if (o !== m) o.open = false; }); }));
+  const cerrar = () => { menus.forEach((m) => (m.open = false)); bar.classList.remove("open"); btn.setAttribute("aria-expanded", "false"); };
+  document.querySelectorAll(".drop a").forEach((a) => a.addEventListener("click", cerrar));
+  document.addEventListener("click", (ev) => { if (!ev.target.closest(".bar")) cerrar(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrar(); });
+  btn.addEventListener("click", () => { const abierto = bar.classList.toggle("open"); btn.setAttribute("aria-expanded", String(abierto)); });
+  const links = new Map([...document.querySelectorAll('.drop a[href^="#"]')].map((a) => [a.getAttribute("href").slice(1), a]));
+  const visto = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    links.forEach((a) => a.removeAttribute("aria-current"));
+    menus.forEach((m) => m.classList.remove("active"));
+    const a = links.get(e.target.id);
+    if (a) { a.setAttribute("aria-current", "true"); a.closest(".menu").classList.add("active"); }
+  }), { rootMargin: "-40% 0px -55% 0px" });
+  links.forEach((_, id) => { const el = document.getElementById(id); if (el) visto.observe(el); });
 })();
 
 const raiz = document.documentElement;
