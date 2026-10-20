@@ -465,7 +465,38 @@ def cifras(casos: list[dict]) -> dict[str, str]:
         "revisor-recall": uno(r"recall (\d+ ?%)", revisor),
         "revisor-precision": uno(r"precisión (\d+ ?%)", revisor),
     }
+    out.update(cifras_de_la_evaluacion(leer("docs/evaluacion.html")))
     return {k: v for k, v in out.items() if v}
+
+
+def cifras_de_la_evaluacion(pagina: str) -> dict[str, str]:
+    """Los números de la evaluación, de los datos embebidos en docs/evaluacion.html (los escribe
+    scripts/evals_page.py con una corrida real; su `--check` en el gate exige que estén al día)."""
+    import re
+
+    m = re.search(r'<script type="application/json" id="facts">(.*?)</script>', pagina, re.S)
+    if not m:
+        return {}
+    try:
+        f = json.loads(m.group(1).replace("<\\/", "</"))
+    except ValueError:
+        return {}
+    g, pct = f["groups"], (lambda x: f"{x * 100:.1f} %".replace(".0 %", " %"))
+    puntos = sum(r["score"] for r in f.get("rubric") or [])
+    return {
+        "eval-casos": str(f["cases"]),
+        "eval-recall": f"{g['rulesRecall']['k']}/{g['rulesRecall']['n']}",
+        "eval-recall-ic": pct(g["rulesRecall"]["lo"]),
+        "eval-evasion": f"{g['evasionRecall']['k']}/{g['evasionRecall']['n']}",
+        "eval-fp": f"{g['fpr']['k']}/{g['fpr']['n']}",
+        "eval-fp-ic": pct(g["fpr"]["hi"]),
+        "eval-guias": f"{g['guides']['k']}/{g['guides']['n']}",
+        "eval-senales": f"{g['signals']['k']}/{g['signals']['n']}",
+        "eval-en": f"{f['byLang']['en']['k']}/{f['byLang']['en']['n']}",
+        "eval-es": f"{f['byLang']['es']['k']}/{f['byLang']['es']['n']}",
+        "eval-perfiles": f"{sum(1 for v in f['profiles'].values() if v['green'])}/{len(f['profiles'])}",
+        "eval-rubrica": f"{puntos}/{4 * len(f.get('rubric') or [])}",
+    }
 
 
 _CIFRA = r'(<(\w+)[^>]*\bdata-cifra="{k}"[^>]*>)([^<]*)(</\2>)'
