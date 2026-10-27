@@ -152,3 +152,21 @@ revisor inferencial con un modelo (necesita el secreto `HERMES_ENV`).
   acciones amplias (P9) porque un checkpoint no deshace un `git push`.
 - `security.protected_instruction_files`: `write_file` a `AGENTS.md`/`CLAUDE.md` siempre pide
   aprobación. `.hermes.md` no está en esa lista por defecto (`doctor.py` lo avisa).
+
+## Lo que enseñó un piloto en producción
+
+El agente SRE de doctiling (Hermes v0.22.2, Railway, Telegram) dejó estos comportamientos de Hermes
+que conviene saber antes de escribir un plugin con herramientas propias ([ADR 0014](decisions/0014-piloto-en-produccion.md)):
+
+| Comportamiento de Hermes | Dónde | Qué hacer |
+|---|---|---|
+| Un resultado **exitoso** con `"error"` o `"failed"` en sus primeros 500 caracteres se cuenta como fallo: el modelo ve «looks like a loop» y la auditoría lo registra con `status: error` | `agent/display.py::_detect_tool_failure` | que un resultado OK no lleve esas cadenas en la cabeza (ni `"error": ""`, ni un estado `FAILED` de los datos); los errores reales, con `success: false` |
+| Con `tools.tool_search` en `auto`, Hermes difiere las herramientas detrás de `tool_search`/`tool_describe`/`tool_call` y el modelo adivina el esquema: 17 llamadas para una pregunta | config de Hermes | con pocas herramientas propias, `tool_search.enabled: off` (`doctor.py` lo avisa) y argumentos planos con nombres que no inviten a anidar |
+| `transform_llm_output` **no se encadena**: gana el primer plugin que devuelve texto, y cargan en orden alfabético | `agent/turn_finalizer.py::apply_llm_output_transform`, `resolve_plugin_load_order` | un plugin que carga antes que `repo-harness` y transforma la respuesta tiene que poner él el aviso de terceros, o devolver `None` (`doctor.py` lo avisa) |
+| `MEDIA:<ruta>`, en cualquier parte de un texto que se manda, adjunta ese archivo | `hermes_cli/send_cmd.py` | `output.defang` lo rompe en la respuesta; lo que un script mande con `hermes send` lo tiene que romper él |
+| Las variables de las plataformas (`TELEGRAM_*`…) no pasan a los procesos hijos | `tools/environments/local_env_policy.py::build_subprocess_env` | un script de cron que manda mensajes lee el token de `$HERMES_HOME/.env`, no del entorno |
+| La revisión de skills en segundo plano lanza un agente que llama a `skill_manage` cada `skills.creation_nudge_interval` iteraciones (10) | config de Hermes | en un nivel sin aprender, `0`: si no, choca con el freno (`doctor.py` lo avisa) |
+| Un plugin que Hermes no puede leer se saltea con un `Skipping …` en el log, y Hermes arranca igual, sin frenos | `plugins_loader.py` | verificar con `hermes plugins list` que esté `enabled` y que no haya ningún `Skipping`, no sólo que el archivo exista (con podman y SELinux, el volumen con `:Z`) |
+
+Para las herramientas de un plugin propio, ver también
+[integraciones: diseñar las herramientas](integraciones.md#diseñar-las-herramientas-de-un-plugin-propio).

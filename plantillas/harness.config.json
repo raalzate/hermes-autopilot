@@ -251,12 +251,14 @@
       },
       {
         "id": "nivel-firma",
-        "pattern": "cli\\.py\\s+(nivel\\s+(subir|bajar|declarar)|recomendacion\\s+(aceptar|rechazar))\\b",
+        "pattern": "cli\\.py\\s+(nivel\\s+(subir|bajar|declarar)|recomendacion\\s+(aceptar|rechazar|juzgar)|hallazgo\\s+juzgar)\\b",
         "example": "python3 .hermes/harness/scripts/cli.py nivel subir --firma Ana",
         "moreExamples": [
-          "python3 scripts/cli.py recomendacion aceptar .hermes/recomendaciones/001.md"
+          "python3 scripts/cli.py recomendacion aceptar .hermes/recomendaciones/001.md",
+          "python3 scripts/cli.py recomendacion juzgar issue#12 aceptada --firma Ana",
+          "python3 scripts/cli.py hallazgo juzgar issue#40 falso --firma Ana"
         ],
-        "reason": "subir de nivel o juzgar una recomendación es evidencia que firma un humano: el agente no se la da a sí mismo (P28). Corré el comando vos, desde tu terminal."
+        "reason": "subir de nivel o juzgar una recomendación o una alerta es evidencia que firma un humano: el agente no se la da a sí mismo (P28). Corré el comando vos, desde tu terminal."
       }
     ],
     "innocent": [
@@ -339,6 +341,12 @@
       "pattern": "^\\.git/",
       "example": ".git/config",
       "reason": "historia de git: fuera del alcance del agente."
+    },
+    {
+      "id": "autonomia-firmada",
+      "pattern": "^config/autonomia\\.json$",
+      "example": "config/autonomia.json",
+      "reason": "las transiciones de autonomía las firma una persona con un PR revisado que agrega una entrada: el agente no se da ni se reinicia un nivel (P28). Proponé el cambio en la respuesta."
     },
     {
       "id": "arnes-codigo",
@@ -587,6 +595,16 @@
       }
     ],
     "redactWith": "[secreto tapado por el arnés]",
+    "$defang": "Marcadores que el canal de salida interpreta y que un texto citado no puede activar. Hermes adjunta el archivo de `MEDIA:<ruta>` en cualquier parte del texto que manda por el gateway (hermes_cli/send_cmd.py): una línea de log con `MEDIA:/opt/data/.env` mandaba los secretos al chat (piloto doctiling-sre, 2026-10-21). `replace` reemplaza cada coincidencia; el self-test pasa `example` y exige que no quede ninguna.",
+    "defang": [
+      {
+        "id": "media-adjunto",
+        "pattern": "(?i)MEDIA\\s*:",
+        "replace": "MEDIA[:]",
+        "example": "el log dice: error al abrir MEDIA:/opt/data/.env",
+        "reason": "un texto citado (un log, un correo) no puede adjuntar un archivo local a la respuesta."
+      }
+    ],
     "innocent": [
       "listo: el gate quedó verde",
       "la variable se llama OPENAI_API_KEY y va en el gestor de secretos"
@@ -809,6 +827,14 @@
     "inicial": "L0",
     "estado": ".git/harness-autonomia.json",
     "comando": "python3 .hermes/harness/scripts/cli.py nivel",
+    "$firmadas": "Producción sin shell ni `.git` (piloto doctiling-sre): un archivo versionado con `transiciones` [{id, accion: declarar|subir, a, firma, motivo}]. Cada entrada la agrega un PR revisado (mergear es firmar) y `cli.py nivel aplicar` la aplica una vez en el arranque. `HARNESS_AUTONOMIA_FILE` lleva el estado a un volumen. El freno `autonomia-firmada` impide que el agente lo edite.",
+    "firmadas": "config/autonomia.json",
+    "certificados": {
+      "$comment": "EL PORQUÉ COMPROBABLE (ADR 0014). Una propuesta del agente puede traer al lado un certificado (`<propuesta><extension>`): los hechos, las reglas y la deducción de su conclusión. `verificador` es el comando que lo comprueba SIN compartir código con el agente (en el piloto doctiling-sre, `oo-horn`, el verificador en Lean 4 de open-ontologies); `{certificado}` se reemplaza por la ruta. Sale 0 = verificado. Lo corre la CLI al juzgar (`recomendacion aceptar|rechazar|juzgar|verificar`), nunca un freno, y queda en el evento: la métrica `certificadosVerificadosMin` lo cuenta. Vacío = el repo no certifica. El arnés no elige la lógica: prueba que la conclusión se deduce de las reglas dadas, no que las reglas sean correctas.",
+      "verificador": [],
+      "extension": ".cert.json",
+      "timeoutSegundos": 30
+    },
     "niveles": {
       "L0": {
         "nombre": "Observador",

@@ -88,3 +88,60 @@ mecanismo no alcanzó: hace falta uno más fuerte, no otra entrada.
 - **Regla:** sin PyYAML, las listas YAML se leen línea por línea, no con una regex de bloque.
 - **Mecanismo:** `manifest_hooks` en `scripts/selftest.py` (línea por línea); self-test §1 cruza
   `provides_hooks` contra lo que `register(ctx)` registra, en las dos direcciones.
+
+### GOTCHA — En producción la autonomía no se podía ganar
+
+- **Síntoma:** en el piloto doctiling-sre (Railway, 2026-10-27), «días en el nivel» marcaba 0 para
+  siempre y L1 era imposible aunque el agente tenía 30 sesiones limpias.
+- **Causa:** el estado vivía en `.git/harness-autonomia.json` y la imagen no tiene `.git`: el nivel
+  no se guardaba y `desde` quedaba en 0. Firmar pedía además una shell en el contenedor, y el puerto
+  22 estaba bloqueado.
+- **Regla:** el arnés no supone `.git` ni terminal donde corre el agente: el estado va a un volumen
+  y la firma es un PR revisado.
+- **Mecanismo:** `HARNESS_AUTONOMIA_FILE`, `autonomia.inicio` (desde el primer evento),
+  `autonomia.firmadas` + `cli.py nivel aplicar`, freno `autonomia-firmada`; self-test §15 y la
+  mutación «una transición firmada se aplica dos veces».
+
+### GOTCHA — Dos bloqueos que no eran del agente le costaron la ventana de evidencia
+
+- **Síntoma:** en la primera ventana del piloto, dos `nivel-L0-*` dejaron dos sesiones «sucias».
+  Uno era una herramienta nueva del plugin (`sre_panel`) que el manifiesto no clasificaba; el otro,
+  la revisión de skills en segundo plano de Hermes llamando a `skill_manage`.
+- **Causa:** el freno de nivel le atribuía al agente todo lo que bloqueaba.
+- **Regla:** un bloqueo dice de quién es. El del config se bloquea igual pero no resta evidencia;
+  lo que Hermes hace por su cuenta se apaga en su config.
+- **Mecanismo:** `integ.declarada` (fuera de `toolNames` → `origen: config`), `autonomia.fuera_de_nivel`,
+  la alerta del panel; `doctor.py` avisa `skills.creation_nudge_interval` ≠ 0. Self-test §15 y la
+  mutación «un bloqueo del config le resta evidencia al agente».
+
+### GOTCHA — `MEDIA:` en un texto citado adjunta un archivo
+
+- **Síntoma:** al revisar `hermes_cli/send_cmd.py` el piloto vio que `MEDIA:<ruta>`, en cualquier
+  parte del texto, se manda como adjunto. Una línea de log con `MEDIA:/opt/data/.env` habría
+  mandado los secretos al chat.
+- **Causa:** las respuestas citan texto de terceros (logs, correos) y el canal interpreta ese
+  marcador.
+- **Regla:** la respuesta no lleva ningún marcador que el canal interprete sin romperlo.
+- **Mecanismo:** `output.defang` (`media-adjunto`) en `turn.respuesta`; self-test §14 con su
+  `example` y la mutación «la respuesta deja vivo un MEDIA: citado».
+
+### GOTCHA — El aviso de terceros se perdía tras un reinicio o detrás de otro plugin
+
+- **Síntoma:** en Telegram, respuestas basadas en logs salían sin el aviso: después de reiniciar el
+  contenedor (cada deploy), y cada vez que el plugin propio del repo cambiaba la respuesta.
+- **Causa:** la marca de la sesión vivía en la memoria del proceso; y Hermes no encadena
+  `transform_llm_output` (gana el primer plugin que devuelve texto, en orden alfabético).
+- **Regla:** la marca se reconstruye del registro; un plugin que carga antes que `repo-harness` y
+  transforma la respuesta pone él el aviso.
+- **Mecanismo:** `_contaminada` en `plugin/__init__.py` (una búsqueda por sesión y proceso en el
+  registro); `doctor.py` avisa el plugin que carga antes y transforma; self-test §15 y la mutación
+  «la marca de terceros no sobrevive un reinicio».
+
+### GOTCHA — `--upgrade` habría borrado el arreglo del repo
+
+- **Síntoma:** el piloto parchó `autonomia.py` y `selftest.py` en su copia del arnés; un
+  `install.py --upgrade` los reemplazaba sin decir nada.
+- **Causa:** el instalador no sabía qué había escrito él y qué había cambiado el repo después.
+- **Regla:** un archivo del arnés que el repo cambió no se pisa sin que alguien lo mire.
+- **Mecanismo:** `.hermes/harness/huellas.json`, la marca `!` y `--pisar`; self-test §11 y §16, y la
+  mutación «install --upgrade borra un parche local».

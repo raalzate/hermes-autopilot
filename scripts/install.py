@@ -12,7 +12,10 @@ Instala el arnés en otro repo. DRY-RUN por defecto (P9): muestra la lista y no 
                    la referencia a un issue en los commits (`tracker`). Por defecto, github.
     --apply        ejecuta el plan. Sin esto, sólo lo imprime.
     --upgrade      reemplaza el CÓDIGO del arnés (`.hermes/harness/`) por esta versión. Nunca toca
-                   el config, AGENTS.md, las skills ni los docs del repo: ésos son del repo.
+                   el config, AGENTS.md, las skills ni los docs del repo: ésos son del repo. Frena
+                   (`!`) si el repo parchó un archivo del arnés después de instalarlo (lo dicen las
+                   huellas de `.hermes/harness/huellas.json`), o si no hay huellas y el archivo difiere.
+    --pisar        con --upgrade, reemplaza igual los archivos parchados. Antes, subí el arreglo.
     --link-plugin  enlaza `$HERMES_HOME/plugins/repo-harness` al plugin instalado (copia si el
                    sistema no permite symlinks). Es lo único que escribe FUERA del repo, y por
                    eso va con su propia bandera.
@@ -22,6 +25,7 @@ Nunca sobreescribe un archivo que ya existe: lo reporta como `=` y sigue. El con
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -37,6 +41,7 @@ RAIZ = HOME if (HOME / ".githooks").is_dir() else HOME.parent.parent
 CODE_FILES = ["gate.py", "lint.py", "linkcheck.py", "selftest.py", "hook.py", "githooks.py", "install.py", "doctor.py",
               "drift.py", "map.py", "timing.py", "cli.py", "loop.py", "panel.py", "integ.py", "integ_run.py", "workspace.py", "schema_check.py"]
 DEST_CODE = Path(".hermes") / "harness"
+HUELLAS = DEST_CODE / "huellas.json"
 
 
 def merge_profile(base: dict, perfil: dict) -> dict:
@@ -81,14 +86,34 @@ def with_forge(cfg: dict, forge: dict) -> dict:
     return cfg
 
 
-def plan(target: Path, profile: str | None, upgrade: bool, forge: str | None = None) -> list[tuple[str, Path, object]]:
-    """[(acción, destino, fuente)] — acción: '+' crear, '~' reemplazar código, '=' ya existe."""
+def _sha(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def huellas(target: Path) -> dict[str, str] | None:
+    """Lo que se instaló la última vez (ruta relativa al repo → sha256). None: una instalación anterior a
+    las huellas, de la que no se sabe qué vino del arnés y qué se parchó en el repo."""
+    try:
+        return json.loads((target / HUELLAS).read_text(encoding="utf-8")).get("archivos") or {}
+    except (OSError, ValueError):
+        return None
+
+
+def plan(target: Path, profile: str | None, upgrade: bool, forge: str | None = None,
+         pisar: bool = False) -> list[tuple[str, Path, object]]:
+    """[(acción, destino, fuente)] — acción: '+' crear, '~' reemplazar código, '=' ya existe, '!' código
+    parchado en el repo que un upgrade borraría (se frena salvo `pisar`)."""
     items: list[tuple[str, Path, object]] = []
+    previas = huellas(target) if upgrade else {}
 
     def add(dst: Path, src, codigo: bool = False):
         existe = dst.exists()
         if existe and not (codigo and upgrade):
             items.append(("=", dst, src))
+        elif existe and _sha(dst) == _sha(src):
+            items.append(("=", dst, src))
+        elif existe and not pisar and _parchado(dst, previas, target):
+            items.append(("!", dst, src))
         else:
             items.append(("~" if existe else "+", dst, src))
 
@@ -128,6 +153,29 @@ def plan(target: Path, profile: str | None, upgrade: bool, forge: str | None = N
     return items
 
 
+def _parchado(dst: Path, previas: dict[str, str] | None, target: Path) -> bool:
+    """¿El repo cambió este archivo del arnés después de instalarlo? Sin huellas no se sabe: se trata como
+    parchado, porque borrar un arreglo local en silencio es peor que pedir que se mire."""
+    if previas is None:
+        return True
+    rel = dst.relative_to(target).as_posix()
+    return rel not in previas or previas[rel] != _sha(dst)
+
+
+def guardar_huellas(target: Path, escritos: list[Path]) -> None:
+    """Sólo lo que ESTA corrida escribió: un archivo que ya estaba (`=`) conserva su huella anterior, y si no
+    tenía, sigue sin tener (no se sabe si vino del arnés o es un parche)."""
+    arch = dict(huellas(target) or {})
+    for f in escritos:
+        if f.is_file() and (target / DEST_CODE) in f.parents and f != target / HUELLAS:
+            arch[f.relative_to(target).as_posix()] = _sha(f)
+    (target / HUELLAS).write_text(json.dumps({"$comment": "Huellas del código del arnés tal como lo instaló "
+                                              "install.py. Un --upgrade frena (`!`) el archivo que el repo cambió "
+                                              "después: subí el arreglo a hermes-autopilot o pasá --pisar.",
+                                              "archivos": dict(sorted(arch.items()))}, indent=2, ensure_ascii=False) + "\n",
+                                  encoding="utf-8")
+
+
 def hermes_home() -> Path:
     return Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes").expanduser()
 
@@ -159,6 +207,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--upgrade", action="store_true")
     ap.add_argument("--link-plugin", action="store_true")
+    ap.add_argument("--pisar", action="store_true")
     if not argv:
         print(__doc__)
         return 1
@@ -177,11 +226,21 @@ def main(argv: list[str]) -> int:
         print(("" if apply else "DRY-RUN — ") + "plugin de Hermes:\n" + link_plugin(target, apply))
         return 0
 
-    items = plan(target, profile, upgrade, a.forge)
+    items = plan(target, profile, upgrade, a.forge, pisar=a.pisar)
     print(f"{'Instalando' if apply else 'DRY-RUN (nada se escribe; --apply para ejecutar)'} en {target}"
           f"{f' · perfil {profile}' if profile else ''} · forja {a.forge}\n")
     for accion, dst, _ in items:
         print(f"{accion}  {dst.relative_to(target)}")
+    parchados = [dst for accion, dst, _ in items if accion == "!"]
+    if parchados:
+        sin_huellas = huellas(target) is None
+        print(f"\n✗ {len(parchados)} archivo(s) del arnés {'difieren de esta versión y no hay huellas de la instalación' if sin_huellas else 'los cambió el repo después de instalarlos'}: "
+              "un --upgrade borraría ese arreglo sin avisar.\n"
+              "  Mirá cada uno con `diff <repo>/<archivo> <hermes-autopilot>/<origen>`. Si el arreglo sirve a "
+              "otros repos, subilo a hermes-autopilot; después re-ejecutá con --pisar.")
+        if apply:
+            print("Nada se escribió.")
+            return 1
     if apply:
         for accion, dst, src in items:
             if accion == "=":
@@ -193,6 +252,9 @@ def main(argv: list[str]) -> int:
                 shutil.copy2(src, dst)
                 if dst.parent.name == ".githooks":
                     dst.chmod(0o755)
+        # Lo escrito, y lo que ya estaba idéntico a esta versión (eso también vino del arnés).
+        guardar_huellas(target, [dst for accion, dst, src in items if accion in "+~" or (
+            accion == "=" and isinstance(src, Path) and dst.is_file() and _sha(dst) == _sha(src))])
 
     if (target / "CLAUDE.md").is_file() and not (target / "AGENTS.md").exists():
         print("\n⚠️  El repo tiene CLAUDE.md: Hermes lo lee SÓLO desde el cwd, sólo si no hay AGENTS.md, y "

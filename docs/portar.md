@@ -43,6 +43,29 @@ Ver [`cli-y-panel.md`](cli-y-panel.md).
 Lo que ya existía se reporta con `=` y no se toca. `--upgrade` reemplaza sólo el código de
 `.hermes/harness/` (nunca el config, `AGENTS.md`, las skills ni los docs).
 
+**Un parche local no se pierde.** El instalador deja `.hermes/harness/huellas.json` con el sha256
+de lo que escribió. Si el repo cambió después un archivo del arnés, `--upgrade` lo marca con `!` y
+no escribe nada. Lo mismo si no hay huellas (una instalación anterior) y el archivo difiere de esta
+versión. Mirá el `diff`; si el arreglo le sirve a otros repos, subilo a hermes-autopilot y después
+corré con `--pisar`. Las integraciones propias del repo van en `.hermes/integraciones/<id>.json`, fuera del
+código del arnés ([integraciones](integraciones.md#agregar-una-integración-al-catálogo)).
+
+## Si el repo se despliega
+
+Un agente que corre en producción (un contenedor, sin `.git` ni shell estable) necesita tres cosas
+más. Las probó el piloto doctiling-sre ([ADR 0014](decisions/0014-piloto-en-produccion.md)):
+
+1. **Estado fuera de git.** `HARNESS_EVENTS_FILE` y `HARNESS_AUTONOMIA_FILE` apuntando a un
+   volumen. Sin eso el registro y el nivel se pierden en cada deploy, y los días en el nivel no
+   corren.
+2. **Firmar por PR.** `autonomia.firmadas` (por defecto `config/autonomia.json`) y
+   `cli.py nivel aplicar` en el arranque de la imagen ([autonomía](autonomia.md#producción-sin-shell-ni-git)).
+3. **Un sandbox antes de salir.** Los tests prueban el código, no la imagen. Una señal del gate
+   que construya la imagen de producción, la corra en dry-run con la configuración real y verifique
+   que Hermes cargó los plugins (`hermes plugins list`: `enabled` y ningún `Skipping`), un ciclo de
+   punta a punta y lo que manda. La evidencia queda atada al hash del árbol: un cambio después la
+   invalida. Sin el motor de contenedores (en CI), la señal sale **omitida**, y omitida no es verde.
+
 ## Lo que hace el humano
 
 El instalador no edita `~/.hermes/config.yaml`: decide qué frenos y qué aprobaciones existen, y
