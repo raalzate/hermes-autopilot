@@ -176,6 +176,31 @@ roto deja pasar (P5): lo caza `integ.py check` en el gate, no el turno del usuar
 5. Si no le creés a las anotaciones del servidor (Playwright marca «destructivo» hasta navegar):
    `ignoreAnnotations` y `$ignoreAnnotations`, que dice por qué.
 
+**Una integración propia del repo** (las herramientas de tu agente, como el plugin de un SRE) va en
+`.hermes/integraciones/<id>.json` del repo, no en `.hermes/harness/plantillas/`: esa carpeta es
+código del arnés y `install.py --upgrade` la reemplaza. `integ.py` lee los dos catálogos; un id del
+repo que choca con uno del arnés es un error, no un reemplazo silencioso. Lo aprendió el piloto
+doctiling-sre (2026-10-21).
+
+## Diseñar las herramientas de un plugin propio
+
+Lo que el piloto doctiling-sre aprendió con sus ocho herramientas `sre_*`:
+
+- **Separá lo que trae texto de terceros.** `thirdParty` marca por nombre de herramienta. Si la
+  herramienta de estado también devuelve líneas de log, cada respuesta sale con el aviso de terceros
+  y el aviso deja de significar algo. Una herramienta de estado que resume sin citar, y otra
+  (`sre_logs`) que cita y es la única marcada.
+- **Declará `toolNames`.** Con la lista, una herramienta nueva que el plugin agregó y el manifiesto
+  todavía no clasifica se bloquea igual (vale `write`), pero el bloqueo queda como falla del config
+  (`origen: config`) y no le resta evidencia de autonomía al agente. Sin la lista, cuenta contra él.
+  Un test del repo que exija que cada herramienta del plugin esté en `toolNames` cierra el ciclo.
+- **Recortá en el origen.** La salida de una herramienta se paga en tokens cada vez: primero lo
+  normalizado (firmas, conteos), y el texto crudo sólo si se pide.
+- **Lo que no necesita al modelo, sin modelo.** Un ciclo de observación cada 5 minutos como script
+  cuesta 0 tokens; como cron con agente, un turno cada vez.
+- Los comportamientos de Hermes que muerden a un plugin propio están en
+  [hermes.md](hermes.md#lo-que-enseñó-un-piloto-en-producción).
+
 ## Lo que no cubre
 
 Está en [huecos](huecos.md):

@@ -40,6 +40,9 @@ from harness import integ as nucleo  # noqa: E402
 from harness.core import CONFIG_PATH, HARNESS_HOME, REPO_ROOT  # noqa: E402
 
 CATALOGO = HARNESS_HOME / "plantillas" / "integraciones"
+# Los manifiestos propios del repo (un agente con sus herramientas) viven FUERA de la copia del arnés:
+# `install.py --upgrade` reemplaza `.hermes/harness/` y no tiene por qué saber de ellos.
+CATALOGO_REPO_REL = ".hermes/integraciones"
 LOCK_REL = ".hermes/integraciones.lock"
 KINDS = ("mcp", "hermes", "cli")
 VERSION_FIJA = re.compile(r"^\d+(\.\d+){0,3}$")
@@ -50,16 +53,24 @@ SOLO_CATALOGO = ("perfiles", "perfilPorDefecto", "descripcion", "setup")
 
 # ── catálogo ─────────────────────────────────────────────────────────────────
 
-def catalogo(directorio: Path = CATALOGO) -> dict[str, dict]:
+def catalogo(directorio: Path | None = None, root: Path | None = None) -> dict[str, dict]:
+    """El catálogo del arnés más el del repo (`.hermes/integraciones/`). Un manifiesto del repo no pisa uno
+    del arnés con el mismo id: queda como error, porque cambiaría en silencio lo que el arnés probó."""
     out: dict[str, dict] = {}
-    for f in sorted(directorio.glob("*.json")):
-        try:
-            m = json.loads(f.read_text(encoding="utf-8"))
-        except ValueError as e:
-            out[f.stem] = {"_error": f"{f.name}: JSON inválido: {e}"}
-            continue
-        m["_file"] = f.name
-        out[m.get("id") or f.stem] = m
+    dirs = [directorio] if directorio is not None else [CATALOGO, (root or REPO_ROOT) / CATALOGO_REPO_REL]
+    for i, d in enumerate(dirs):
+        for f in sorted(d.glob("*.json")) if d.is_dir() else []:
+            try:
+                m = json.loads(f.read_text(encoding="utf-8"))
+            except ValueError as e:
+                out[f.stem] = {"_error": f"{f.name}: JSON inválido: {e}"}
+                continue
+            m["_file"] = f.name if i == 0 else f"{CATALOGO_REPO_REL}/{f.name}"
+            iid = m.get("id") or f.stem
+            if iid in out and i > 0:
+                out[iid] = {"_error": f"{m['_file']}: el id `{iid}` ya es del catálogo del arnés; usá otro id"}
+                continue
+            out[iid] = m
     return out
 
 
@@ -250,7 +261,7 @@ def nucleo_secreto(nombre: str) -> bool:
 def validar_catalogo(config_base: dict, root: Path = REPO_ROOT) -> list[str]:
     """Cada manifiesto, con cada uno de sus perfiles, materializado y probado sobre `config_base`."""
     errores = []
-    for iid, m in catalogo().items():
+    for iid, m in catalogo(root=root).items():
         forma = problemas_de_manifiesto(m)
         errores += [f"{iid}: {e}" for e in forma]
         if forma:

@@ -252,6 +252,10 @@ def seccion_integraciones(config: dict, ctx) -> None:
             r = llm(response_text=regla["example"], session_id="s-limpia")
             check(isinstance(r, str) and salida["redactWith"] in r and not re.search(regla["pattern"], r),
                   f"output.redact[{regla['id']}]: el secreto quedó en la respuesta: {r!r}")
+        for regla in salida.get("defang") or []:
+            r = llm(response_text=regla["example"], session_id="s-limpia")
+            check(isinstance(r, str) and not re.search(regla["pattern"], r),
+                  f"output.defang[{regla['id']}]: el marcador quedó vivo en la respuesta: {r!r}")
         for texto in salida.get("innocent") or []:
             check(llm(response_text=texto, session_id="s-limpia") is None, f"output: cambió una respuesta inocente: `{texto}`")
         r = llm(response_text="Listo, respondí el correo.", session_id="s-contaminada")
@@ -305,7 +309,8 @@ def seccion_integraciones(config: dict, ctx) -> None:
     filas = pn.por_integracion(ig.con(config, "navegador", nav), [
         {"kind": "block", "rule": "integ:navegador:red-interna", "at": 1}, {"kind": "ask", "rule": "integ:navegador:dominio", "at": 2},
         {"kind": "integ-uso", "key": "navegador:send", "at": 3}, {"kind": "block", "rule": "force-push", "at": 4}])
-    check(filas and filas[0]["block"] == 1 and filas[0]["ask"] == 1 and filas[0]["uso"] == 1,
+    fila = next((f for f in filas if f["id"] == "navegador"), None)
+    check(fila and fila["block"] == 1 and fila["ask"] == 1 and fila["uso"] == 1,
           f"panel: la tarjeta de integraciones no cuenta bien: {filas}")
 
     # drift: una versión fijada con una vulnerabilidad conocida es rojo; una nueva, aviso; sin red, aviso.
@@ -478,11 +483,16 @@ def seccion_autonomia(config: dict, ctx) -> None:
             ok, msg, _ = au.subir(cfg, troot, "", evs=[])
             check(not ok and "firma" in msg, "subió sin firma")
             ahora = time.time()
-            limpias = [{"at": ahora, "kind": "turno", "session": f"s{i}"} for i in range(10)]
-            ok, msg, _ = au.subir(cfg, troot, "Ana", evs=limpias)
+            # La evidencia sale de los umbrales del config (un repo los sube: doctiling-sre pide 30 sesiones y 14
+            # días), no de los del perfil por defecto; el reloj se adelanta lo que pida `diasMin`.
+            paso = (s.get("ascenso") or {}).get("L0->L1") or {}
+            limpias = [{"at": ahora, "kind": "turno", "session": f"s{i}"}
+                       for i in range(max(10, int(paso.get("sesionesLimpias") or 0)))]
+            reloj = ahora + float(paso.get("diasMin") or 0) * 86400 + 60
+            ok, msg, _ = au.subir(cfg, troot, "Ana", evs=limpias, ahora=reloj)
             check(ok and au.nivel(cfg, troot) == "L1", f"con la evidencia de L0->L1 no subió a L1: {msg}")
             check(au.leer(cfg, troot)["historial"][-1].get("firma") == "Ana", "el ascenso no guardó la firma")
-            ok, msg, _ = au.subir(cfg, troot, "Ana", evs=limpias)
+            ok, msg, _ = au.subir(cfg, troot, "Ana", evs=limpias, ahora=reloj)
             check(not ok and au.nivel(cfg, troot) == "L1", "subió dos niveles con la misma evidencia (la ventana no se reinició)")
             check(not au.puede_subir(cfg, "L0", limpias, ahora + 10)[0],
                   "la evidencia ANTERIOR a la última transición cuenta: bajar o subir no reinicia la ventana (P28)")
@@ -543,6 +553,12 @@ def seccion_autonomia(config: dict, ctx) -> None:
                 llm(user_message="hola", session_id="s-turno")
             despues = len([e for e in ev_mod.tail(cfg, troot, 500) if e.get("kind") == "turno"])
             check(despues - antes == 1, f"`turno` se registró {despues - antes} veces para una sesión")
+            # Un reinicio de Hermes (cada deploy) borra la memoria del proceso, no la conversación: la marca de
+            # terceros sale del registro y la respuesta sigue llevando el aviso (piloto doctiling-sre).
+            ev_mod.record(cfg, troot, "contaminada", source="correo-de-afuera", session="s-reinicio")
+            r = ctx.hooks["transform_llm_output"][0](response_text="Listo.", session_id="s-reinicio")
+            check(isinstance(r, str) and "correo-de-afuera" in r,
+                  f"tras un reinicio la sesión que leyó a un tercero perdió el aviso: {r!r}")
             # El loop no trabaja desatendido por debajo de un nivel con `loop: true`.
             fijar("L2")
             ok, motivo = loop_mod.nivel_permite_loop(cfg, troot)
@@ -562,6 +578,79 @@ def seccion_autonomia(config: dict, ctx) -> None:
             check(not ok, "declarar un nivel sin firma ni motivo")
             au.declarar(cfg, troot, "L3", "selftest", "prueba")
             check(any("declarado" in x for x in au.resumen(cfg, troot).get("alertas") or []), "un nivel declarado no aparece como alerta")
+
+            # Un bloqueo que es culpa del config (una herramienta fuera de `toolNames`) frena igual, pero no le
+            # resta evidencia al agente (piloto doctiling-sre: `sre_panel` sin clasificar le costó la ventana).
+            ajeno = [{"at": ahora + 5, "kind": "block", "rule": "nivel-L0-integracion", "origen": "config", "session": "s0", "tool": "x_nueva"}]
+            m_ = au.metricas(limpias + ajeno, 0)
+            check(m_["intentosFueraDeNivel"] == 0 and m_["sesionesLimpias"] == len(limpias),
+                  "un bloqueo con `origen` (falla del config) contó como intento del agente")
+            m_ = au.metricas(limpias + [{**ajeno[0], "origen": ""}], 0)
+            check(m_["intentosFueraDeNivel"] == 1, "un bloqueo del agente dejó de contar")
+            integ_cfg = {**cfg, "autonomia": s, "integrations": {**(cfg.get("integrations") or {}), "enabled": {"prueba": {
+                "kind": "hermes", "tools": "^prb_", "toolNames": ["prb_leer"], "classes": {"read": "^prb_leer$"},
+                "perfil": "lectura", "actions": {"write": "deny"}}}}}
+            fijar("L0")
+            d_ = guards.nivel_guard(core.Event(tool="prb_nueva", args={}), integ_cfg, troot)
+            check(d_.block and (d_.rule or {}).get("origen") == "config",
+                  f"una herramienta fuera de `toolNames` no quedó atribuida al config: {d_.rule}")
+
+            # El registro firmado: producción sin shell aplica lo que un PR mergeó, una vez cada entrada y en orden.
+            fijar("L0")
+            entradas = [{"id": "r1", "accion": "declarar", "a": "L1", "firma": "Ana", "motivo": "piloto"},
+                        {"id": "r2", "accion": "subir", "firma": "Ana"},
+                        {"id": "r3", "accion": "declarar", "a": "L3", "firma": "Ana", "motivo": "después de r2"}]
+            res = au.aplicar_firmadas(cfg, troot, entradas)
+            check([r[:2] for r in res] == [("r1", True), ("r2", False)] and au.nivel(cfg, troot) == "L1",
+                  f"el registro firmado no aplicó en orden o saltó un `subir` sin evidencia: {res}")
+            check(au.leer(cfg, troot)["historial"][-1].get("ref") == "r1", "la transición firmada no guardó su `ref`")
+            res = au.aplicar_firmadas(cfg, troot, entradas[:1])
+            check(res == [] and au.nivel(cfg, troot) == "L1", "una entrada firmada se aplicó dos veces")
+            check(not au.aplicar_firmadas(cfg, troot, [{"id": "r9", "accion": "declarar", "a": "L3", "firma": "", "motivo": ""}])[0][1],
+                  "una entrada sin firma se aplicó")
+            # Juicios de afuera (el tablero): una vez por ref, con firma; los hallazgos dan la tasa de falsos positivos.
+            ok, _ = au.juzgar(cfg, troot, "hallazgo", "issue#1", False, "Ana")
+            check(ok, "un hallazgo juzgado con ref y firma no se registró")
+            check(not au.juzgar(cfg, troot, "hallazgo", "issue#1", True, "Ana")[0], "el mismo hallazgo se juzgó dos veces")
+            check(not au.juzgar(cfg, troot, "hallazgo", "issue#2", True, "")[0], "un juicio sin firma se registró")
+            au.juzgar(cfg, troot, "hallazgo", "issue#2", True, "Ana")
+            m_ = au.metricas(ev_mod.tail(cfg, troot, 500), 0)
+            check(m_["hallazgosJuzgados"] == 2 and m_["falsosPositivosMax"] == 0.5,
+                  f"la tasa de falsos positivos no sale de los hallazgos juzgados: {m_['hallazgosJuzgados']}, {m_['falsosPositivosMax']}")
+            check(au.juzgar(cfg, troot, "recomendacion", "issue#3", True, "Ana")[0]
+                  and au.metricas(ev_mod.tail(cfg, troot, 500), 0)["aceptadasMin"] is not None,
+                  "una recomendación juzgada en el tablero no cuenta como evidencia de L1")
+            # El porqué comprobable (ADR 0014): un verificador que no es el agente decide, y queda en la evidencia.
+            import cli as cli_mod  # noqa: E402
+            verif = {**cfg, "autonomia": {**s, "certificados": {"verificador": [
+                sys.executable, "-c", "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('deduce') else 1)",
+                "{certificado}"], "extension": ".cert.json", "timeoutSegundos": 20}}}
+            prop = troot / "propuesta.md"
+            prop.write_text("# reiniciar\n", encoding="utf-8")
+            cert = cli_mod._cert_de(verif, prop)
+            check(cli_mod.verificar_certificado(verif, cert)[0] == "ausente", "una propuesta sin certificado no sale `ausente`")
+            cert.write_text(json.dumps({"deduce": True}), encoding="utf-8")
+            check(cli_mod.verificar_certificado(verif, cert)[0] == "verificado", "un certificado que el verificador acepta no sale `verificado`")
+            cert.write_text(json.dumps({"deduce": False}), encoding="utf-8")
+            check(cli_mod.verificar_certificado(verif, cert)[0] == "rechazado",
+                  "un certificado editado (el verificador sale ≠ 0) no sale `rechazado`")
+            check(cli_mod.verificar_certificado(cfg, cert) == ("", ""), "sin verificador en el config se certificó igual")
+            check("recomendacion verificar" in au.mensaje(verif, "L2", "write", "escribir `x`", "ask"),
+                  "en L2, con verificador, pedir aprobación no le dice al humano cómo comprobar el porqué")
+            base = [{"at": ahora, "kind": "recomendacion", "aceptada": True, "certificado": c} for c in ("verificado", "verificado", "rechazado")]
+            m_ = au.metricas(base + [{"at": ahora, "kind": "recomendacion", "aceptada": True}], 0)
+            check(m_["certificadosVerificadosMin"] == 0.5,
+                  f"una propuesta sin certificado no cuenta como no verificada: {m_['certificadosVerificadosMin']}")
+            au.juzgar(cfg, troot, "recomendacion", "issue#4", True, "Ana", certificado="verificado")
+            check(any(e.get("ref") == "issue#4" and e.get("certificado") == "verificado" for e in ev_mod.tail(cfg, troot, 500)),
+                  "el resultado del verificador no quedó en el evento del juicio")
+            # El estado puede vivir fuera de `.git` (un volumen en producción).
+            vol = troot / "volumen" / "nivel.json"
+            os.environ["HARNESS_AUTONOMIA_FILE"] = str(vol)
+            try:
+                check(au.ruta(cfg, troot) == vol, "`HARNESS_AUTONOMIA_FILE` no redirige el estado de autonomía")
+            finally:
+                os.environ.pop("HARNESS_AUTONOMIA_FILE", None)
         finally:
             os.environ["HARNESS_REPO"] = str(REPO_ROOT)
             os.environ["HARNESS_NO_EVENTS"] = eventos_antes or "1"
@@ -672,6 +761,14 @@ def workspace_section(config: dict) -> None:
               "install --forge gitlab does not install .gitlab-ci.yml (or still installs GitHub Actions)")
         cfg_gl = next(src for _, d, src in ins.plan(t, None, False, "gitlab") if d == t / ".hermes" / "harness.config.json")
         check((cfg_gl.get("drift") or {}).get("runner") == ".gitlab-ci.yml", "with the gitlab forge, drift points to a runner that is not installed")
+        # --upgrade never erases a file of the harness that the repo patched (doctiling-sre pilot).
+        parche = t / ins.DEST_CODE / "plugin" / "harness" / "core.py"
+        parche.parent.mkdir(parents=True, exist_ok=True)
+        parche.write_text("# local fix\n", encoding="utf-8")
+        acc = {d: a for a, d, _ in ins.plan(t, None, True, "github")}
+        check(acc.get(parche) == "!", f"install --upgrade would overwrite a locally patched harness file ({acc.get(parche)})")
+        acc = {d: a for a, d, _ in ins.plan(t, None, True, "github", pisar=True)}
+        check(acc.get(parche) == "~", "install --upgrade --pisar does not replace the patched file")
 
     # The coder's queue carries the epic's issue.
     check(lp.issue_de("- [ ] Login [issue: o/api#5]") == "o/api#5" and lp.issue_de("- [ ] Login") == "", "loop.issue_de does not read `[issue: …]`")
@@ -2197,8 +2294,15 @@ def main() -> int:
                     correr([str(install), tmp, "--profile", pf.stem, "--apply"], REPO_ROOT)
                     check((t / "AGENTS.md").read_text(encoding="utf-8") == "# mío\n", "el instalador sobreescribió AGENTS.md")
                     check(core_py.read_text(encoding="utf-8") == "# viejo\n", "--apply sin --upgrade reemplazó código")
-                    correr([str(install), tmp, "--profile", pf.stem, "--apply", "--upgrade"], REPO_ROOT)
-                    check(core_py.read_text(encoding="utf-8") != "# viejo\n", "--upgrade no reemplazó el código del arnés")
+                    check((t / ".hermes" / "harness" / "huellas.json").is_file(), "--apply no dejó las huellas del código instalado")
+                    # Un archivo del arnés que el repo parchó no se borra en silencio (piloto doctiling-sre).
+                    p = correr([str(install), tmp, "--profile", pf.stem, "--apply", "--upgrade"], REPO_ROOT)
+                    check(p.returncode == 1 and core_py.read_text(encoding="utf-8") == "# viejo\n",
+                          "--upgrade borró un parche local del arnés sin frenar")
+                    correr([str(install), tmp, "--profile", pf.stem, "--apply", "--upgrade", "--pisar"], REPO_ROOT)
+                    check(core_py.read_text(encoding="utf-8") != "# viejo\n", "--upgrade --pisar no reemplazó el código del arnés")
+                    p = correr([str(install), tmp, "--profile", pf.stem, "--apply", "--upgrade"], REPO_ROOT)
+                    check(p.returncode == 0, f"--upgrade sobre una instalación sin parches frenó: {p.stdout[-300:]}")
                     check((t / "AGENTS.md").read_text(encoding="utf-8") == "# mío\n", "--upgrade tocó AGENTS.md")
                     # --link-plugin en un HERMES_HOME temporal: nunca en el del usuario.
                     hh = t / "hermes-home"

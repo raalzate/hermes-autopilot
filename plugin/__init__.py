@@ -95,6 +95,24 @@ _GUARDIAS: dict[str, str] = {}
 _TURNOS: set[str] = set()
 
 
+_REVISADAS: set[str] = set()  # sesiones cuya marca ya se buscó en el registro en este proceso
+
+
+def _contaminada(config, root, sesion: str) -> str:
+    """De dónde leyó a un tercero esta sesión. La marca vive en memoria y un reinicio de Hermes (cada deploy
+    del gateway) la borraba aunque la conversación siguiera: la respuesta salía sin aviso (piloto
+    doctiling-sre). Si no está, se busca UNA vez por sesión y proceso en el registro (`contaminada`)."""
+    if sesion in _CONTAMINADAS or sesion in _REVISADAS:
+        return _CONTAMINADAS.get(sesion, "")
+    _REVISADAS.add(sesion)
+    if events.spec(config) and not os.environ.get("HARNESS_NO_EVENTS"):
+        for e in reversed(events.tail(config, root, 5000)):
+            if e.get("kind") == "contaminada" and e.get("session") == sesion:
+                _CONTAMINADAS[sesion] = str(e.get("source") or "?")
+                break
+    return _CONTAMINADAS.get(sesion, "")
+
+
 def _integraciones_de_la_tarea():
     """`HARNESS_INTEGRACIONES` (la pone el loop desde la cola): las integraciones que la tarea
     permite. Ausente = todas las habilitadas; vacía = ninguna."""
@@ -170,7 +188,7 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
     cuenta = integ.contable(config, tool_name, args)
     clave = f"{cuenta[0]}:{cuenta[1]}" if cuenta else ""
     ev = core.Event(tool=tool_name, args=args, cwd=cwd, session_id=session_id,
-                    contaminada=_CONTAMINADAS.get(sesion, ""), integraciones=_integraciones_de_la_tarea(),
+                    contaminada=_contaminada(config, root, sesion), integraciones=_integraciones_de_la_tarea(),
                     uso={clave: _uso(config, root, clave)} if clave else {})
     d = guards.evaluate(ev, config, root)
     if clave and not (d.block or d.approve):
@@ -187,8 +205,9 @@ def on_pre_tool_call(tool_name: str = "", args=None, session_id: str = "", task_
             events.record(config, root, "contaminada", source=fuente, session=sesion)
     if d.block or d.approve:
         # Lo que el freno decidió, para el panel: sin esto se ve sólo dentro de esta conversación.
+        extra = {"origen": d.rule["origen"]} if (d.rule or {}).get("origen") else {}
         events.record(config, root, "block" if d.block else "ask", rule=(d.rule or {}).get("id", "?"),
-                      tool=tool_name, session=session_id)
+                      tool=tool_name, session=session_id, **extra)
     if d.block:
         autonomia.revisar(config, root)  # una regla crítica baja el nivel sin esperar a nadie (P28)
     return d.to_hermes()
@@ -223,7 +242,7 @@ def on_transform_llm_output(response_text: str = "", session_id: str = "", task_
     root, config = _contexto(_cwd_de_sesion(task_id) or None)
     if not config:
         return None
-    nuevo = turn.respuesta(config, response_text, _CONTAMINADAS.get(session_id or task_id or "default", ""))
+    nuevo = turn.respuesta(config, response_text, _contaminada(config, root, session_id or task_id or "default"))
     if nuevo is not None:
         events.record(config, root, "respuesta", session=session_id,
                       tapado=nuevo.count((config.get("output") or {}).get("redactWith") or "[tapado por el arnés]"))

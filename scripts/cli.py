@@ -16,6 +16,10 @@
     python3 scripts/cli.py nivel subir --firma "Nombre"           sube UN nivel, sólo si la evidencia alcanza (P28)
     python3 scripts/cli.py nivel bajar [--a L1] --motivo "…" --firma "Nombre"
     python3 scripts/cli.py nivel declarar L3 --motivo "…" --firma "Nombre"   sin evidencia: queda como alerta
+    python3 scripts/cli.py nivel aplicar [--registro config/autonomia.json]  lo que firmó un PR (producción sin shell)
+    python3 scripts/cli.py recomendacion juzgar <ref> aceptada|rechazada [--certificado <archivo>] --firma "Nombre"   juzgada afuera (tablero)
+    python3 scripts/cli.py recomendacion verificar <propuesta.md>   ¿el porqué se deduce de los hechos? (el verificador del repo)
+    python3 scripts/cli.py hallazgo juzgar <ref> valido|falso --firma "Nombre"   ¿la alerta del agente era real?
     python3 scripts/cli.py recomendacion list | aceptar|rechazar <archivo> [--firma "Nombre"]   las propuestas de L1
     python3 scripts/cli.py integ list|show|add|set|rm|test|deps|hermes|check   las integraciones (scripts/integ.py)
     python3 scripts/cli.py gate|selftest|lint|map|timing|doctor|drift|install|loop|panel|casos [args…]
@@ -295,7 +299,7 @@ def _firma_de(args: list[str]) -> str:
     return p.stdout.strip()
 
 
-PROPORCION = {"aceptadasMin", "denegadosMax", "gateVerdeMin"}  # el resto son conteos (o días)
+PROPORCION = {"aceptadasMin", "denegadosMax", "gateVerdeMin", "falsosPositivosMax"}  # el resto son conteos (o días)
 
 
 def _fila(f: dict) -> str:
@@ -333,6 +337,24 @@ def cmd_nivel(args: list[str]) -> int:
         ok, msg = autonomia.declarar(config, REPO_ROOT, a, _opcion(args, "--firma"), _opcion(args, "--motivo"))
         print(("✓ " if ok else "✗ ") + msg)
         return 0 if ok else 2
+    if sub == "aplicar":
+        # Producción sin shell: el arranque corre esto y aplica lo que un PR firmó (ADR 0012).
+        rel = _opcion(args, "--registro") or autonomia.spec(config).get("firmadas") or ""
+        if not rel:
+            print("✗ no hay registro firmado: `autonomia.firmadas` del config o --registro <archivo>.")
+            return 1
+        f = Path(rel) if Path(rel).is_absolute() else REPO_ROOT / rel
+        try:
+            entradas = json.loads(f.read_text(encoding="utf-8")).get("transiciones")
+        except (OSError, ValueError) as e:
+            print(f"✗ {rel}: {e}")
+            return 1
+        hechas = autonomia.aplicar_firmadas(config, REPO_ROOT, entradas)
+        for ref, ok, msg in hechas:
+            print(f"{'✓' if ok else '✗'} {ref}: {msg}")
+        if not hechas:
+            print(f"nivel {autonomia.nivel(config, REPO_ROOT)}: sin transiciones nuevas en {rel}.")
+        return 0 if all(ok for _, ok, _ in hechas) else 2
     r = autonomia.resumen(config, REPO_ROOT)
     if "--json" in args:
         print(json.dumps(r, indent=1, ensure_ascii=False, default=str))
@@ -360,6 +382,49 @@ def cmd_nivel(args: list[str]) -> int:
     return 0
 
 
+def cmd_hallazgo(args: list[str]) -> int:
+    """¿La alerta del agente era real? Un humano lo juzga (afuera: el issue de la alerta) y la tasa de falsos
+    positivos es evidencia de competencia (`falsosPositivosMax`), no sólo de obediencia."""
+    from harness import autonomia
+
+    if len(args) < 3 or args[0] != "juzgar" or args[2] not in ("valido", "falso"):
+        print("uso: harness hallazgo juzgar <ref> valido|falso --firma \"Nombre\"")
+        return 1
+    ok, msg = autonomia.juzgar(leer_config(), REPO_ROOT, "hallazgo", args[1], args[2] == "valido", _firma_de(args))
+    print(("✓ " if ok else "✗ ") + msg)
+    return 0 if ok else 2
+
+
+def verificar_certificado(config: dict, cert: Path | None) -> tuple[str, str]:
+    """El porqué de una propuesta, comprobado por un programa que no es el agente (ADR 0014). Lo corre la CLI
+    al juzgar, nunca un freno (los frenos no lanzan procesos). → (estado, detalle), estado en
+    `autonomia.CERTIFICADO`. Sin verificador en el config: "" (el repo no certifica)."""
+    spec = (config.get("autonomia") or {}).get("certificados") or {}
+    cmd = spec.get("verificador") or []
+    if not cmd:
+        return "", ""
+    if cert is None or not cert.is_file():
+        return "ausente", "la propuesta no trae certificado"
+    argv = [str(cert.resolve()) if a == "{certificado}" else a for a in cmd]
+    try:
+        p = subprocess.run(argv, cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=float(spec.get("timeoutSegundos") or 30))
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return "error", f"el verificador no corrió: {e}"
+    ultima = next((l.strip() for l in reversed((p.stdout + p.stderr).splitlines()) if l.strip()), "")
+    return ("verificado" if p.returncode == 0 else "rechazado"), ultima[:200]
+
+
+def _cert_de(config: dict, propuesta: Path) -> Path:
+    ext = ((config.get("autonomia") or {}).get("certificados") or {}).get("extension") or ".cert.json"
+    return propuesta.with_name(propuesta.stem + ext)
+
+
+def _decir_cert(estado: str, detalle: str) -> None:
+    if estado:
+        print(f"  certificado: {estado}" + (f" — {detalle}" if detalle else ""))
+
+
 def cmd_recomendacion(args: list[str]) -> int:
     """Las propuestas que el agente deja en L1: un humano las juzga, y eso es evidencia (P27)."""
     from harness import events
@@ -368,6 +433,32 @@ def cmd_recomendacion(args: list[str]) -> int:
     d = REPO_ROOT / ".hermes" / "recomendaciones"
     sub = args[0] if args else "list"
     MARCA = "<!-- juicio:"
+    if sub == "verificar":
+        # Antes de aprobar: ¿el porqué se deduce de los hechos? Se mira, no se registra nada.
+        if len(args) < 2:
+            print("uso: harness recomendacion verificar <propuesta.md | certificado>")
+            return 1
+        p = (REPO_ROOT / args[1]) if not Path(args[1]).is_absolute() else Path(args[1])
+        estado, detalle = verificar_certificado(config, p if p.suffix == ".json" else _cert_de(config, p))
+        if not estado:
+            print("✗ el repo no declara `autonomia.certificados.verificador`: no certifica propuestas.")
+            return 1
+        _decir_cert(estado, detalle)
+        return 0 if estado == "verificado" else 2
+    if sub == "juzgar":
+        # Lo juzgado AFUERA (un issue etiquetado, un botón del chat): un adaptador lo registra con su ref.
+        from harness import autonomia
+        if len(args) < 3 or args[2] not in ("aceptada", "rechazada"):
+            print("uso: harness recomendacion juzgar <ref> aceptada|rechazada [--certificado <archivo>] --firma \"Nombre\"")
+            return 1
+        c = _opcion(args, "--certificado")
+        estado, detalle = verificar_certificado(config, (REPO_ROOT / c) if c else None)
+        ok, msg = autonomia.juzgar(config, REPO_ROOT, "recomendacion", args[1], args[2] == "aceptada", _firma_de(args),
+                                   certificado=estado)
+        print(("✓ " if ok else "✗ ") + msg)
+        if ok:
+            _decir_cert(estado, detalle)
+        return 0 if ok else 2
     if sub == "list":
         archivos = sorted(d.glob("*.md")) if d.is_dir() else []
         if not archivos:
@@ -376,7 +467,8 @@ def cmd_recomendacion(args: list[str]) -> int:
             texto = f.read_text(encoding="utf-8", errors="replace")
             estado = re.search(r"<!-- juicio: (\w+)", texto)
             titulo = next((l.lstrip("# ").strip() for l in texto.splitlines() if l.strip()), f.name)
-            print(f"  [{estado.group(1) if estado else 'pendiente':<9}] {f.relative_to(REPO_ROOT)} — {titulo[:80]}")
+            cert = " 📜" if _cert_de(config, f).is_file() else ""
+            print(f"  [{estado.group(1) if estado else 'pendiente':<9}] {f.relative_to(REPO_ROOT)}{cert} — {titulo[:80]}")
         return 0
     if sub not in ("aceptar", "rechazar") or len(args) < 2:
         print("uso: harness recomendacion list | aceptar|rechazar <archivo> [--firma \"Nombre\"]")
@@ -399,11 +491,15 @@ def cmd_recomendacion(args: list[str]) -> int:
         print("✗ juzgar una recomendación lleva firma (--firma o `git config user.name`).")
         return 1
     aceptada = sub == "aceptar"
+    estado, detalle = verificar_certificado(config, _cert_de(config, f))
     import time as _t
     f.write_text(texto.rstrip("\n") + f"\n\n{MARCA} {'aceptada' if aceptada else 'rechazada'} · {firma} · "
-                 f"{_t.strftime('%Y-%m-%d %H:%M')} -->\n", encoding="utf-8")
-    events.record(config, REPO_ROOT, "recomendacion", archivo=f.relative_to(REPO_ROOT).as_posix(), aceptada=aceptada, firma=firma)
+                 f"{_t.strftime('%Y-%m-%d %H:%M')}" + (f" · certificado {estado}" if estado else "") + " -->\n",
+                 encoding="utf-8")
+    events.record(config, REPO_ROOT, "recomendacion", archivo=f.relative_to(REPO_ROOT).as_posix(), aceptada=aceptada, firma=firma,
+                  **({"certificado": estado} if estado else {}))
     print(f"✓ {f.name}: {'aceptada' if aceptada else 'rechazada'} por {firma}. Cuenta como evidencia para subir de L1.")
+    _decir_cert(estado, detalle)
     return 0
 
 
@@ -633,7 +729,8 @@ def main(argv: list[str]) -> int:
         print(f"harness: no hay {CONFIG_PATH}. Instalalo primero (`harness install <repo>`).")
         return 1
     fn = {"status": cmd_status, "rule": cmd_rule, "config": cmd_config, "profile": cmd_profile, "task": cmd_task,
-          "signal": cmd_signal, "nivel": cmd_nivel, "recomendacion": cmd_recomendacion}.get(cmd)
+          "signal": cmd_signal, "nivel": cmd_nivel, "recomendacion": cmd_recomendacion,
+          "hallazgo": cmd_hallazgo}.get(cmd)
     if fn is None:
         print(f"harness: comando desconocido `{cmd}`.\n")
         print(__doc__)

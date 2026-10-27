@@ -122,6 +122,15 @@ def clase(integ: dict, crudo: str) -> str:
     return "write"
 
 
+def declarada(integ: dict, crudo: str) -> bool:
+    """¿El manifiesto conoce esta herramienta? Con `toolNames`, una que no está ahí es nueva: vale `write` (lo
+    seguro), pero bloquearla es una falla del manifiesto, no del agente. Sin `toolNames` no se sabe: cuenta."""
+    nombres = integ.get("toolNames")
+    if not nombres:
+        return True
+    return bool(_variantes(crudo) & set(nombres))
+
+
 def accion(integ: dict, c: str) -> str:
     if c == "deny":
         return "deny"
