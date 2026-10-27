@@ -409,6 +409,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
         <a href="#portar"><b>Portar</b><span>plugin o shell hook, ocho stacks</span></a>
       </div></details>
       <details class="menu"><summary>Evidencia</summary><div class="drop">
+        <a href="#produccion"><b>En producción</b><span>un SRE real que se gana la autonomía</span></a>
         <a href="#prueba"><b>Prueba</b><span>cada número, un comando</span></a>
         <a href="#evaluacion"><b>Evaluación</b><span>guías, reglas y señales, con IC95</span></a>
         <a href="#huecos"><b>Huecos</b><span>lo que no puede prometer</span></a>
@@ -563,9 +564,32 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <div class="peldano" role="listitem"><span class="lv">L2</span><h3>Con aprobación</h3><p>Escribe, y cada escritura la aprueba un humano.</p><div class="ev">para subir<b>10 cambios aprobados · ≤ 10 % denegados · gates ≥ 90 % en verde</b></div></div>
       <div class="peldano" role="listitem"><span class="lv">L3</span><h3>Autonomía en el loop</h3><p>Trabaja solo dentro del loop, con gate, tope y freno de mano.</p><div class="ev">sigue vigilado<b>un senior juzga y firma cada PR</b></div></div>
     </div>
-    <p class="bajada"><b>Bajar es automático.</b> En las pruebas, un agente en L3 intentó algo que una regla crítica veda y bajó a L2; después tocó archivos que no debía y bajó a L1. El panel en vivo lo mostró como alerta, con el motivo. El nivel vive bajo <code>.git/</code>, donde el agente no escribe: no se firma a sí mismo.</p>
+    <p class="bajada"><b>Bajar es automático.</b> En las pruebas, un agente en L3 intentó algo que una regla crítica veda y bajó a L2; después tocó archivos que no debía y bajó a L1. El panel en vivo lo mostró como alerta, con el motivo. El nivel vive bajo <code>.git/</code> (en producción, en un volumen), donde el agente no escribe: no se firma a sí mismo.</p>
+    <p class="bajada"><b>Desde L2, el porqué se comprueba.</b> Aprobar «reiniciar el servicio» es aprobar una conclusión. La propuesta puede traer un <b>certificado</b> —hechos, reglas, deducción— que verifica un programa que no comparte código con el agente. Una conclusión sesgada o editada no verifica, y el ascenso puede exigir que las propuestas vengan certificadas.</p>
     <div class="nunca"><b>Ni en L3, solo:</b><span class="x">fusionar a main</span><span class="x">firmar su ascenso</span><span class="x">cambiar sus permisos</span></div>
     <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/autonomia.md">Autonomía por niveles</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workshop/autonomia/README.md">Workshop del agente que se gana la autonomía</a></p>
+  </div>
+</div></section>
+
+<section id="produccion"><div class="wrap sec-inner">
+  <div class="rail"><b>0d</b>producción</div>
+  <div>
+    <div class="col stack">
+      <h2>Probado en producción: un SRE que se gana la autonomía</h2>
+      <p class="lede">El primer repo que instaló el arnés y salió a producción es un agente SRE de solo lectura: observa una plataforma real, abre incidentes con reglas y avisa por Telegram, desatendido, en un contenedor sin <code>.git</code> ni terminal. En una semana mostró qué supuestos del arnés sólo valían en un repo de desarrollo, y los cerró.</p>
+    </div>
+    <div class="grid three">
+      <div class="cell stat"><span class="lbl">sesiones limpias</span><b>30/30</b><span class="why">conversaciones reales con el modelo en L0 sin un solo intento fuera del nivel, en la ventana del 27-oct-2026.</span><span class="cmd">cli.py nivel</span></div>
+      <div class="cell stat"><span class="lbl">bloqueos que no eran suyos</span><b>2</b><span class="why">los de la ventana anterior: una herramienta nueva sin clasificar y la revisión de skills en segundo plano de Hermes. Ahora no le restan evidencia.</span><span class="cmd">origen: config · doctor.py</span></div>
+      <div class="cell stat"><span class="lbl">red team por correo</span><b>3/3</b><span class="why">correos de ataque reales: avisó por Telegram, no obedeció, no abrió el enlace ni respondió.</span><span class="cmd">mail.spoof_suspect · mail.injection_suspect</span></div>
+    </div>
+    <div class="grid two" style="margin-top:1.2rem">
+      <div class="cell"><span class="mark">autonomia.firmadas</span><h3>Firmar es mergear</h3><p>En producción no hay terminal para firmar. Un PR revisado agrega la transición a un archivo versionado y el arranque la aplica una vez, en orden. <code>subir</code> sigue exigiendo la evidencia: el PR firma, no regala. El agente no puede editar ese archivo.</p><span class="foot">falla: un nivel que no se puede ganar porque firmar pedía una shell</span></div>
+      <div class="cell"><span class="mark">recomendacion · hallazgo juzgar</span><h3>Se juzga donde la gente ya mira</h3><p>Una etiqueta en el issue del tablero registra el juicio de una propuesta o de una alerta, con la firma de quien la puso, una vez por issue. Los falsos positivos también son evidencia: acertar, no sólo obedecer.</p><span class="foot">falla: evidencia que sólo existe si alguien abre una terminal en el contenedor</span></div>
+      <div class="cell"><span class="mark">autonomia.certificados</span><h3>Un porqué que no hay que creer</h3><p>El piloto certifica la causa raíz de cada incidente investigado con <code>oo-horn</code>, el verificador en Lean 4 de open-ontologies. Quien aprueba, o un auditor meses después, comprueba la deducción sin confiar en el agente ni en el modelo.</p><span class="foot">falla: aprobar una conclusión dictada por un correo plantado</span></div>
+      <div class="cell"><span class="mark">huellas.json · .hermes/integraciones/</span><h3>Lo del repo no se pisa</h3><p>El piloto tuvo que parchar su copia del arnés; un <code>--upgrade</code> la habría borrado sin avisar. Ahora el instalador sabe qué escribió y frena lo que el repo cambió, y las herramientas propias viven fuera del código del arnés.</p><span class="foot">falla: un arreglo local que desaparece en la próxima actualización</span></div>
+    </div>
+    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/decisions/0014-piloto-en-produccion.md">Lo que enseñó el piloto (ADR 0014)</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/autonomia.md#producción-sin-shell-ni-git">Autonomía en producción</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/autonomia.md#certificados-comprobar-el-porqué-sin-creerle">Certificados</a></p>
   </div>
 </div></section>
 
@@ -665,17 +689,18 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
     </div>
     <div class="grid two">
       <div class="cell"><span class="mark">abierto · fuera del loop</span><h3>Un programa que no es Python</h3><p>En una sesión interactiva, un binario o un script de node que lee el <code>.env</code> sin nombrarlo no lo ve ningún regex. Python ya está cerrado (la guardia de sesión), y en el loop no hay <code>.env</code> donde trabaja el agente.</p><span class="foot">mitigación: guardia de sesión · pre-commit · secretos fuera del disco</span></div>
-      <div class="cell"><span class="mark">abierto · inyección</span><h3>Si la respuesta obedeció</h3><p>Ningún freno sabe si un texto es dato o instrucción. Lo que tiene efecto afuera escala tras leer a un tercero, y la respuesta de esa sesión lleva al pie de qué fuente leyó.</p><span class="foot">mitigación: sesión contaminada · aviso en la respuesta · gate de la tarea</span></div>
-      <div class="cell"><span class="mark">abierto · medición</span><h3>El loop con un modelo de verdad</h3><p>Los casos prueban el arnés con un agente determinista. Cuánto obedece un modelo el motivo de un freno no está medido: necesita una key. El revisor inferencial sí se midió con un modelo real.</p><span class="foot">mitigación: contrato con Hermes real en cada PR · pipeline nocturno</span></div>
+      <div class="cell"><span class="mark">abierto · inyección</span><h3>Si la respuesta obedeció</h3><p>Ningún freno sabe si un texto es dato o instrucción. Lo que tiene efecto afuera escala tras leer a un tercero, y la respuesta de esa sesión lleva al pie de qué fuente leyó, también después de un reinicio. Desde L2, una conclusión certificada que fue sesgada no verifica.</p><span class="foot">mitigación: sesión contaminada · aviso en la respuesta · certificados · gate de la tarea</span></div>
+      <div class="cell"><span class="mark">abierto · medición</span><h3>El loop con un modelo de verdad</h3><p>Los casos prueban el arnés con un agente determinista; en el loop, cuánto obedece un modelo el motivo de un freno no está medido. Fuera del loop ya hay datos: el piloto en producción, 30 de 30 sesiones sin salirse del nivel. El revisor inferencial se midió con un modelo real.</p><span class="foot">mitigación: contrato con Hermes real en cada PR · piloto en producción · pipeline nocturno</span></div>
       <div class="cell"><span class="mark">abierto · integraciones</span><h3>Si un mensaje permitido es correcto</h3><p>A quién, cuánto, desde qué tarea, después de leer qué, y que no lleve un secreto ni un <code>{{hueco}}</code> de plantilla: eso se decide. Si el dato es de otro cliente o la promesa es falsa, no.</p><span class="foot">mitigación: lista de destinatarios · borrador en vez de envío</span></div>
     </div>
     <div class="tscroll"><table>
       <thead><tr><th>Cerrado hace poco</th><th>Mecanismo</th><th>Prueba</th></tr></thead>
       <tbody>
-        <tr><td>un programa Python de una sesión interactiva lee el <code>.env</code> armando la ruta</td><td>guardia de sesión: <code>PYTHONPATH</code> de Hermes + spec en <code>.git/</code></td><td>procesos reales en el self-test</td></tr>
-        <tr><td>un mensaje permitido sale con un secreto o con <code>Hola {{nombre}}</code></td><td><code>integrations.content</code></td><td>self-test, anidado como lo arma Graph</td></tr>
-        <tr><td>un secreto copiado en la respuesta del turno</td><td><code>transform_llm_output</code> lo tapa antes de mostrar y guardar</td><td>e2e por la costura real de Hermes</td></tr>
-        <tr><td>con aprobaciones seguidas, el tope por hora deja de cortar</td><td><code>post_tool_call</code> cuenta lo aprobado y ejecutado</td><td>e2e con el emisor real de Hermes</td></tr>
+        <tr><td>en producción (sin <code>.git</code> ni shell) la autonomía no se podía ganar ni firmar</td><td>estado en un volumen, transiciones firmadas por PR, juicios desde el tablero</td><td>self-test §15 y dos mutaciones</td></tr>
+        <tr><td>dos bloqueos que no eran del agente le costaron la evidencia</td><td>herramienta fuera de <code>toolNames</code> → <code>origen: config</code>; <code>doctor.py</code> avisa lo de Hermes</td><td>self-test §15 y una mutación</td></tr>
+        <tr><td><code>MEDIA:/ruta</code> citado en la respuesta adjunta el archivo al chat</td><td><code>output.defang</code> rompe el marcador</td><td>self-test con el <code>example</code> y una mutación</td></tr>
+        <tr><td>el aviso de terceros se perdía en cada deploy</td><td>la marca se reconstruye del registro de eventos</td><td>self-test §15 y una mutación</td></tr>
+        <tr><td><code>install.py --upgrade</code> borraba un parche local</td><td><code>huellas.json</code>, marca <code>!</code> y <code>--pisar</code></td><td>self-test §11 y §16, y una mutación</td></tr>
       </tbody>
     </table></div>
     <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md">Auditoría completa de huecos</a></p>
@@ -780,7 +805,9 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
         <tr><td>pedir aprobación humana</td><td><code>pre_tool_call</code></td><td><code>{"action":"approve"}</code> → el gate de aprobación de Hermes; en cron se niega solo</td></tr>
         <tr><td>no cerrar con el gate pendiente</td><td><code>pre_verify</code></td><td><code>{"action":"continue","message"}</code>, sólo si el turno editó archivos, máx. 3</td></tr>
         <tr><td>contar lo que un humano aprobó</td><td><code>post_tool_call</code></td><td>observador, después de ejecutar; <code>status="blocked"</code> si se negó</td></tr>
-        <tr><td>tapar un secreto en la respuesta</td><td><code>transform_llm_output</code></td><td>el primer <code>str</code> reemplaza la respuesta antes de mostrarla y guardarla</td></tr>
+        <tr><td>tapar un secreto en la respuesta</td><td><code>transform_llm_output</code></td><td>el primer <code>str</code> reemplaza la respuesta antes de mostrarla y guardarla — <b>no se encadena</b>: un plugin que carga antes y devuelve texto descarta el del arnés (<code>doctor.py</code> lo avisa)</td></tr>
+        <tr><td>que un resultado OK no parezca fallo</td><td><code>_detect_tool_failure</code></td><td><code>"error"</code> o <code>"failed"</code> en los primeros 500 caracteres cuentan como fallo, aunque la herramienta haya salido bien</td></tr>
+        <tr><td>mandar un mensaje sin adjuntar nada</td><td><code>hermes send</code></td><td><code>MEDIA:&lt;ruta&gt;</code> en cualquier parte del texto adjunta ese archivo: <code>output.defang</code> lo rompe</td></tr>
         <tr><td>lint del archivo recién escrito</td><td><code>transform_tool_result</code></td><td>el primer <code>str</code> reemplaza el resultado que ve el modelo</td></tr>
         <tr><td>estado del repo al abrir</td><td><code>register_system_prompt_section</code></td><td>≤ 4000 caracteres, congelada por sesión</td></tr>
         <tr><td>pistas según el pedido</td><td><code>pre_llm_call</code></td><td><code>{"context"}</code> se suma al mensaje del usuario</td></tr>
@@ -814,6 +841,8 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
     <div class="scar"><h3>Un <code>patch</code> en modo V4A se salteaba los frenos de escritura</h3><p><b>Causa:</b> ese modo no trae <code>path</code>; las rutas van en encabezados dentro del texto. <b>Mecanismo:</b> la gramática V4A va al config; el freno evalúa cada ruta y cada línea agregada.</p></div>
     <div class="scar"><h3>El arnés se apagaba en el gateway y en cron</h3><p><b>Causa:</b> buscaba el repo desde el cwd del proceso, no desde el de la sesión. <b>Mecanismo:</b> el plugin le pregunta a Hermes el cwd de la sesión; caso en el e2e con el proceso afuera y la sesión adentro.</p></div>
     <div class="scar"><h3>En Windows el gate no fallaba: desaparecía</h3><p><b>Causa:</b> consola cp1252; imprimir <code>✓</code> reventaba antes de verificar nada. <b>Mecanismo:</b> salida UTF-8 forzada y un caso del self-test que emula cp1252 — lo cazó la matriz de CI.</p></div>
+    <div class="scar"><h3>En producción, la autonomía no se podía ganar</h3><p><b>Causa:</b> el nivel vivía en <code>.git/</code> y la imagen no lo tiene: los días en el nivel quedaban en 0 para siempre, y firmar pedía una shell. <b>Mecanismo:</b> estado en un volumen, evidencia desde el primer evento y transiciones firmadas por PR — lo cazó el piloto doctiling-sre.</p></div>
+    <div class="scar"><h3>Una línea de log podía mandar los secretos al chat</h3><p><b>Causa:</b> Hermes adjunta el archivo de <code>MEDIA:&lt;ruta&gt;</code>, y una respuesta cita logs de terceros. <b>Mecanismo:</b> <code>output.defang</code> rompe el marcador antes de que la respuesta salga, con su ejemplo en el self-test.</p></div>
   </div>
 </div></section>
 
