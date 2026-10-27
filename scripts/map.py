@@ -61,7 +61,7 @@ def construir(config: dict, raiz: Path = REPO_ROOT, home: Path = HARNESS_HOME) -
     def agregar(nombre, c, tipo_def):
         etapas = c.get("stage")
         piezas.append({"nombre": nombre, "dir": c.get("direction", "?"), "tipo": c.get("kind", tipo_def),
-                       "etapas": etapas if isinstance(etapas, list) else [etapas]})
+                       "etapas": etapas if isinstance(etapas, list) else [etapas], "intent": c.get("intent")})
 
     # Hooks del plugin: la dirección y la etapa las pone el HOOK de Hermes, no el freno.
     for h in manifest_hooks(home):
@@ -83,7 +83,8 @@ def construir(config: dict, raiz: Path = REPO_ROOT, home: Path = HARNESS_HOME) -
 
     # Señales del gate: un sensor computacional en cada lugar donde corre el gate COMPLETO.
     for s in (config.get("gate") or {}).get("signals") or []:
-        agregar(f"gate · {s.get('name')}", {"direction": "sensor", "stage": tax.get("gateStages") or []}, "computacional")
+        agregar(f"gate · {s.get('name')}", {"direction": "sensor", "stage": tax.get("gateStages") or [], "intent": s.get("why")},
+                "computacional")
 
     # Skills: el lugar donde vive lo inferencial, así que cada una se declara.
     for root in (config.get("skills") or {}).get("roots") or []:

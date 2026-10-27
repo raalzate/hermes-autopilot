@@ -141,6 +141,39 @@ def guardia_sesion(config: dict | None, root: Path) -> None:
                        "en una sesión interactiva, un script del agente los lee sin nombrarlos. `sessionGuard.python: true` lo cierra para Python")
 
 
+def evidencia_hermes(config: dict | None, root: Path, texto: str) -> None:
+    """Hermes lanza, cada `skills.creation_nudge_interval` iteraciones (10 por defecto), un agente en segundo
+    plano que llama a `skill_manage`. En un nivel donde aprender está vedado el freno lo bloquea y la sesión
+    cuenta como salida del nivel: el agente pierde evidencia por algo que no hizo."""
+    try:
+        from harness import autonomia
+        n = autonomia.nivel(config, root) if autonomia.spec(config) else None
+        aprender = autonomia.accion(config, n, "skill", {}) if n else "allow"
+    except Exception:  # noqa: BLE001 — el doctor informa, no se cae
+        return
+    m = re.search(r"^\s+creation_nudge_interval:\s*(\d+)", texto, re.M)
+    if aprender != "allow" and (m is None or int(m.group(1)) != 0):
+        nota(AMARILLO, f"nivel {n} sin aprender y `skills.creation_nudge_interval` en {m.group(1) if m else '10 (por defecto)'}: "
+                       "la revisión de skills en segundo plano choca con el freno y cuenta como intento fuera del nivel. "
+                       "Ponelo en 0 mientras el nivel no deje aprender")
+    # Hermes no encadena `transform_llm_output`: gana el primer plugin que devuelve texto, en orden alfabético
+    # (agent/turn_finalizer.py, resolve_plugin_load_order). Uno que cargue antes que repo-harness y transforme la
+    # respuesta se come el aviso de terceros y lo tapado de los secretos, sin que nada falle.
+    for nombre in sorted(yaml_lista(texto, "plugins", "enabled")):
+        if nombre >= "repo-harness":
+            continue
+        d = hermes_home() / "plugins" / nombre
+        fuente = "".join(f.read_text(encoding="utf-8", errors="replace") for f in d.rglob("*.py")) if d.is_dir() else ""
+        if "transform_llm_output" in fuente:
+            nota(AMARILLO, f"el plugin `{nombre}` carga antes que repo-harness y transforma la respuesta: cuando devuelve "
+                           "texto, Hermes descarta el de repo-harness (aviso de terceros y secretos tapados). Que ese plugin "
+                           "haga lo mismo o que devuelva None")
+    if re.search(r"^\s+tool_search:\s*\n\s+enabled:\s*(auto|on|true)\b", texto, re.M):
+        nota(AMARILLO, "`tools.tool_search.enabled` difiere las herramientas detrás de tool_describe/tool_call: con pocas "
+                       "herramientas propias, el modelo adivina el esquema y falla (17 llamadas para una pregunta en el piloto). "
+                       "Con menos de ~20 herramientas, `off`")
+
+
 def main() -> int:
     config = load_config(REPO_ROOT)
     home = hermes_home()
@@ -235,6 +268,9 @@ def main() -> int:
     # 8. Guardia de Python fuera del loop: con secretos en el disco y sin ella, un programa del agente
     #    en una sesión interactiva los lee sin nombrarlos (docs/huecos.md).
     guardia_sesion(config, REPO_ROOT)
+
+    # 9. Lo que Hermes hace por su cuenta y ensucia la evidencia de autonomía (piloto doctiling-sre).
+    evidencia_hermes(config, REPO_ROOT, texto)
 
     for nivel, msg in hallazgos:
         print(f"  {nivel} {msg}")

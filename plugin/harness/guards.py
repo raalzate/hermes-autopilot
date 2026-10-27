@@ -478,6 +478,11 @@ def nivel_guard(ev: Event, config: dict, root: Path) -> Decision:
         return Decision.allow()
     regla = {"id": f"nivel-{n}-{kind}", "reason": f"el nivel {n} no permite {que} sin más"}
     texto = autonomia.mensaje(config, n, kind, que, act)
+    if kind == "integracion" and not integ.declarada(de[1], de[2]):
+        # La culpa es del manifiesto: el bloqueo queda (lo seguro), pero no le resta evidencia al agente.
+        regla["origen"] = "config"
+        texto += (f"\n`{ev.tool}` no está en `toolNames` del manifiesto de `{de[0]}`: es nueva y vale `write` hasta que "
+                  "alguien la clasifique. Avisale al humano; este bloqueo no cuenta contra tu nivel.")
     return Decision.ask(texto, regla) if act == "ask" else Decision.deny(texto, regla)
 
 

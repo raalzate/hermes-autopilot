@@ -53,6 +53,11 @@ def _comun(root: Path) -> Path | None:
 
 
 def ruta(config: dict | None, root: Path) -> Path | None:
+    """`HARNESS_AUTONOMIA_FILE` (ruta absoluta) lo redirige, como `HARNESS_EVENTS_FILE` al registro: una
+    imagen sin `.git` (producción) guarda el nivel en su volumen; sin eso no hay `desde` y los días no corren."""
+    forzado = os.environ.get("HARNESS_AUTONOMIA_FILE")
+    if forzado:
+        return Path(forzado)
     rel = spec(config).get("estado") or ".git/harness-autonomia.json"
     if rel.startswith(".git/"):
         c = _comun(root)
@@ -117,9 +122,15 @@ def anterior(n: str) -> str | None:
 
 # ── evidencia (pura) ──────────────────────────────────────────────────────────
 
+def fuera_de_nivel(e: dict) -> bool:
+    """Un bloqueo del freno de nivel que es del AGENTE. Uno con `origen` (una herramienta que el manifiesto no
+    conoce) es del config: sigue bloqueado, pero no le resta evidencia (piloto doctiling-sre, 2026-10-27)."""
+    return e.get("kind") == "block" and str(e.get("rule", "")).startswith("nivel-") and not e.get("origen")
+
+
 def _sesiones(evs: list[dict]) -> tuple[set, set]:
     vistas = {e.get("session") for e in evs if e.get("kind") == "turno" and e.get("session")}
-    sucias = {e.get("session") for e in evs if e.get("kind") == "block" and str(e.get("rule", "")).startswith("nivel-")}
+    sucias = {e.get("session") for e in evs if fuera_de_nivel(e)}
     return vistas, sucias
 
 
@@ -132,12 +143,13 @@ def metricas(evs: list[dict], desde: float, ahora: float | None = None) -> dict:
     evs = [e for e in evs if float(e.get("at") or 0) >= desde]
     vistas, sucias = _sesiones(evs)
     recs = [e for e in evs if e.get("kind") == "recomendacion"]
+    hall = [e for e in evs if e.get("kind") == "hallazgo"]
     aprob = [e for e in evs if e.get("kind") == "aprobacion"]
     gates = [e for e in evs if e.get("kind") == "gate" and e.get("mode", "full") != "fast"]
     verdes = [g for g in gates if str(g.get("verdict", "")).startswith("verde")]
     return {
         "sesionesLimpias": len(vistas - sucias),
-        "intentosFueraDeNivel": sum(1 for e in evs if e.get("kind") == "block" and str(e.get("rule", "")).startswith("nivel-")),
+        "intentosFueraDeNivel": sum(1 for e in evs if fuera_de_nivel(e)),
         "recomendaciones": len(recs),
         "aceptadasMin": _ratio(sum(1 for e in recs if e.get("aceptada")), len(recs)),
         "cambiosAprobados": sum(1 for e in aprob if e.get("approved")),
@@ -145,6 +157,13 @@ def metricas(evs: list[dict], desde: float, ahora: float | None = None) -> dict:
         "gatesMin": len(gates),
         "gateVerdeMin": _ratio(len(verdes), len(gates)),
         "tamperings": sum(1 for e in evs if e.get("kind") == "tampering"),
+        # Competencia, no sólo obediencia: lo que el agente detectó y una persona juzgó (un agente que observa
+        # y avisa se mide por cuántas de sus alertas eran reales).
+        "hallazgosJuzgados": len(hall),
+        "falsosPositivosMax": _ratio(sum(1 for e in hall if not e.get("valido")), len(hall)),
+        # El porqué comprobable: de las propuestas juzgadas, cuántas traían un certificado que el verificador
+        # del repo aceptó. Una sin certificado cuenta como no verificada (ADR 0014).
+        "certificadosVerificadosMin": _ratio(sum(1 for e in recs if e.get("certificado") == "verificado"), len(recs)),
         "diasMin": max(0.0, ((ahora or time.time()) - desde) / 86400) if desde else 0.0,
     }
 
@@ -152,12 +171,17 @@ def metricas(evs: list[dict], desde: float, ahora: float | None = None) -> dict:
 # Cómo se compara cada métrica con su umbral: "min" = al menos, "max" = como mucho.
 COMPARA = {"sesionesLimpias": "min", "intentosFueraDeNivel": "max", "recomendaciones": "min", "aceptadasMin": "min",
            "cambiosAprobados": "min", "denegadosMax": "max", "gatesMin": "min", "gateVerdeMin": "min",
-           "tamperings": "max", "diasMin": "min"}
+           "tamperings": "max", "diasMin": "min", "hallazgosJuzgados": "min", "falsosPositivosMax": "max",
+           "certificadosVerificadosMin": "min"}
 ETIQUETA = {"sesionesLimpias": "sesiones sin salirse del nivel", "intentosFueraDeNivel": "intentos fuera del nivel",
             "recomendaciones": "recomendaciones juzgadas", "aceptadasMin": "recomendaciones aceptadas",
             "cambiosAprobados": "cambios aprobados", "denegadosMax": "aprobaciones denegadas",
             "gatesMin": "gates corridos", "gateVerdeMin": "gates verdes", "tamperings": "intocables tocados",
-            "diasMin": "días en el nivel"}
+            "diasMin": "días en el nivel", "hallazgosJuzgados": "hallazgos juzgados",
+            "falsosPositivosMax": "falsos positivos", "certificadosVerificadosMin": "propuestas con certificado verificado"}
+
+# Lo que puede decir el verificador de un certificado (lo corre la CLI al juzgar, nunca un freno).
+CERTIFICADO = ("verificado", "rechazado", "ausente", "error")
 
 
 def evidencia(config: dict | None, n: str, evs: list[dict], desde: float, ahora: float | None = None) -> list[dict]:
@@ -182,6 +206,14 @@ def evidencia(config: dict | None, n: str, evs: list[dict], desde: float, ahora:
         filas.append({"clave": clave, "etiqueta": ETIQUETA.get(clave, clave), "valor": v, "umbral": u,
                       "modo": modo or "?", "ok": ok})
     return filas
+
+
+def inicio(est: dict, evs: list[dict]) -> float:
+    """Desde cuándo cuenta la evidencia: la última transición o, si nunca hubo una, el primer evento del
+    registro (desde ahí el agente está en `inicial`). Sin ninguno de los dos, 0: los días no corren."""
+    if est.get("desde"):
+        return est["desde"]
+    return min((float(e.get("at") or 0) for e in evs if e.get("at")), default=0.0)
 
 
 def puede_subir(config: dict | None, n: str, evs: list[dict], desde: float, ahora: float | None = None) -> tuple[bool, list[dict]]:
@@ -285,9 +317,12 @@ def mensaje(config: dict, n: str, familia: str, que: str, act: str) -> str:
     sig = siguiente(n)
     cmd = spec(config).get("comando") or "python3 scripts/cli.py nivel"
     if act == "ask":
+        # El freno no corre el verificador (no lanza procesos): le dice al humano cómo comprobar el porqué.
+        cert = ((spec(config).get("certificados") or {}).get("verificador")
+                and f" Si ejecuta una propuesta, comprobá su porqué antes: `{cmd.replace(' nivel', ' recomendacion')} verificar <propuesta>`.")
         return (f"NIVEL {n} ({lv.get('nombre', n)}): {que} pide aprobación humana. En este nivel el agente puede "
                 f"{lv.get('puede', 'cambiar el repo con aprobación')} Lo que el humano decida queda como evidencia"
-                + (f" para {sig}." if sig else "."))
+                + (f" para {sig}." if sig else ".") + (cert or ""))
     return (f"NIVEL {n} ({lv.get('nombre', n)}): {que} no está permitido en este nivel.\n"
             f"Lo que sí podés hacer: {lv.get('puede', 'leer y reportar')}\n"
             f"La autonomía se gana con evidencia: " + (f"lo que falta para {sig} lo muestra `{cmd}`. " if sig else "")
@@ -311,11 +346,15 @@ def _escribir(config: dict, root: Path, estado: dict) -> bool:
         return False
 
 
-def transicion(config: dict, root: Path, a: str, tipo: str, firma: str = "", motivo: str = "", evid: list | None = None) -> bool:
-    """Escribe el nivel nuevo, lo agrega al historial y lo deja en el registro (P29)."""
+def transicion(config: dict, root: Path, a: str, tipo: str, firma: str = "", motivo: str = "", evid: list | None = None,
+               ref: str = "") -> bool:
+    """Escribe el nivel nuevo, lo agrega al historial y lo deja en el registro (P29). `ref`: la entrada del
+    registro firmado que la pidió (un despliegue la aplica una sola vez)."""
     est = leer(config, root)
     de = est["nivel"]
     h = {"at": round(time.time(), 3), "de": de, "a": a, "tipo": tipo, "firma": firma, "motivo": motivo}
+    if ref:
+        h["ref"] = ref
     if evid:
         h["evidencia"] = {f["clave"]: f["valor"] for f in evid}
     if not _escribir(config, root, {"nivel": a, "historial": (est["historial"] + [h])[-50:]}):
@@ -325,7 +364,9 @@ def transicion(config: dict, root: Path, a: str, tipo: str, firma: str = "", mot
     return True
 
 
-def subir(config: dict, root: Path, firma: str, evs: list[dict] | None = None) -> tuple[bool, str, list[dict]]:
+def subir(config: dict, root: Path, firma: str, evs: list[dict] | None = None,
+          ahora: float | None = None, ref: str = "") -> tuple[bool, str, list[dict]]:
+    """`ahora`: el reloj de la evaluación (por defecto, el real). Lo usa el self-test para `diasMin`."""
     if not firma.strip():
         return False, "subir de nivel lo firma un humano: falta --firma.", []
     est = leer(config, root)
@@ -336,10 +377,10 @@ def subir(config: dict, root: Path, firma: str, evs: list[dict] | None = None) -
     if not sig:
         return False, f"ya está en {n}: no hay nivel más alto.", []
     evs = evs if evs is not None else events.tail(config, root, 20000)
-    ok, filas = puede_subir(config, n, evs, est["desde"])
+    ok, filas = puede_subir(config, n, evs, inicio(est, evs), ahora)
     if not ok:
         return False, f"la evidencia no alcanza para pasar de {n} a {sig}.", filas
-    transicion(config, root, sig, "ganado", firma=firma, motivo=f"evidencia cumplida para {n}->{sig}", evid=filas)
+    transicion(config, root, sig, "ganado", firma=firma, motivo=f"evidencia cumplida para {n}->{sig}", evid=filas, ref=ref)
     return True, f"{n} → {sig}, firmado por {firma}.", filas
 
 
@@ -352,15 +393,61 @@ def bajar(config: dict, root: Path, motivo: str, firma: str = "", a: str | None 
     return destino
 
 
-def declarar(config: dict, root: Path, a: str, firma: str, motivo: str) -> tuple[bool, str]:
+def declarar(config: dict, root: Path, a: str, firma: str, motivo: str, ref: str = "") -> tuple[bool, str]:
     """Fijar un nivel SIN evidencia: la excepción a P28 (un sandbox de aprendizaje, el repo del
     propio arnés). Exige firma y motivo, y el panel lo muestra como alerta mientras dure."""
     if a not in NIVELES:
         return False, f"nivel inválido: {a} (válidos: {', '.join(NIVELES)})"
     if not firma.strip() or not motivo.strip():
         return False, "declarar un nivel sin evidencia exige --firma y --motivo: queda a la vista."
-    transicion(config, root, a, "declarado", firma=firma, motivo=motivo)
+    transicion(config, root, a, "declarado", firma=firma, motivo=motivo, ref=ref)
     return True, f"{a} declarado por {firma} ({motivo}). El panel lo muestra como no ganado."
+
+
+JUICIOS = {"recomendacion": "aceptada", "hallazgo": "valido"}
+
+
+def juzgar(config: dict, root: Path, kind: str, ref: str, ok: bool, firma: str, evs: list[dict] | None = None,
+           certificado: str = "") -> tuple[bool, str]:
+    """Un juicio humano que viene de AFUERA del repo (una etiqueta en el tablero, un botón en el chat): la
+    propuesta (`recomendacion`) o la alerta (`hallazgo`) identificada por `ref`, una sola vez, con la firma de
+    quien juzgó. Así producción junta evidencia sin una shell (piloto doctiling-sre: etiquetas `rec:*`).
+    `certificado`: lo que dijo el verificador del porqué de la propuesta (`CERTIFICADO`), si se corrió."""
+    campo = JUICIOS.get(kind)
+    if not campo:
+        return False, f"no se juzga `{kind}` (son {', '.join(JUICIOS)})"
+    if not str(ref).strip() or not str(firma).strip():
+        return False, "un juicio lleva `ref` (qué se juzgó) y la firma de quien lo juzgó."
+    evs = evs if evs is not None else events.tail(config, root, 20000)
+    if any(e.get("kind") == kind and str(e.get("ref")) == str(ref) for e in evs):
+        return False, f"{ref} ya fue juzgada: cuenta una vez."
+    extra = {"certificado": certificado} if certificado in CERTIFICADO and kind == "recomendacion" else {}
+    events.record(config, root, kind, ref=str(ref), firma=firma, **{campo: bool(ok)}, **extra)
+    return True, f"{ref}: {campo if ok else 'no ' + campo} · {firma}" + (f" · certificado {certificado}" if extra else "")
+
+
+def aplicar_firmadas(config: dict, root: Path, entradas: list) -> list[tuple[str, bool, str]]:
+    """Las transiciones de un registro firmado (`autonomia.firmadas`): un archivo versionado donde cada entrada
+    la agrega un PR revisado. Mergear es firmar, así que producción (sin shell ni `.git`) cambia de nivel en el
+    próximo arranque. Se aplican en orden y una vez cada una (su `id` queda como `ref` en el historial). `subir`
+    sigue exigiendo la evidencia: si no alcanza, esa y las siguientes esperan. → [(id, aplicada, mensaje)]."""
+    hechas = {h.get("ref") for h in leer(config, root)["historial"] if isinstance(h, dict)}
+    out: list[tuple[str, bool, str]] = []
+    for e in entradas if isinstance(entradas, list) else []:
+        ref = str((e or {}).get("id") or "")
+        if not ref or ref in hechas:
+            continue
+        accion_, firma = e.get("accion"), str(e.get("firma") or "")
+        if accion_ == "declarar":
+            ok, msg = declarar(config, root, str(e.get("a") or ""), firma, str(e.get("motivo") or ""), ref=ref)
+        elif accion_ == "subir":
+            ok, msg, _ = subir(config, root, firma, ref=ref)
+        else:
+            ok, msg = False, f"acción desconocida: {accion_!r} (son `declarar` y `subir`)"
+        out.append((ref, ok, msg))
+        if not ok:
+            break  # en orden: una entrada nunca salta a otra que no se aplicó
+    return out
 
 
 def revisar(config: dict | None, root: Path, evs: list[dict] | None = None) -> str | None:
@@ -386,7 +473,8 @@ def resumen(config: dict | None, root: Path, evs: list[dict] | None = None) -> d
     est = leer(config, root)
     n = est["nivel"]
     evs = evs if evs is not None else events.tail(config, root, 20000)
-    ok, filas = puede_subir(config, n, evs, est["desde"])
+    desde = inicio(est, evs)
+    ok, filas = puede_subir(config, n, evs, desde)
     niveles = s.get("niveles") or {}
     alertas = []
     if est["error"]:
@@ -398,11 +486,16 @@ def resumen(config: dict | None, root: Path, evs: list[dict] | None = None) -> d
         # Visible siempre: un nivel declarado es una excepción a P28, no una forma de ganarlo.
         alertas.append(f"{n} fue declarado por un humano, no ganado con evidencia"
                        + (f" ({ult.get('motivo')})" if ult and ult.get("motivo") else " (`autonomia.inicial` del config)"))
+    ajenos = sorted({str(e.get("tool")) for e in evs if e.get("kind") == "block" and e.get("origen")
+                     and float(e.get("at") or 0) >= desde})
+    if ajenos:
+        alertas.append(f"bloqueos que no son del agente (herramientas fuera de `toolNames`: {', '.join(ajenos[:4])}): "
+                       "clasificalas en su manifiesto")
     return {
         "activa": True, "nivel": n, "nombre": (niveles.get(n) or {}).get("nombre", n),
         "puede": (niveles.get(n) or {}).get("puede", ""), "noPuede": (niveles.get(n) or {}).get("noPuede", ""),
         "loop": bool((niveles.get(n) or {}).get("loop")), "siguiente": siguiente(n),
-        "listoParaSubir": ok, "evidencia": filas, "desde": est["desde"], "inicial": est.get("inicial", False),
+        "listoParaSubir": ok, "evidencia": filas, "desde": desde, "inicial": est.get("inicial", False),
         "historial": est["historial"][-8:], "alertas": [a for a in alertas if a],
         "niveles": [{"id": k, "nombre": (niveles.get(k) or {}).get("nombre", k)} for k in NIVELES],
         "comando": s.get("comando") or "python3 scripts/cli.py nivel",

@@ -128,6 +128,146 @@ def por_integracion(config: dict | None, evs: list[dict]) -> list[dict]:
     return sorted(out.values(), key=lambda c: c["id"])
 
 
+# Las tres direcciones del arnés, como las lee un humano en el panel. «Gates» es el nombre de la
+# columna de sensores: lo que verifica DESPUÉS y decide si el trabajo es entregable.
+DIRECCIONES = {
+    "guía": ("Guías", "Orientan ANTES de que el agente decida: qué es el repo, cómo se trabaja y qué "
+             "procedimiento seguir. No bloquean; si una guía se ignora seguido, es candidata a freno."),
+    "freno": ("Frenos", "Paran una acción YA decidida y todavía no ejecutada. Cada uno dice qué pasó, por qué "
+              "importa y cuál es la salida. Bloquear niega; escalar pide la firma de un humano."),
+    "sensor": ("Gates y sensores", "Verifican DESPUÉS: el trabajo no es entregable hasta que pasan. Corren al "
+               "cerrar el turno, en commit y push, en CI y en el barrido continuo."),
+}
+
+# Cada familia de reglas del config: título, para qué existe, qué hace al casar y en qué etapa muerde.
+FAMILIAS_FRENO = (
+    ("terminal.deny", "Terminal · prohibido", "Comandos que el agente nunca corre: destruyen trabajo, apagan la verificación o desarman el arnés.", "block", "acción decidida"),
+    ("terminal.ask", "Terminal · con firma humana", "Comandos legítimos pero con efecto afuera (publicar, mandar datos): los aprueba una persona; en el loop, sin humano, no corren.", "ask", "acción decidida"),
+    ("protectedPaths", "Rutas que el agente no escribe", "Archivos que cambia un humano o una herramienta propia (secretos, git, el arnés, la cola del loop, lockfiles).", "block", "acción decidida"),
+    ("protectedReads", "Archivos que el agente no lee", "Secretos y claves: lo leído entra al contexto, al historial y puede salir en una respuesta.", "block", "acción decidida"),
+    ("patterns", "Contenido que no entra al repo", "Texto vedado en cualquier escritura, venga por la herramienta que venga.", "block", "acción decidida"),
+    ("memory.deny", "Lo que no se guarda en memoria", "La memoria viaja a todas las sesiones: un secreto o una regla que apaga un freno ahí se replica.", "block", "acción decidida"),
+    ("skills.deny", "Lo que una skill no enseña", "Una skill es una guía permanente: no puede enseñar a desarmar frenos.", "block", "acción decidida"),
+    ("cron.deny", "Lo que un cron no hace solo", "Lo desatendido se decide al crearlo: sin humano mirando no se publica ni se despliega.", "block", "acción decidida"),
+    ("taint.askCommands", "Tras leer a un tercero · comandos", "Después de leer web, tickets o correos, lo que sale afuera puede ser una inyección: escala.", "ask", "acción decidida"),
+    ("taint.askWrites", "Tras leer a un tercero · escrituras", "Escribir donde lo leen todas las sesiones futuras volvería permanente una instrucción plantada.", "ask", "acción decidida"),
+    ("integrations.content.deny", "Lo que no sale por una integración", "Un secreto o una plantilla sin completar en un mensaje que sí se permite mandar no vuelve.", "block", "integración"),
+    ("output.redact", "Lo que se tapa en la respuesta", "La respuesta del turno pasa por acá antes de que la vea el humano y antes de guardarse.", "redact", "fin del turno"),
+)
+
+
+def _texto_skill(p: Path) -> tuple[str, int]:
+    """La `description` del frontmatter de una skill y el largo del cuerpo (lo que cuesta cargarla)."""
+    try:
+        texto = p.read_text(encoding="utf-8")
+    except OSError:
+        return "", 0
+    m = re.search(r"^description:\s*(.+)$", texto, re.M)
+    return (m.group(1).strip() if m else ""), len(texto)
+
+
+def controles(config: dict, root: Path, mapa: dict | None, evs: list[dict], gate: dict) -> dict:
+    """Guías, frenos y gates agrupados, cada grupo con su intención y cada regla con su porqué, su
+    ejemplo y cuántas veces mordió en el registro. Lo que el panel lista es lo que el config declara:
+    una regla sin `reason` o una pieza sin `intent` se ve como tal, para que alguien la escriba."""
+    mordidas: dict[str, dict] = {}
+    for e in evs:
+        if e.get("kind") in ("block", "ask") and e.get("rule"):
+            c = mordidas.setdefault(str(e["rule"]), {"block": 0, "ask": 0, "last": 0})
+            c[e["kind"]] += 1
+            c["last"] = max(c["last"], e.get("at", 0))
+    registro = bool(events.spec(config))
+    out = {d: {"titulo": t, "intencion": i, "grupos": []} for d, (t, i) in DIRECCIONES.items()}
+    piezas = (mapa or {}).get("piezas") or []
+
+    def regla(r: dict, accion: str) -> dict:
+        m = mordidas.get(str(r.get("id")), {})
+        return {"id": r.get("id"), "porque": r.get("reason") or r.get("hint") or "", "ejemplo": r.get("example"),
+                "accion": accion, "mordio": m.get("block", 0) + m.get("ask", 0), "ultima": m.get("last", 0)}
+
+    # ── Guías ──
+    ctx = config.get("context") or {}
+    tope = ctx.get("maxChars")
+    tax = config.get("taxonomy") or {}
+    guias = []
+    for nombre, c in (tax.get("guides") or {}).items():
+        if nombre.startswith("$"):
+            continue
+        p = root / c.get("file", nombre)
+        n = p.stat().st_size if p.is_file() else 0
+        guias.append({"id": nombre, "porque": c.get("intent") or "", "etapa": c.get("stage"), "chars": n,
+                      "tope": tope if nombre in (ctx.get("files") or []) else None})
+    if guias:
+        out["guía"]["grupos"].append({"titulo": "Contexto que se carga", "etapa": "sesión", "tipo": "inferencial",
+                                      "intencion": "Lo que el agente lee al abrir la sesión. Cada carácter cuesta tokens en CADA turno: corto, con punteros en vez de copias.",
+                                      "items": guias})
+    rutas = [regla(r, "pista") for r in config.get("routes") or []]
+    if rutas:
+        out["guía"]["grupos"].append({"titulo": "Pistas de ruteo", "etapa": "pedido", "tipo": "computacional",
+                                      "intencion": "Si el pedido casa con el patrón, el turno recibe la pista: sólo se paga cuando aplica.",
+                                      "items": rutas})
+    skills_por_dir: dict[str, list] = {}
+    for raiz_sk in (config.get("skills") or {}).get("roots") or []:
+        d = root / raiz_sk
+        for f in sorted(d.glob("*/SKILL.md")) if d.is_dir() else []:
+            c = (tax.get("skills") or {}).get(f.parent.name) or {}
+            desc, n = _texto_skill(f)
+            skills_por_dir.setdefault(c.get("direction", "guía"), []).append(
+                {"id": f"/{f.parent.name}", "porque": c.get("intent") or desc, "etapa": c.get("stage"), "chars": n})
+    if skills_por_dir.get("guía"):
+        out["guía"]["grupos"].append({"titulo": "Skills (procedimientos)", "etapa": "pedido", "tipo": "inferencial",
+                                      "intencion": "Se cargan bajo demanda: en cada sesión sólo pesa la descripción; el cuerpo, cuando se usa.",
+                                      "items": skills_por_dir["guía"]})
+
+    # ── Frenos ──
+    au = autonomia.resumen(config, root) if autonomia.spec(config) else {}
+    if au.get("activa"):
+        out["freno"]["grupos"].append({"titulo": "Nivel de autonomía", "etapa": "acción decidida", "tipo": "computacional",
+                                       "intencion": "Corre antes que los demás frenos: lo que el nivel no permite no llega a evaluarse. Subir lo firma un humano.",
+                                       "items": [{"id": f"{au.get('nivel')} · {au.get('nombre')}", "porque": f"Puede: {au.get('puede') or '—'}",
+                                                  "ejemplo": f"No puede: {au.get('noPuede')}" if au.get("noPuede") else None, "accion": "block"}]})
+    for ruta, titulo, intencion, accion, etapa in FAMILIAS_FRENO:
+        reglas = [regla(r, accion) for r in _get(config, ruta) or [] if isinstance(r, dict)]
+        if reglas:
+            out["freno"]["grupos"].append({"titulo": titulo, "familia": ruta, "etapa": etapa, "tipo": "computacional",
+                                           "intencion": intencion, "items": reglas})
+    ramas = (config.get("branches") or {}).get("protected") or []
+    piezas_freno = [{"id": p["nombre"], "porque": p.get("intent") or "", "etapa": ", ".join(map(str, p["etapas"])), "tipo": p["tipo"]}
+                    for p in piezas if p["dir"] == "freno"]
+    if ramas:
+        piezas_freno.append({"id": "ramas protegidas: " + ", ".join(ramas), "porque": (config.get("branches") or {}).get("reason", ""), "etapa": "push"})
+    if piezas_freno:
+        out["freno"]["grupos"].append({"titulo": "Dónde se aplican", "etapa": "varias", "tipo": "computacional",
+                                       "intencion": "Los puntos del ciclo que ejecutan los frenos de arriba.", "items": piezas_freno})
+
+    # ── Gates y sensores ──
+    sig = gate.get("signals") or {}
+    senales = [{"id": s.get("name"), "porque": s.get("why") or "", "estado": sig.get(s.get("name"))}
+               for s in (config.get("gate") or {}).get("signals") or []]
+    if senales:
+        out["sensor"]["grupos"].append({"titulo": "Gate · definición de entregable", "etapa": "fin del turno · integración", "tipo": "computacional",
+                                        "intencion": f"Todas verdes = entregable. Una omitida no es verde. Corre con `{(config.get('gate') or {}).get('command', '')}`.",
+                                        "items": senales})
+    lint = [{"id": f"invariante · {i.get('file')}", "porque": i.get("reason") or "",
+             "ejemplo": " · ".join([*(f"debe: /{p}/" for p in i.get("mustContain") or []), *(f"no debe: /{p}/" for p in i.get("mustNotContain") or [])])}
+            for i in config.get("invariants") or []]
+    lint += [regla(r, "lint") for r in ctx.get("blockedPatterns") or []]
+    if lint:
+        out["sensor"]["grupos"].append({"titulo": "Lint sobre lo escrito", "etapa": "herramienta ejecutada", "tipo": "computacional",
+                                        "intencion": "Corre sobre el archivo recién escrito y le devuelve al agente el hallazgo en el mismo turno.",
+                                        "items": lint})
+    otros = [{"id": p["nombre"], "porque": p.get("intent") or "", "etapa": ", ".join(map(str, p["etapas"])), "tipo": p["tipo"]}
+             for p in piezas if p["dir"] == "sensor" and not p["nombre"].startswith(("gate · ", "skill · "))]
+    otros += [{**s, "tipo": "inferencial"} for s in skills_por_dir.get("sensor", [])]
+    if otros:
+        out["sensor"]["grupos"].append({"titulo": "Hooks, CI, skills de revisión", "etapa": "varias", "tipo": "mixto",
+                                        "intencion": "Los lugares donde el trabajo sale (commit, push, CI) y las revisiones con juicio.", "items": otros})
+    for d in out.values():
+        d["total"] = sum(len(g["items"]) for g in d["grupos"])
+    out["registro"] = registro
+    return out
+
+
 def fuentes(config: dict | None, root: Path) -> list[Path]:
     """Lo que alimenta el panel: si cambia la fecha de alguno, hay estado nuevo que empujar."""
     config = config or {}
@@ -179,6 +319,7 @@ def estado(config: dict | None, root: Path, n_eventos: int = 60) -> dict:
         mapa = mapa_mod.construir(config, root)
     except Exception:  # noqa: BLE001 — el panel informa; un mapa roto lo dice el gate
         mapa = None
+    historia = events.tail(config, root, 2000)
     return {
         "repo": root.name,
         "root": str(root),
@@ -194,8 +335,9 @@ def estado(config: dict | None, root: Path, n_eventos: int = 60) -> dict:
                  "limits": {k: spec.get(k) for k in ("maxIterations", "sameFailureLimit", "maxMinutes")} if spec else {},
                  "tasks": _tareas(config, root) if spec else None},
         "events": events.tail(config, root, n_eventos),
-        "topRules": mas_mordieron(events.tail(config, root, 2000)),
-        "integrations": por_integracion(config, events.tail(config, root, 2000)),
+        "topRules": mas_mordieron(historia),
+        "integrations": por_integracion(config, historia),
+        "controls": controles(config, root, mapa, historia, gate),
         "eventsEnabled": bool(events.spec(config)),
         "autonomia": autonomia.resumen(config, root),
     }
@@ -323,6 +465,19 @@ ul{list-style:none;margin:0;padding:0}li{padding:.28rem 0;border-top:1px solid v
 .escalera span.hecho{background:color-mix(in srgb,var(--ok) 25%,var(--chip));color:var(--ink)}.escalera span.aqui{background:var(--ok);color:var(--panel);font-weight:650}
 #aev li{display:block}#aev .bar{margin-top:.25rem}#aev .bar.no i{background:var(--warn)}#aev .fila{display:flex;gap:.5rem}#aev .fila .n{margin-left:auto}
 #aalertas li{color:var(--warn);font-size:.88rem}
+.ctl{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.col{border-top:4px solid var(--c);padding-top:.6rem;min-width:0}.col.guía{--c:var(--skip)}.col.freno{--c:var(--bad)}.col.sensor{--c:var(--ok)}
+.col>h3{display:flex;gap:.5rem;align-items:baseline;font-size:1rem}.col>h3 .n{margin-left:auto;color:var(--c)}
+.col>p{font-size:.85rem;color:var(--mute);margin:.2rem 0 .7rem}
+details.g{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--bg)}
+details.g>summary{cursor:pointer;padding:.5rem .7rem;list-style:none}details.g>summary::-webkit-details-marker{display:none}
+details.g>summary b{font-size:.9rem}details.g>summary .meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.25rem}
+details.g>summary .int{display:block;font-size:.82rem;color:var(--mute);margin-top:.25rem}
+details.g[open]>summary{border-bottom:1px solid var(--line)}
+details.g ul{padding:.2rem .7rem .5rem}details.g li{display:block;font-size:.84rem}
+details.g li .top{display:flex;gap:.4rem;align-items:baseline;flex-wrap:wrap}details.g li .top .n{margin-left:auto}
+details.g li .por{color:var(--ink);margin:.15rem 0}details.g li code{font-family:var(--mono);font-size:.76rem;background:var(--chip);border-radius:4px;padding:.05rem .3rem;overflow-wrap:anywhere}
+.chip.block{color:var(--bad)}.chip.ask{color:var(--warn)}.chip.sin{color:var(--warn)}
 </style>
 </head>
 <body>
@@ -336,10 +491,11 @@ ul{list-style:none;margin:0;padding:0}li{padding:.28rem 0;border-top:1px solid v
     <div class="ag"><div><div class="escalera" id="escalera"></div><div class="big" id="anivel">—</div><p id="apuede"></p><p class="mute" id="anopuede"></p><ul id="aalertas"></ul></div>
     <div><h3 id="aevtit">Evidencia</h3><ul id="aev"></ul><p id="afirma"></p></div>
     <div><h3>Transiciones</h3><ul id="ahist"></ul></div></div></section>
+  <section class="wide" id="controles"><h2>Controles del arnés · guías, frenos y gates, con su intención</h2><div class="ctl" id="ctl"></div></section>
   <section><h2>Gate</h2><div class="big" id="verdict">—</div><div class="mute" id="gatewhen"></div><ul id="signals" style="margin-top:.6rem"></ul></section>
   <section><h2>Loop autónomo</h2><div class="big" id="lphase">—</div><div id="ltask" class="mute"></div><div id="lreason"></div><ul id="attempts" style="margin-top:.6rem"></ul></section>
   <section><h2>Tareas</h2><div id="tasks"></div></section>
-  <section><h2>Frenos activos</h2><div class="grid2" id="rules"></div><h2 style="margin-top:1rem">Los que más mordieron</h2><ul id="top"></ul></section>
+  <section><h2>Los frenos que más mordieron</h2><p class="mute" style="font-size:.85rem;margin:0 0 .5rem">Mucho: el agente no conoce la regla (falta una guía) o muerde de más (revisarla).</p><ul id="top"></ul></section>
   <section><h2>Integraciones</h2><ul id="integ"></ul></section>
   <section><h2>Salud del arnés</h2><div class="grid2" id="health"></div></section>
   <section class="wide"><h2>Eventos en vivo</h2><ul id="ev"></ul></section>
@@ -385,7 +541,7 @@ function render(s){
   +(tot?`<div class="bar"><i style="width:${Math.round(100*T.done/tot)}%"></i></div>`:"")
   +`<ul style="margin-top:.6rem">${T.escalated.map(t=>`<li><span class="chip bad">!</span>${esc(t)}</li>`).join("")}${T.pending.slice(0,6).map(t=>`<li><span class="chip">·</span>${esc(t)}</li>`).join("")}</ul>`
   +(tot?"":`<p class="empty">Sin tareas en <span class="k">${esc(T.file)}</span>.</p>`)}
- $("rules").innerHTML=Object.entries(s.rules||{}).map(([k,n])=>`<span class="k">${esc(k)}</span><b class="n">${n}</b>`).join("");
+ controles(s.controls);
  $("top").innerHTML=(s.topRules||[]).length?s.topRules.map(r=>`<li><span class="k">${esc(r.rule)}</span><span class="mute" style="margin-left:auto">${hace(r.last)}</span><b class="n bad">${r.block}</b>${r.ask?`<b class="n warn">+${r.ask}</b>`:""}</li>`).join(""):'<li class="empty">Ninguna todavía.</li>';
  $("integ").innerHTML=(s.integrations||[]).length?s.integrations.map(i=>`<li><span class="k">${esc(i.id)}</span><span class="mute">${esc(i.perfil)}</span><span class="mute" style="margin-left:auto">${i.last?hace(i.last):""}</span><b class="n">${i.uso}</b>${i.block?`<b class="n bad">${i.block}</b>`:""}${i.ask?`<b class="n warn">+${i.ask}</b>`:""}</li>`).join(""):'<li class="empty">Ninguna habilitada (<span class="k">cli.py integ list</span>).</li>';
  const S=s.status||{}, M=s.map;
@@ -395,6 +551,28 @@ function render(s){
   +`<span>registro de eventos</span><b class="n ${s.eventsEnabled?"ok":"warn"}">${s.eventsEnabled?"encendido":"apagado"}</b>`;
  const evs=(s.events||[]).slice().reverse();
  $("ev").innerHTML=evs.length?evs.map(e=>{const[c,l]=EV[e.kind]||["",e.kind];return`<li><span class="t">${hora(e.at)}</span><span class="chip ${c}">${esc(l)}</span><span class="msg">${evText(e)}</span></li>`}).join(""):'<li class="empty">Todavía nada. Cada freno, gate y vuelta del loop aparece acá apenas pasa.</li>';
+}
+const ACC={block:"bloquea",ask:"escala",redact:"tapa",pista:"pista",lint:"lint"}, tok=n=>n?`~${Math.round(n/4).toLocaleString()} tok`:"";
+const abiertos=new Set();
+function itemCtl(it,registro){
+ const est=it.estado?`<span class="chip ${CLS[it.estado]||"mute"}">${esc(it.estado)}</span>`:"";
+ const acc=it.accion?`<span class="chip ${esc(it.accion)}">${esc(ACC[it.accion]||it.accion)}</span>`:"";
+ const mor=it.accion==="block"||it.accion==="ask"?(it.mordio?`<b class="n bad" title="veces que mordió">${it.mordio}× · ${hace(it.ultima)}</b>`:registro?'<span class="n mute" title="nunca mordió en el registro">0×</span>':""):"";
+ const peso=it.chars?`<span class="n mute ${it.tope&&it.chars>it.tope?"bad":""}">${tok(it.chars)}${it.tope?` / ${tok(it.tope)}`:""}</span>`:"";
+ const por=it.porque?`<div class="por">${esc(it.porque)}</div>`:'<div class="por warn">sin intención declarada: agregá <span class="k">intent</span> o <span class="k">reason</span> en el config</div>';
+ return`<li><div class="top">${est}${acc}<span class="k">${esc(it.id)}</span>${it.etapa?`<span class="mute">${esc(it.etapa)}</span>`:""}${mor}${peso}</div>${por}${it.ejemplo?`<div class="mute">ej.: <code>${esc(it.ejemplo)}</code></div>`:""}</li>`}
+function controles(C){
+ if(!C){$("controles").style.display="none";return}
+ $("controles").style.display="";
+ document.querySelectorAll("#ctl details[open]").forEach(d=>abiertos.add(d.dataset.k));
+ document.querySelectorAll("#ctl details:not([open])").forEach(d=>abiertos.delete(d.dataset.k));
+ $("ctl").innerHTML=["guía","freno","sensor"].map(d=>{const c=C[d]||{grupos:[]};
+  return`<div class="col ${d}"><h3>${esc(c.titulo)}<span class="n">${c.total||0}</span></h3><p>${esc(c.intencion)}</p>`
+  +(c.grupos.length?c.grupos.map(g=>{const k=d+"/"+g.titulo,rojas=g.items.filter(i=>i.estado==="roja").length,sin=g.items.filter(i=>!i.porque).length;
+   return`<details class="g" data-k="${esc(k)}" ${abiertos.has(k)?"open":""}><summary><b>${esc(g.titulo)}</b> <span class="mute">· ${g.items.length}</span>`
+   +`<span class="meta"><span class="chip">${esc(g.etapa)}</span><span class="chip">${esc(g.tipo)}</span>${g.familia?`<span class="chip k">${esc(g.familia)}</span>`:""}${rojas?`<span class="chip bad">${rojas} roja(s)</span>`:""}${sin?`<span class="chip sin">${sin} sin intención</span>`:""}</span>`
+   +`<span class="int">${esc(g.intencion)}</span></summary><ul>${g.items.map(i=>itemCtl(i,C.registro)).join("")}</ul></details>`}).join("")
+   :'<p class="empty">Nada declarado en esta dirección.</p>')+"</div>"}).join("");
 }
 const PROPORCION=new Set(["aceptadasMin","denegadosMax","gateVerdeMin"]);
 function valor(f,x){if(x==null)return"—";return PROPORCION.has(f.clave)?Math.round(x*100)+"%":(Math.round(x*10)/10)}

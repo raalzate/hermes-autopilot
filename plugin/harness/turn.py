@@ -156,6 +156,13 @@ def respuesta(config: dict, texto: str, contaminada: str = "") -> str | None:
             nuevo = re.sub(regla["pattern"], tapa, nuevo, flags=re.I)
         except (re.error, KeyError, TypeError):
             continue
+    # `defang`: un marcador que el canal de salida INTERPRETA (Hermes adjunta el archivo de `MEDIA:<ruta>` al
+    # mandar por el gateway) se rompe, porque la respuesta cita texto de terceros (piloto doctiling-sre).
+    for regla in spec.get("defang") or []:
+        try:
+            nuevo = re.sub(regla["pattern"], regla["replace"], nuevo)
+        except (re.error, KeyError, TypeError):
+            continue
     aviso = spec.get("taintNotice")
     if contaminada and isinstance(aviso, str) and aviso and aviso.split("{")[0] not in nuevo:
         nuevo = nuevo.rstrip() + "\n\n" + aviso.replace("{fuente}", contaminada)

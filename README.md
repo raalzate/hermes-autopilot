@@ -44,7 +44,7 @@ archivos, y un gate que define qué es "terminado".
 - **22 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
   oficina, datos, soporte y operación (cinco con integraciones): un agente toma un atajo y el arnés lo frena, lo escala o lo
   deja llegar a verde. Se corre cada uno con un comando, y el gate los corre todos.
-- **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): 23 cerrados con su prueba, y lo
+- **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): 40 cerrados con su prueba, y lo
   que sigue abierto con su porqué.
 - **Defensa en capas para lo desatendido:** cada tarea del loop corre aislada en su worktree (los
   secretos no están), una guardia de Python ve lo que un programa abre, y una sesión que leyó a un
