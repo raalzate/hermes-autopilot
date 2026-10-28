@@ -53,7 +53,7 @@ en memoria y moría con cada deploy.
    comprueba sin compartir código con el agente. La CLI lo corre al juzgar y el resultado queda en
    el evento; `certificadosVerificadosMin` lo pide para subir. El piloto lo hace con `oo-horn` (Lean
    4, open-ontologies) sobre la causa raíz de cada incidente investigado. El arnés no elige la
-   lógica: sólo exige un comando que salga 0.
+   lógica: sólo exige un comando que salga 0 si verifica y 3 si no pudo verificar.
 
 ## Consecuencias
 

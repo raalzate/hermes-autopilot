@@ -201,7 +201,7 @@ def problemas_de_manifiesto(m: dict) -> list[str]:
     iid = m.get("id", "")
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", iid):
         p.append("`id` en minúsculas, dígitos y `-`")
-    if m.get("_file") and m["_file"] != f"{iid}.json":
+    if m.get("_file") and Path(m["_file"]).name != f"{iid}.json":
         p.append(f"el archivo se llama {m['_file']}: tiene que ser {iid}.json")
     for k in ("titulo", "descripcion", "verificado", "kind", "perfiles", "examples"):
         if not m.get(k):

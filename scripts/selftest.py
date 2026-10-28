@@ -140,6 +140,18 @@ def seccion_integraciones(config: dict, ctx) -> None:
     errores = ig.validar_catalogo(config)
     check(not errores, "el catálogo de integraciones no pasa sus propios ejemplos:\n    " + "\n    ".join(errores[:8]))
     check(len(ig.catalogo()) >= 7, "el catálogo perdió integraciones")
+    # Un manifiesto propio del repo (`.hermes/integraciones/`) entra al catálogo con la misma forma que uno del arnés,
+    # y no pisa uno del arnés con el mismo id (piloto doctiling-sre: lo rechazaba por la ruta, no por el nombre).
+    with tempfile.TemporaryDirectory() as tmp_:
+        propio = Path(tmp_) / ig.CATALOGO_REPO_REL
+        propio.mkdir(parents=True)
+        nav_ = json.loads((ig.CATALOGO / "navegador.json").read_text(encoding="utf-8"))
+        (propio / "propia.json").write_text(json.dumps({**nav_, "id": "propia"}), encoding="utf-8")
+        (propio / "navegador.json").write_text(json.dumps(nav_), encoding="utf-8")
+        cat_ = ig.catalogo(root=Path(tmp_))
+        check("propia" in cat_ and not ig.problemas_de_manifiesto(cat_["propia"]),
+              f"un manifiesto del repo no entra al catálogo con su forma: {ig.problemas_de_manifiesto(cat_.get('propia') or {})}")
+        check(bool((cat_.get("navegador") or {}).get("_error")), "un manifiesto del repo pisó en silencio uno del arnés con el mismo id")
     check(bool(nucleo.spec(config).get("undeclared")), "`integrations.undeclared` no está: un MCP sin declarar pasaría sin que nadie decida")
 
     # Un config con todo el catálogo habilitado, en un repo temporal: el plugin real lo lee de ahí.
@@ -623,7 +635,8 @@ def seccion_autonomia(config: dict, ctx) -> None:
             # El porqué comprobable (ADR 0014): un verificador que no es el agente decide, y queda en la evidencia.
             import cli as cli_mod  # noqa: E402
             verif = {**cfg, "autonomia": {**s, "certificados": {"verificador": [
-                sys.executable, "-c", "import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get('deduce') else 1)",
+                sys.executable, "-c",
+                "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(3 if d.get('falta') else 0 if d.get('deduce') else 1)",
                 "{certificado}"], "extension": ".cert.json", "timeoutSegundos": 20}}}
             prop = troot / "propuesta.md"
             prop.write_text("# reiniciar\n", encoding="utf-8")
@@ -634,7 +647,11 @@ def seccion_autonomia(config: dict, ctx) -> None:
             cert.write_text(json.dumps({"deduce": False}), encoding="utf-8")
             check(cli_mod.verificar_certificado(verif, cert)[0] == "rechazado",
                   "un certificado editado (el verificador sale ≠ 0) no sale `rechazado`")
-            check(cli_mod.verificar_certificado(cfg, cert) == ("", ""), "sin verificador en el config se certificó igual")
+            cert.write_text(json.dumps({"falta": True}), encoding="utf-8")
+            check(cli_mod.verificar_certificado(verif, cert)[0] == "error",
+                  "un verificador que no pudo verificar (sale 3: falta en esta máquina) salió como certificado rechazado")
+            sin_verif = {**cfg, "autonomia": {**s, "certificados": {"verificador": []}}}  # el repo puede tener uno
+            check(cli_mod.verificar_certificado(sin_verif, cert) == ("", ""), "sin verificador en el config se certificó igual")
             check("recomendacion verificar" in au.mensaje(verif, "L2", "write", "escribir `x`", "ask"),
                   "en L2, con verificador, pedir aprobación no le dice al humano cómo comprobar el porqué")
             base = [{"at": ahora, "kind": "recomendacion", "aceptada": True, "certificado": c} for c in ("verificado", "verificado", "rechazado")]
