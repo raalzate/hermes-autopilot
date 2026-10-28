@@ -412,7 +412,9 @@ def verificar_certificado(config: dict, cert: Path | None) -> tuple[str, str]:
     except (OSError, subprocess.TimeoutExpired) as e:
         return "error", f"el verificador no corrió: {e}"
     ultima = next((l.strip() for l in reversed((p.stdout + p.stderr).splitlines()) if l.strip()), "")
-    return ("verificado" if p.returncode == 0 else "rechazado"), ultima[:200]
+    # Exit 3 = no pudo verificar (falta el verificador en esta máquina), como una señal OMITIDA del gate: no es un
+    # certificado rechazado, y tampoco cuenta como verificado.
+    return {0: "verificado", 3: "error"}.get(p.returncode, "rechazado"), ultima[:200]
 
 
 def _cert_de(config: dict, propuesta: Path) -> Path:

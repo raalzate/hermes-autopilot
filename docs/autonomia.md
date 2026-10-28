@@ -150,7 +150,7 @@ edita la conclusión o una premisa, no verifica.
   certificado verificado; una sin certificado cuenta como no verificada.
 - **Qué prueba y qué no.** Que la conclusión se deduce de las reglas dadas, no que las reglas sean
   ciertas. Esas reglas las escribe una persona y viven en el repo, revisadas como código.
-- **Qué lógica.** La que el repo elija; el arnés sólo pide un comando que salga 0. El piloto
+- **Qué lógica.** La que el repo elija; el arnés sólo pide un comando que salga 0 si verifica, 3 si no pudo verificar (falta el verificador: `error`, como una señal omitida) y otro código si rechaza. El piloto
   doctiling-sre certifica la causa raíz de sus incidentes (L2) con `oo-horn`, el verificador en
   Lean 4 de [open-ontologies](https://github.com/fabio-rovai/open-ontologies): hechos del
   incidente, reglas de `causes` por regla de detección, y el veredicto
