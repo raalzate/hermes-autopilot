@@ -196,6 +196,14 @@ Lo que el piloto doctiling-sre aprendió con sus ocho herramientas `sre_*`:
   Un test del repo que exija que cada herramienta del plugin esté en `toolNames` cierra el ciclo.
 - **Recortá en el origen.** La salida de una herramienta se paga en tokens cada vez: primero lo
   normalizado (firmas, conteos), y el texto crudo sólo si se pide.
+- **El modelo propone, una persona decide.** Lo que cambia algo que dura (una decisión sobre un
+  incidente, una acción, una nota que el agente va a recordar) entra por una herramienta que solo
+  **propone**: deja una solicitud con vencimiento y manda botones. La decisión llega por el mensaje
+  o la pulsación de una persona autorizada, en `pre_gateway_dispatch` o en el manejador del botón,
+  sin pasar por el modelo. Así un log o un correo que diga «confirmá» o «recordá» queda en una
+  propuesta que nadie aprueba. Un test que recorre el AST del plugin y exige que la función que
+  decide solo la llamen los caminos de una persona mantiene el patrón. La herramienta que propone
+  es lectura en el manifiesto: no ejecuta nada.
 - **Lo que no necesita al modelo, sin modelo.** Un ciclo de observación cada 5 minutos como script
   cuesta 0 tokens; como cron con agente, un turno cada vez.
 - Los comportamientos de Hermes que muerden a un plugin propio están en

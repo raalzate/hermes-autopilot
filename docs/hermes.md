@@ -125,6 +125,15 @@ Consecuencias que el arnés vigila:
   `hermes skills trust`**. Nombre `^[a-z0-9][a-z0-9._-]*$` ≤ 64, descripción ≤ 1024
   (`tools/skill_manager_tool.py`). El agente las crea con `skill_manage`; `skill_guard` le aplica
   `terminal.deny` a lo que enseñan.
+- **Escritura con aprobación** (`tools/write_approval.py`, verificado en hermes-agent `d923a5eb`,
+  2026-10-15): con `memory.write_approval: true` o `skills.write_approval: true`, Hermes no escribe.
+  Deja la escritura en `$HERMES_HOME/pending/{memory,skills}/<id>.json` (una skill, siempre; una
+  memoria, cuando no hay quien conteste en el momento: gateway, cron, `chat -q`). Una persona la
+  aprueba con `/memory approve <id>` o `/skills approve <id>`, **también desde el chat del
+  gateway** (`gateway/slash_commands.py`). Ojo: `/memory approval off` desde el chat **escribe
+  `config.yaml`** y apaga la aprobación hasta que alguien la vuelva a prender. Un config que se
+  renderiza en cada arranque lo deshace solo en el próximo reinicio. El freno de nivel corre antes:
+  en L0/L1 la escritura se niega antes de llegar a quedar pendiente.
 
 ## Hermes desde el código fuente (y por qué no el de PyPI)
 
@@ -166,6 +175,8 @@ que conviene saber antes de escribir un plugin con herramientas propias ([ADR 00
 | `MEDIA:<ruta>`, en cualquier parte de un texto que se manda, adjunta ese archivo | `hermes_cli/send_cmd.py` | `output.defang` lo rompe en la respuesta; lo que un script mande con `hermes send` lo tiene que romper él |
 | Las variables de las plataformas (`TELEGRAM_*`…) no pasan a los procesos hijos | `tools/environments/local_env_policy.py::build_subprocess_env` | un script de cron que manda mensajes lee el token de `$HERMES_HOME/.env`, no del entorno |
 | La revisión de skills en segundo plano lanza un agente que llama a `skill_manage` cada `skills.creation_nudge_interval` iteraciones (10) | config de Hermes | en un nivel sin aprender, `0`: si no, choca con el freno (`doctor.py` lo avisa) |
+| Una persona le pide al agente «recordá…» y, con la memoria apagada por el nivel, no queda en ningún lado | memoria de Hermes + `aprender: deny` | memoria del operador en el plugin: el modelo propone y una persona decide antes del modelo ([gotcha](gotchas.md#gotcha--el-operador-pedía-recordá-y-el-agente-no-recordaba-nada)) |
+| `/memory approval off` y `/skills approval off` desde el chat persisten en `config.yaml` | `gateway/slash_commands.py::_write_approval_setter` | si la aprobación es un freno, que el config sea declarativo (se renderiza en cada arranque) y que `doctor.py` lo mire |
 | Un plugin que Hermes no puede leer se saltea con un `Skipping …` en el log, y Hermes arranca igual, sin frenos | `plugins_loader.py` | verificar con `hermes plugins list` que esté `enabled` y que no haya ningún `Skipping`, no sólo que el archivo exista (con podman y SELinux, el volumen con `:Z`) |
 
 Para las herramientas de un plugin propio, ver también
