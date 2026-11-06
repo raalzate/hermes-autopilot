@@ -145,3 +145,26 @@ mecanismo no alcanzó: hace falta uno más fuerte, no otra entrada.
 - **Regla:** un archivo del arnés que el repo cambió no se pisa sin que alguien lo mire.
 - **Mecanismo:** `.hermes/harness/huellas.json`, la marca `!` y `--pisar`; self-test §11 y §16, y la
   mutación «install --upgrade borra un parche local».
+
+### GOTCHA — El operador pedía «recordá…» y el agente no recordaba nada
+
+- **Síntoma:** en el piloto doctiling-sre (L1, Telegram) el operador le pedía al agente que
+  recordara algo y a las dos horas lo había olvidado. La salida obvia, un prompt de «aprendizaje
+  continuo» que prende la memoria y `skill_manage`, choca con el nivel.
+- **Causa:** en L0 y L1 `aprender` es `deny`, así que la memoria de Hermes va apagada
+  (`memory_enabled: false`, `creation_nudge_interval: 0`), y el plugin reinicia la conversación
+  tras un rato sin mensajes. Además, la memoria de Hermes la escribe el modelo: lo que leyó de un
+  tercero puede volverse permanente (P12, P24). No había un camino para la memoria que **pide una
+  persona**.
+- **Regla:** la memoria que pide una persona no es aprendizaje del agente. El modelo **propone** la
+  nota en el almacén propio del plugin, y solo una persona autorizada la **decide** (un botón o
+  «guardar M-xxxxxx», procesado en `pre_gateway_dispatch`, antes del modelo). Olvidar pasa por el
+  mismo camino. La memoria de Hermes y `aprender` no se tocan, y la herramienta que propone se
+  clasifica como lectura en el manifiesto: no le resta evidencia al nivel. Lo guardado vuelve en
+  una herramienta de lectura, no en el prompt de cada turno (P14).
+- **Mecanismo:** en el piloto, `memory.py` + `sre_remember` (doctiling-sre#78) y un test que recorre
+  el AST del plugin y exige que solo los caminos de una persona llamen a la decisión. En el arnés,
+  el patrón está en [integraciones](integraciones.md#diseñar-las-herramientas-de-un-plugin-propio) y
+  el camino nativo de Hermes (`write_approval`) en [hermes.md](hermes.md#aprendizaje-memoria-y-skills).
+  Lo que falta, que `aprender: ask` aproveche ese camino, está en [huecos](huecos.md#abiertos).
+
