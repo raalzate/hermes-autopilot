@@ -118,8 +118,10 @@ pasar: parece un freno roto y es un payload mal armado.
 ## Integraciones
 
 El instalador copia el catálogo (`.hermes/harness/plantillas/integraciones/`) y la plantilla trae
-`integrations` sin ninguna habilitada, con `undeclared: ask`. Habilitarlas es un paso del humano:
-[`integraciones.md`](integraciones.md). El lock (`.hermes/integraciones.lock`) va versionado.
+`integrations` con `undeclared: ask` y una sola habilitada: `ontologia`, en `lectura`
+(`integrations.porDefecto`). El gate del repo es rojo hasta instalarla (`integ.py deps ontologia
+--apply`) y commitear el lock (`.hermes/integraciones.lock`). Las demás las habilita el humano:
+[`integraciones.md`](integraciones.md).
 
 ## Después
 

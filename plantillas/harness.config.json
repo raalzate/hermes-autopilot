@@ -630,6 +630,10 @@
       "action": "ask",
       "reason": "una herramienta de un servidor MCP que ninguna integración del repo declara: nadie decidió si lee, escribe o manda. Declarala con `python3 scripts/integ.py add <id>` (o sumala a `integrations.undeclared.allow` si es inocua)."
     },
+    "porDefecto": {
+      "$comment": "Las que todo copiloto trae al instalarse: `install.py` materializa cada una del catálogo con su perfil en `enabled.<id>` y saca esta clave. Instalable = el gate es rojo hasta `integ.py deps <id> --apply` (y el lock commiteado): instalada y muerta no cuenta.",
+      "ontologia": "lectura"
+    },
     "enabled": {},
     "content": {
       "$comment": "LO QUE DICE lo que sale (hueco 26, docs/huecos.md). Cada texto de los argumentos de una llamada de clase `classes` de una integración (en una por CLI, el comando entero) se compara con `deny`: un secreto o una plantilla sin completar en un mensaje que SÍ se permite mandar no vuelve una vez mandado. Si el texto es correcto, a quién nombra o qué promete sigue siendo del humano: eso no lo decide un regex. `innocent`: textos que tienen que pasar.",

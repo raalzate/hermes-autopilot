@@ -96,9 +96,7 @@ def reglas_sin_cicatriz(config: dict, log: str) -> list[dict]:
 ECOSISTEMA = {"npm": "npm", "pypi": "PyPI"}
 
 
-def dependencias(config: dict) -> list[tuple[str, str, str, str]]:
-    """[(origen, ecosistema, paquete, versión)] de las integraciones habilitadas y del catálogo."""
-    out = []
+def _fuentes(config: dict) -> list[tuple[str, dict]]:
     habilitadas = ((config.get("integrations") or {}).get("enabled") or {})
     fuentes = [(f"integración `{i}`", e) for i, e in habilitadas.items() if isinstance(e, dict)]
     catalogo = Path(__file__).resolve().parent.parent / "plantillas" / "integraciones"
@@ -107,11 +105,24 @@ def dependencias(config: dict) -> list[tuple[str, str, str, str]]:
             fuentes.append((f"catálogo `{f.stem}`", json.loads(f.read_text(encoding="utf-8"))))
         except ValueError:
             continue
-    for origen, m in fuentes:
+    return fuentes
+
+
+def dependencias(config: dict) -> list[tuple[str, str, str, str]]:
+    """[(origen, ecosistema, paquete, versión)] de las integraciones habilitadas y del catálogo. Lo que se
+    instala desde git (`source`) no va: OSV lo buscaría por un nombre de PyPI que no es ese código."""
+    out = []
+    for origen, m in _fuentes(config):
         for r in m.get("requires") or []:
-            if r.get("kind") in ECOSISTEMA and r.get("package") and r.get("version"):
+            if r.get("kind") in ECOSISTEMA and r.get("package") and r.get("version") and not r.get("source"):
                 out.append((origen, ECOSISTEMA[r["kind"]], r["package"], str(r["version"])))
     return sorted(set(out))
+
+
+def desde_git(config: dict) -> list[tuple[str, str, str]]:
+    """[(origen, paquete, fuente)] de lo que se instala desde git: ningún registro lo mide."""
+    return sorted({(o, r["package"], str(r["source"])) for o, m in _fuentes(config)
+                   for r in m.get("requires") or [] if r.get("source") and r.get("package")})
 
 
 def _http_json(url: str, cuerpo: dict | None = None):
@@ -139,15 +150,18 @@ def integraciones(config: dict, osv=consultar_osv, ultima=ultima_version) -> tup
     """(rojos, avisos, verdes) de las dependencias de las integraciones. `osv` y `ultima` se
     inyectan: el self-test prueba la lógica sin red."""
     deps = dependencias(config)
+    git = [f"{o}: {p} se instala desde git ({f.rsplit('@', 1)[-1][:12]}): OSV no lo mide. Revisá el repo "
+           "(issues de seguridad, commits nuevos) y probá un commit nuevo con `integ_run.py --probe` antes de fijarlo."
+           for o, p, f in desde_git(config)]
     if not deps:
-        return [], [], []
+        return [], git, []
     try:
         vulns = osv(deps)
     except (OSError, ValueError) as e:
-        return [], [f"no pude consultar OSV ({e}): las dependencias de las integraciones no se midieron."], []
+        return [], [f"no pude consultar OSV ({e}): las dependencias de las integraciones no se midieron."] + git, []
     rojos = [f"{o}: {p}@{v} ({e}) tiene vulnerabilidades conocidas: {', '.join(ids[:5])}. Subí la versión "
              "(probala con `integ_run.py --probe`) o deshabilitá la integración." for (o, e, p, v), ids in zip(deps, vulns) if ids]
-    avisos = []
+    avisos = list(git)
     for o, e, p, v in deps:
         try:
             u = ultima(e, p)

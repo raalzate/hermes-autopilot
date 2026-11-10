@@ -1,0 +1,223 @@
+{
+  "id": "ontologia",
+  "titulo": "Capa semántica y base de conocimiento (auto-ontology-mcp)",
+  "descripcion": "El servidor MCP auto-ontology-mcp (Apache-2.0), la capa semántica de NVIDIA Auto Ontology: una ontología sobre las bases del equipo (términos, relaciones, atributos SQL) para contestar preguntas con SQL validado contra ella, y una base de conocimiento propia (conceptos, registros, pasajes de fuentes). No pide clave de modelo: el modelo de Hermes hace el lenguaje y el servidor lo determinista. Guarda todo en SQLite local. Las bases se abren de sólo lectura y el servidor rechaza todo lo que no sea un SELECT; las registra el HUMANO por la CLI, nunca el agente.",
+  "verificado": "2026-11-10 · auto-ontology-mcp 0.6.1, commit b6e1f924 (no está en PyPI: se instala desde git, fijado al commit): `tools/list` real con AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0 (33 herramientas, con anotaciones: sin `add_datasource` ni `scan_datasource`), `--help`, y las variables que lee `config.py`",
+  "version": "0.6.1",
+  "kind": "mcp",
+  "server": "ontologia",
+  "toolNames": [
+    "check_readiness",
+    "get_modeling_worklist",
+    "save_table_terms",
+    "list_relationships",
+    "set_relationship",
+    "suggest_sql_attributes",
+    "save_sql_attribute",
+    "update_term",
+    "save_glossary",
+    "define_entity",
+    "add_records",
+    "edit_records",
+    "save_concept",
+    "save_passages",
+    "search_text",
+    "get_source",
+    "list_terms",
+    "recent_changes",
+    "export_wiki",
+    "search_ontology",
+    "get_term",
+    "describe_table",
+    "find_join_path",
+    "check_answerable",
+    "get_query_context",
+    "lookup_values",
+    "validate_sql",
+    "run_sql",
+    "save_example_query",
+    "export_ontology",
+    "import_ontology",
+    "search",
+    "fetch"
+  ],
+  "classes": {
+    "deny": "^(add_datasource|scan_datasource)$",
+    "destructive": "^(set_relationship|save_sql_attribute|update_term|define_entity|edit_records|save_passages)$",
+    "read": "^(check_readiness|get_modeling_worklist|list_relationships|suggest_sql_attributes|search_text|get_source|list_terms|recent_changes|search_ontology|get_term|describe_table|find_join_path|check_answerable|get_query_context|lookup_values|validate_sql|run_sql|export_ontology|search|fetch)$"
+  },
+  "$classes": "`run_sql` es `read`: el servidor sólo acepta un SELECT (sqlglot) y la conexión es de sólo lectura con rollback; la defensa de verdad, como en `postgres`, es un rol de sólo lectura en la base. `destructive` es lo que el servidor anota destructivo (borra términos, relaciones, registros o pasajes). `add_datasource` y `scan_datasource` son del humano: la primera lleva la URL con la contraseña en los argumentos y el servidor la guarda en texto plano: el lanzador lo apaga (AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0) y, si igual aparece, `deny`.",
+  "thirdParty": "^(run_sql|lookup_values|search_text|get_source|search|fetch)$",
+  "$thirdParty": "Devuelven texto guardado por otros: filas de la base y pasajes de las fuentes. `describe_table` trae muestras cortas de columnas y queda afuera a propósito: marcarla haría que modelar una tabla escale siempre, y el aviso dejaría de significar algo.",
+  "policy": {},
+  "budget": {
+    "maxPerHour": {
+      "destructive": 10
+    },
+    "maxResultChars": 40000,
+    "idleMinutes": 10,
+    "timeoutSeconds": 120,
+    "maxMemoryMB": 1024,
+    "nice": 5
+  },
+  "perfiles": {
+    "lectura": {
+      "read": "allow",
+      "write": "deny",
+      "destructive": "deny"
+    },
+    "asistente": {
+      "read": "allow",
+      "write": "ask",
+      "destructive": "deny"
+    },
+    "autonomo": {
+      "read": "allow",
+      "write": "allow",
+      "destructive": "ask"
+    }
+  },
+  "perfilPorDefecto": "lectura",
+  "reasons": {
+    "deny": "registrar una base pasa la contraseña por los argumentos y el servidor la guarda en texto plano. La base la registra el humano con la CLI (`auto-ontology-mcp add`), con la contraseña en ~/.pgpass.",
+    "write": "el perfil lectura consulta la ontología y la base; no modela ni guarda conocimiento. Si la tarea modela, que el humano cambie el perfil.",
+    "destructive": "borrar o reemplazar términos, relaciones, registros o pasajes cambia lo que el equipo ya validó."
+  },
+  "requires": [
+    {
+      "kind": "system",
+      "command": "python3",
+      "min": "3.12",
+      "hint": {
+        "darwin": "brew install python@3.12",
+        "default": "instalá Python 3.12+"
+      }
+    },
+    {
+      "kind": "pypi",
+      "package": "auto-ontology-mcp",
+      "version": "0.6.1",
+      "source": "git+https://github.com/gogoymh/auto-ontology-mcp@b6e1f924f938be69fe272cad9104fa46ae6dbd16",
+      "bin": "auto-ontology-mcp"
+    }
+  ],
+  "launch": {
+    "runtime": "python",
+    "bin": {
+      "kind": "pypi",
+      "name": "auto-ontology-mcp"
+    },
+    "args": [
+      "serve"
+    ],
+    "env": {
+      "AUTO_ONTOLOGY_HOME": "{datos}",
+      "AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS": "0",
+      "AUTO_ONTOLOGY_MAX_ROWS": "500",
+      "AUTO_ONTOLOGY_QUERY_TIMEOUT_S": "30"
+    }
+  },
+  "setup": [
+    "Un rol de sólo lectura en cada base (en PostgreSQL: CREATE ROLE agente LOGIN; GRANT pg_read_all_data TO agente;). Es la defensa de verdad: el freno de SQL del servidor es la segunda capa.",
+    "La base la registra el HUMANO, con la misma carpeta de datos que usa el lanzador: AUTO_ONTOLOGY_HOME=~/.hermes/integraciones/ontologia/datos ~/.hermes/integraciones/ontologia/0.6.1/venv/bin/auto-ontology-mcp add <nombre> <url> (y `scan <nombre>` cuando cambia el esquema)",
+    "La URL sin contraseña (postgresql+psycopg://agente@host/db) y la contraseña en ~/.pgpass (permisos 600): el servidor guarda la URL en texto plano en ontology.db.",
+    "SQLite viene incluido; para PostgreSQL, MySQL o DuckDB instalá el driver en el mismo venv (psycopg[binary], pymysql, duckdb-engine) con versión fija.",
+    "Para probarla sin una base: el mismo binario con `demo` arma la base de ejemplo `demo` y tres documentos."
+  ],
+  "examples": [
+    {
+      "tool": "run_sql",
+      "args": {
+        "sql": "SELECT region, sum(total) FROM orders GROUP BY region",
+        "question": "ventas por región"
+      },
+      "expect": "allow",
+      "why": "un SELECT validado contra la ontología es lectura"
+    },
+    {
+      "tool": "search_ontology",
+      "args": {
+        "query": "ingreso mensual recurrente"
+      },
+      "expect": "allow",
+      "why": "buscar en la ontología es lo que hace el perfil lectura"
+    },
+    {
+      "tool": "add_datasource",
+      "args": {
+        "name": "ventas",
+        "url": "postgresql+psycopg://admin:clave@db.interna:5432/ventas"
+      },
+      "perfil": "autonomo",
+      "expect": "block",
+      "regla": "clase-deny",
+      "why": "la contraseña viaja en los argumentos y queda en texto plano: la base la registra el humano"
+    },
+    {
+      "tool": "save_table_terms",
+      "args": {
+        "table": "orders",
+        "terms": [
+          {
+            "name": "Pedido"
+          }
+        ]
+      },
+      "perfil": "lectura",
+      "expect": "block",
+      "regla": "clase-write",
+      "why": "el perfil lectura no modela"
+    },
+    {
+      "tool": "save_concept",
+      "args": {
+        "name": "Churn",
+        "description": "clientes que cancelan en el mes"
+      },
+      "perfil": "asistente",
+      "expect": "approve",
+      "regla": "pide-write",
+      "why": "en asistente, guardar conocimiento lo aprueba un humano"
+    },
+    {
+      "tool": "edit_records",
+      "args": {
+        "entity": "Receipt",
+        "action": "delete",
+        "ids": [
+          1,
+          2
+        ]
+      },
+      "perfil": "asistente",
+      "expect": "block",
+      "regla": "clase-destructive",
+      "why": "en asistente, borrar registros no es del agente"
+    },
+    {
+      "tool": "update_term",
+      "args": {
+        "term": "Pedido",
+        "delete": true
+      },
+      "perfil": "autonomo",
+      "expect": "approve",
+      "regla": "pide-destructive",
+      "why": "en autonomo, borrar un término que el equipo validó lo aprueba un humano"
+    },
+    {
+      "tool": "add_records",
+      "args": {
+        "entity": "Receipt",
+        "records": [
+          {
+            "total": 12.5
+          }
+        ]
+      },
+      "perfil": "autonomo",
+      "expect": "allow",
+      "why": "en autonomo, agregar registros a la base de conocimiento pasa"
+    }
+  ]
+}

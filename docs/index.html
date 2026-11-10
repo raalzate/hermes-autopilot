@@ -455,8 +455,8 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       </div>
     </div>
     <div class="cifras" aria-label="El arnés, en números">
-      <div><b id="n-casos" data-cifra="casos">22</b><span>casos reales replicables</span></div>
-      <div><b id="n-corridas" data-cifra="corridas">46</b><span>corridas, en el gate</span></div>
+      <div><b id="n-casos" data-cifra="casos">23</b><span>casos reales replicables</span></div>
+      <div><b id="n-corridas" data-cifra="corridas">48</b><span>corridas, en el gate</span></div>
       <div><b data-cifra="mutaciones">160</b><span>mutaciones que lo ponen rojo</span></div>
       <div><b data-cifra="huecos-cerrados">40</b><span>huecos cerrados, con su prueba</span></div>
       <div><b data-cifra="huecos-abiertos">5</b><span>huecos abiertos, escritos</span></div>
@@ -505,7 +505,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <div><span class="mark" style="font-family:var(--f-mono);font-size:var(--step--1);color:var(--accent-ink);letter-spacing:.08em;text-transform:uppercase">capa inteligente · Claude</span><h3>El modelo para lo pesado</h3><ul><li>Escribe y refactoriza código</li><li>Revisa el diff antes de la firma</li><li>Se llama por la terminal, con tope</li></ul></div>
     </div>
     <p class="col" style="margin-top:1rem;color:var(--ink-soft)">El enrutamiento es una política tuya, en el config: <b>el modelo es intercambiable y el arnés no</b>. Cambiás de modelo y las reglas, el gate y los niveles siguen igual.</p>
-    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="#mapa">Ver el mapa</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/README.md">22 casos replicables</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/CORRIDAS.md">Sus corridas completas</a></p>
+    <p class="col" style="margin-top:1.2rem"><a class="btn btn-1" href="#mapa">Ver el mapa</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/README.md">23 casos replicables</a> <a class="btn" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/CORRIDAS.md">Sus corridas completas</a></p>
   </div>
 </div></section>
 
@@ -547,7 +547,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <li class="fr"><h3>Gate · al terminar</h3><span>Un comando decide «terminado»: self-test, lint, tests del repo. Verde o rojo; no hay opinión.</span></li>
       <li><h3>Loop · la tarea</h3><span>Verde: un humano lo revisa. Rojo distinto: reintenta con el rojo en mano. El mismo rojo dos veces, o el tope: <b>escala</b>.</span></li>
     </ol>
-    <p class="col" style="margin-top:1.2rem;font-size:var(--step--1);color:var(--ink-faint)">Las corridas completas de los <b data-cifra="casos">22</b> casos están en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/CORRIDAS.md">casos/CORRIDAS.md</a>.</p>
+    <p class="col" style="margin-top:1.2rem;font-size:var(--step--1);color:var(--ink-faint)">Las corridas completas de los <b data-cifra="casos">23</b> casos están en <a href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/CORRIDAS.md">casos/CORRIDAS.md</a>.</p>
   </div>
 </div></section>
 
@@ -648,7 +648,7 @@ footer { border-top: 1px solid var(--rule-soft); padding-block: 2rem 3rem; font-
       <div class="cell stat"><span class="lbl">verificaciones</span><b data-cifra="verificaciones">1347</b><span class="why">del self-test, generadas desde el <code>example</code> de cada regla, pasando por el callback real del plugin.</span><span class="cmd">python3 scripts/selftest.py</span></div>
       <div class="cell stat"><span class="lbl">mutaciones</span><b><span data-cifra="mutaciones">160</span>/<span data-cifra="mutaciones">160</span></b><span class="why">rompen un freno a propósito en una copia del repo; todas tienen que poner rojo el self-test.</span><span class="cmd">python3 scripts/mutations.py</span></div>
       <div class="cell stat"><span class="lbl">dentro de Hermes</span><b data-cifra="hermes">209</b><span class="why">verificaciones con el despacho real de Hermes: directivas, aprobaciones contadas, la respuesta tapada, <code>pre_verify</code>, ruteo, lint tras escribir, sección del prompt.</span><span class="cmd">python3 scripts/hermes_e2e.py</span></div>
-      <div class="cell stat"><span class="lbl">casos replicables</span><b data-cifra="casos">22</b><span class="why">programación, infraestructura, oficina, datos, soporte y operación: un agente con un atajo real, de punta a punta, en un repo instalado de cero.</span><span class="cmd">python3 scripts/casos.py</span></div>
+      <div class="cell stat"><span class="lbl">casos replicables</span><b data-cifra="casos">23</b><span class="why">programación, infraestructura, oficina, datos, soporte y operación: un agente con un atajo real, de punta a punta, en un repo instalado de cero.</span><span class="cmd">python3 scripts/casos.py</span></div>
       <div class="cell stat"><span class="lbl">perfiles de stack</span><b>8</b><span class="why">python, node, front, go, rust, .NET, Maven, Gradle — cada uno instalado en un repo temporal con su gate.</span><span class="cmd">self-test §11</span></div>
       <div class="cell stat"><span class="lbl">revisor inferencial</span><b data-cifra="revisor-recall">100 %</b><span class="why">de los atajos cazados por el revisor con un modelo real, con <span data-cifra="revisor-precision">91 %</span> de precisión, contra 16 diffs etiquetados salidos de los casos. Un sensor inferencial se mide con una tasa.</span><span class="cmd">python3 scripts/evals.py inferential</span></div>
       <div class="cell stat"><span class="lbl">dependencias</span><b>0</b><span class="why">Python de la biblioteca estándar. Donde hay Hermes, hay todo lo que el arnés necesita.</span><span class="cmd">regla patterns[dependencia]</span></div>
@@ -940,7 +940,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
       <li><b>Lo que no cabe en el gate igual está vivo</b> — deriva programada y mapa.</li>
       <li><b>El loop autónomo tiene salida, tope y freno de mano</b>, y nunca publica.<span class="tag new">nuevo</span></li>
       <li><b>Lo que el arnés hace se ve fuera de la conversación</b> — eventos y panel.<span class="tag new">nuevo</span></li>
-      <li><b>Lo que el arnés promete se reproduce de punta a punta</b> — 22 casos replicables en el gate.<span class="tag new">nuevo</span></li>
+      <li><b>Lo que el arnés promete se reproduce de punta a punta</b> — 23 casos replicables en el gate.<span class="tag new">nuevo</span></li>
       <li><b>Lo que entra de un tercero no sale solo</b> — tras leer una web o un ticket, publicar o persistir escala a un humano.<span class="tag new">nuevo</span></li>
       <li><b>Un sensor inferencial se mide con una tasa</b> — recall y precisión del revisor contra atajos reales.<span class="tag new">nuevo</span></li>
       <li><b>Lo que el agente hace afuera tiene clase, destinatario y tope</b> — integraciones: correo, WhatsApp, navegador, Google, Microsoft, GitHub, bases.<span class="tag new">nuevo</span></li>
@@ -963,7 +963,7 @@ explícita al humano. No lo reintentes igual.}</pre></figure>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/loop-autonomo.md" style="text-decoration:none;color:inherit"><span class="mark">operar</span><h3>El loop autónomo</h3><p>La cola, los topes, el freno de mano y qué hacer cuando escala.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/cli-y-panel.md" style="text-decoration:none;color:inherit"><span class="mark">cli · panel</span><h3>La CLI y el panel</h3><p>Parametrizar sin editar JSON, y ver el arnés en vivo.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/workshop/README.md" style="text-decoration:none;color:inherit"><span class="mark">workshop</span><h3>Workshop de agentes autónomos</h3><p>Seis módulos prácticos, con un agente de juguete y sin API key.</p></a>
-      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/README.md" style="text-decoration:none;color:inherit"><span class="mark">casos</span><h3><span data-cifra="casos">22</span> casos replicables</h3><p>Programación, infraestructura, oficina, datos, soporte y operación: el atajo del agente y cómo lo para el arnés.</p></a>
+      <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/casos/README.md" style="text-decoration:none;color:inherit"><span class="mark">casos</span><h3><span data-cifra="casos">23</span> casos replicables</h3><p>Programación, infraestructura, oficina, datos, soporte y operación: el atajo del agente y cómo lo para el arnés.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/integraciones.md" style="text-decoration:none;color:inherit"><span class="mark">integraciones</span><h3>Integraciones</h3><p>Correo, WhatsApp, navegador headless, Google, Microsoft, GitHub y bases: perfiles, destinatarios, secretos, recursos y dependencias con lock.</p></a>
       <a class="cell" href="https://github.com/raalzate/hermes-autopilot/blob/main/docs/huecos.md" style="text-decoration:none;color:inherit"><span class="mark">huecos</span><h3>Auditoría de huecos</h3><p>Lo que se cerró, con su prueba, y lo que sigue abierto.</p></a>
       <a class="cell" href="evaluacion.html" style="text-decoration:none;color:inherit"><span class="mark">evaluación</span><h3>Informe de evaluación</h3><p>Gráficos, intervalos de confianza, los ocho stacks, el historial y la rúbrica.</p></a>
