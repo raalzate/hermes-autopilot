@@ -86,6 +86,24 @@ def with_forge(cfg: dict, forge: dict) -> dict:
     return cfg
 
 
+def with_integraciones(cfg: dict) -> dict:
+    """`integrations.porDefecto` ({id: perfil}): lo que todo copiloto trae. Cada una se MATERIALIZA del
+    catálogo, igual que `integ.py add`, y la clave se va: en el repo queda sólo lo habilitado."""
+    cfg = json.loads(json.dumps(cfg))
+    sec = cfg.get("integrations") if isinstance(cfg.get("integrations"), dict) else {}
+    pedidas = {k: v for k, v in (sec.pop("porDefecto", None) or {}).items() if not k.startswith("$")}
+    if not pedidas:
+        return cfg
+    sys.path.insert(0, str(HOME / "scripts"))
+    import integ as ig  # noqa: E402 — el mismo materializar que `integ.py add`
+    cat = ig.catalogo(PLANT / "integraciones")
+    for iid, perfil in pedidas.items():
+        if iid not in cat:
+            sys.exit(f"install: `integrations.porDefecto` pide `{iid}` y no está en el catálogo")
+        sec.setdefault("enabled", {}).setdefault(iid, ig.materializar(cat[iid], perfil))
+    return cfg
+
+
 def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
@@ -136,7 +154,7 @@ def plan(target: Path, profile: str | None, upgrade: bool, forge: str | None = N
             sys.exit(f"install: no existe el perfil `{profile}`. Disponibles: {disponibles}")
         base = merge_profile(base, json.loads(pf.read_text(encoding="utf-8")))
     fg = forge_of(forge)
-    base = with_forge(base, fg)
+    base = with_integraciones(with_forge(base, fg))
     add(target / ".hermes" / "harness.config.json", base)
 
     add(target / "AGENTS.md", PLANT / "AGENTS.md")
@@ -260,6 +278,11 @@ def main(argv: list[str]) -> int:
         print("\n⚠️  El repo tiene CLAUDE.md: Hermes lo lee SÓLO desde el cwd, sólo si no hay AGENTS.md, y "
               "no resuelve sus `@imports`. Pasá las reglas a AGENTS.md (se instala uno nuevo).")
     creados = sum(1 for a, *_ in items if a != "=")
+    cfg_nuevo = next((src for _, dst, src in items if isinstance(src, dict)), {})
+    pasos_integ = "".join(
+        f"\n     python3 .hermes/harness/scripts/integ.py deps {i} --apply   # instala aislado y escribe el lock: commitealo"
+        f"\n     python3 .hermes/harness/scripts/integ.py hermes {i}         # el bloque para ~/.hermes/config.yaml"
+        for i in ((cfg_nuevo.get("integrations") or {}).get("enabled") or {})) or "\n     (ninguna)"
     print(f"\n{creados} a escribir, {len(items) - creados} ya existían (no se tocan).")
     print(f"""
 Siguiente (lo hace el humano — el instalador no toca el config de Hermes):
@@ -267,13 +290,15 @@ Siguiente (lo hace el humano — el instalador no toca el config de Hermes):
   2. hermes skills trust {target}            # las skills de .hermes/skills/ del repo
   3. python3 .hermes/harness/scripts/install.py {target} --link-plugin --apply
      hermes plugins enable repo-harness     # los plugins generales son opt-in
-  4. python3 .hermes/harness/scripts/gate.py
-  5. Las reglas de ESTE repo, cada una con su `example` (la CLI la prueba antes de escribirla):
+  4. Las integraciones que trae (`integrations.enabled`). Sin el lock, el gate es rojo: habilitada y
+     sin instalar es «instalada y muerta».{pasos_integ}
+  5. python3 .hermes/harness/scripts/gate.py
+  6. Las reglas de ESTE repo, cada una con su `example` (la CLI la prueba antes de escribirla):
      python3 .hermes/harness/scripts/cli.py rule add terminal.deny --id … --pattern … --example … --reason …
-  6. Panel en vivo y loop autónomo:
+  7. Panel en vivo y loop autónomo:
      python3 .hermes/harness/scripts/cli.py panel
      python3 .hermes/harness/scripts/cli.py task add "…" && python3 .hermes/harness/scripts/cli.py loop
-  7. El agente arranca en L0 (observa): la autonomía se gana con evidencia (P27, docs/autonomia.md).
+  8. El agente arranca en L0 (observa): la autonomía se gana con evidencia (P27, docs/autonomia.md).
      python3 .hermes/harness/scripts/cli.py nivel     # qué puede hoy y qué evidencia le falta""")
     return 0
 

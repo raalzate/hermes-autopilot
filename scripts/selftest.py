@@ -333,6 +333,8 @@ def seccion_integraciones(config: dict, ctx) -> None:
                                 ultima=lambda e, p: "9.9.9")
     check(any("GHSA-x" in x for x in r), "drift: una vulnerabilidad conocida no salió roja")
     check(any("9.9.9" in x for x in a), "drift: una versión nueva no salió como aviso")
+    check(not any(p == "auto-ontology-mcp" for _, _, p, _ in deps) and any("auto-ontology-mcp" in x and "desde git" in x for x in a),
+          "drift: lo instalado desde git no lo mide OSV: va como aviso, nunca como «sin vulnerabilidades»")
     def sin_red(_):
         raise OSError("sin red")
     r, a, v = dfx.integraciones(config, osv=sin_red)
@@ -372,10 +374,25 @@ def seccion_integraciones(config: dict, ctx) -> None:
     check(any("sin fijar" in e for e in ig.problemas_de_manifiesto(
         {**ig.catalogo()["navegador"], "requires": [{"kind": "npm", "package": "x", "version": "latest"}]})),
         "una dependencia sin versión fija debía ser rojo")
+    check(any("`source`" in e for e in ig.problemas_de_manifiesto(
+        {**ig.catalogo()["ontologia"], "requires": [{"kind": "pypi", "package": "x", "version": "1.0.0",
+                                                    "source": "git+https://github.com/x/x@main"}]})),
+        "una dependencia desde git sin fijar a un commit debía ser rojo (una rama se mueve)")
+    check(not ig.problemas_de_manifiesto(ig.catalogo()["ontologia"]), "un pypi desde git fijado a un commit debía pasar")
     check(any("referencia" in e for e in ig.problemas_de_manifiesto(
         {**ig.catalogo()["navegador"], "launch": {"env": {"API_TOKEN": "abc123"}}})), "un secreto con su valor en el manifiesto debía ser rojo")
     # El lock: una integración que instala algo y no está en el lock es rojo.
-    con_nav = ig.con(config, "navegador", nav)
+    # `porDefecto`: el instalador materializa cada una del catálogo (como `integ.py add`) y saca la clave.
+    import install as ins_  # noqa: E402
+    pd = ins_.with_integraciones({"integrations": {"porDefecto": {"$comment": "x", "ontologia": "lectura"}, "enabled": {}}})
+    check("porDefecto" not in pd["integrations"] and (pd["integrations"]["enabled"].get("ontologia") or {}).get("perfil") == "lectura"
+          and (pd["integrations"]["enabled"]["ontologia"].get("actions") or {}).get("write") == "deny",
+          f"install: `porDefecto` no se materializó en `enabled`: {sorted(pd['integrations'])}")
+    # Sobre un config sin habilitadas: un copiloto recién instalado ya trae las de `porDefecto`.
+    sin_integ = config
+    for i in list(((config.get("integrations") or {}).get("enabled") or {})):
+        sin_integ = ig.con(sin_integ, i, None)
+    con_nav = ig.con(sin_integ, "navegador", nav)
     check(any("no está en" in e for e in ig.problemas_de_lock(con_nav, Path(tmp))), "una integración instalable sin lock debía ser rojo")
     (Path(tmp) / ".hermes" / "integraciones.lock").write_text(json.dumps({"navegador": {"requires": [
         {"package": "@playwright/mcp", "version": nav["requires"][1]["version"], "integrity": "sha512-x"}]}}), encoding="utf-8")

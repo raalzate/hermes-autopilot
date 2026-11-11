@@ -126,6 +126,8 @@ CODIGO = {
     "integraciones: los archivos locales no se miran": ("plugin/harness/integ.py", "        for raw in archivos:", "        for raw in []:"),
     "integraciones: el CLI no se clasifica": ("plugin/harness/guards.py", "    if kind == \"shell\":\n        # Una integración por CLI", "    if False:\n        # Una integración por CLI"),
     "integraciones: un comando se lee como nombre": ("plugin/harness/integ.py", "    if any(c.isspace() for c in crudo):\n        return {crudo}", "    if False:\n        return {crudo}"),
+    "install: porDefecto no se materializa": ("scripts/install.py", "        sec.setdefault(\"enabled\", {}).setdefault(iid, ig.materializar(cat[iid], perfil))", "        pass"),
+    "integraciones: una fuente git sin commit pasa": ("scripts/integ.py", 'FUENTE_GIT = re.compile(r"^git\\+https://\\S+@[0-9a-f]{40}$")', 'FUENTE_GIT = re.compile(r"^git")'),
     "integraciones: el resultado no se recorta": ("plugin/harness/integ.py", "    if not isinstance(tope, int) or tope <= 0 or len(resultado) <= tope:\n        return None", "    if True:\n        return None"),
     "integ.py: acepta un ejemplo que no frena": ("scripts/integ.py", '        if hizo != ej.get("expect"):', "        if False:"),
     "integ.py: el lock no se mira": ("scripts/integ.py", '        if iid not in lock:\n            out.append', '        if False:\n            out.append'),

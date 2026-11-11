@@ -46,6 +46,9 @@ CATALOGO_REPO_REL = ".hermes/integraciones"
 LOCK_REL = ".hermes/integraciones.lock"
 KINDS = ("mcp", "hermes", "cli")
 VERSION_FIJA = re.compile(r"^\d+(\.\d+){0,3}$")
+# Un paquete de Python que no está en PyPI se instala desde git, fijado a un COMMIT (40 hex): una rama o un
+# tag se mueven, y el lock dejaría de decir lo que se instaló.
+FUENTE_GIT = re.compile(r"^git\+https://\S+@[0-9a-f]{40}$")
 REF_SECRETO = re.compile(r"^secret://(keychain|keyring|op|file|env)/.+")
 # Claves de un manifiesto que no viajan al config: son del catálogo (instalar, describir, perfiles).
 SOLO_CATALOGO = ("perfiles", "perfilPorDefecto", "descripcion", "setup")
@@ -246,10 +249,12 @@ def problemas_de_manifiesto(m: dict) -> list[str]:
     for r in m.get("requires") or []:
         if r.get("kind") in ("npm", "pypi") and not VERSION_FIJA.match(str(r.get("version", ""))):
             p.append(f"requires `{r.get('package')}`: versión `{r.get('version')}` sin fijar (una exacta: `1.2.3`, nunca `latest` ni un rango)")
+        if r.get("source") and (r.get("kind") != "pypi" or not FUENTE_GIT.match(str(r["source"]))):
+            p.append(f"requires `{r.get('package')}`: `source` es `git+https://…@<commit de 40 hex>` (sólo pypi; una rama o un tag se mueven)")
         if r.get("kind") not in ("npm", "pypi", "browser", "system"):
             p.append(f"requires: `kind` {r.get('kind')} desconocido (npm · pypi · browser · system)")
     for k, v in ((m.get("launch") or {}).get("env") or {}).items():
-        if isinstance(v, str) and nucleo_secreto(k) and not REF_SECRETO.match(v) and not v.startswith("{prefix}"):
+        if isinstance(v, str) and nucleo_secreto(k) and not REF_SECRETO.match(v) and not v.startswith(("{prefix}", "{datos}")):
             p.append(f"launch.env.{k}: un secreto va como referencia `secret://…`, nunca su valor")
     return p
 
@@ -299,10 +304,12 @@ def pasos(iid: str, entry: dict) -> list[dict]:
         elif k == "pypi":
             venv = pre / "venv"
             py = _bin_dir(pre, "pypi") / ("python.exe" if os.name == "nt" else "python")
-            out.append({"req": r, "que": f"pypi {r['package']}=={r['version']} en {venv}",
+            spec = f"{r['package']} @ {r['source']}" if r.get("source") else f"{r['package']}=={r['version']}"
+            out.append({"req": r, "que": f"pypi {spec} en {venv}",
                         "argv": [sys.executable, "-m", "venv", str(venv)], "luego": [str(py), "-m", "pip", "install", "-q",
-                                 "--disable-pip-version-check", "--report", str(pre / "pip-report.json"), f"{r['package']}=={r['version']}"],
-                        "listo": (_bin_dir(pre, "pypi") / r.get("bin", "")).exists()})
+                                 "--disable-pip-version-check", "--report", str(pre / "pip-report.json"), spec],
+                        "listo": (_bin_dir(pre, "pypi") / r.get("bin", "")).exists()
+                                 and (not r.get("source") or _commit_pip(pre, r["package"]) == r["source"].rsplit("@", 1)[1])})
         elif k == "browser":
             # El instalador del PROPIO servidor: sabe qué build de navegador espera su versión.
             inst = r.get("bin", "playwright")
@@ -332,6 +339,18 @@ def _sistema_ok(r: dict) -> bool:
     return tiene >= pide
 
 
+def _commit_pip(pre: Path, paquete: str) -> str:
+    """El commit que pip instaló desde git (su reporte), o "": otro commit con la misma versión se reinstala."""
+    try:
+        rep = json.loads((pre / "pip-report.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    for it in rep.get("install") or []:
+        if (it.get("metadata") or {}).get("name", "").lower().replace("_", "-") == paquete.lower().replace("_", "-"):
+            return ((it.get("download_info") or {}).get("vcs_info") or {}).get("commit_id", "")
+    return ""
+
+
 def _version_npm(pre: Path, paquete: str) -> str:
     try:
         return json.loads((pre / "node_modules" / paquete / "package.json").read_text(encoding="utf-8")).get("version", "")
@@ -358,7 +377,10 @@ def integridad(iid: str, entry: dict) -> list[dict]:
                 for it in rep.get("install") or []:
                     if (it.get("metadata") or {}).get("name", "").lower().replace("_", "-") == r["package"].lower().replace("_", "-"):
                         v = it["metadata"].get("version", "")
-                        h = "sha256-" + (((it.get("download_info") or {}).get("archive_info") or {}).get("hashes") or {}).get("sha256", "")
+                        info = it.get("download_info") or {}
+                        commit = (info.get("vcs_info") or {}).get("commit_id", "")
+                        # Desde git no hay wheel que hashear: el commit ES la identidad de lo instalado.
+                        h = f"git-{commit}" if commit else "sha256-" + ((info.get("archive_info") or {}).get("hashes") or {}).get("sha256", "")
             except (OSError, ValueError):
                 pass
             out.append({"kind": "pypi", "package": r["package"], "version": v, "integrity": h})

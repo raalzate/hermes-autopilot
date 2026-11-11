@@ -41,7 +41,7 @@ archivos, y un gate que define qué es "terminado".
   DevOps. Un proyecto de gestión sin código, donde Hermes orquesta épicas, milestones, tablero y wiki;
   codificadores (Claude Code o Hermes) con su repo, su tablero y su cola. Una épica se despacha en
   issues hijos vinculados y encolados en cada codificador, y su checklist se marca solo.
-- **22 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
+- **23 casos reales replicables** ([`casos/`](casos/README.md)) de programación, infraestructura,
   oficina, datos, soporte y operación (cinco con integraciones): un agente toma un atajo y el arnés lo frena, lo escala o lo
   deja llegar a verde. Se corre cada uno con un comando, y el gate los corre todos.
 - **Auditoría de huecos** ([`docs/huecos.md`](docs/huecos.md)): 40 cerrados con su prueba, y lo

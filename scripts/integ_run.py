@@ -102,7 +102,9 @@ def entrada(iid: str, repo: Path) -> dict:
 
 
 def plantilla(texto: str, prefijo: Path) -> str:
-    return texto.replace("{prefix}", prefijo.as_posix())
+    """`{prefix}`: lo instalado de ESTA versión. `{datos}`: lo que la integración guarda y tiene que
+    sobrevivir a una versión nueva (una base de conocimiento), al lado de las versiones."""
+    return texto.replace("{prefix}", prefijo.as_posix()).replace("{datos}", (prefijo.parent / "datos").as_posix())
 
 
 def comando(iid: str, entry: dict, repo: Path) -> tuple[list[str], dict]:

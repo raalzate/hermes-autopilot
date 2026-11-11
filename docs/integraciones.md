@@ -31,6 +31,12 @@ Todo eso también está como `python3 scripts/cli.py integ …`.
 | `mensajeria` | CLI | WhatsApp, Telegram, Slack, Teams, correo… vía `hermes send` | `asistente` | `hermes_cli/send_cmd.py` |
 | `github` | CLI | `gh`: issues, PRs, releases, API | `asistente` | subcomandos y banderas de `gh` 2.x |
 | `postgres` | CLI | `psql`, con el SQL clasificado; la defensa de verdad es un rol de sólo lectura | `lectura` | `psql` 14+ |
+| `ontologia` | MCP | capa semántica sobre las bases (preguntas → SQL validado contra una ontología) y base de conocimiento local (auto-ontology-mcp); las bases las registra el humano | `lectura` | `auto-ontology-mcp` 0.6.1, commit `b6e1f924`: `tools/list` real (33) y un SELECT y un DELETE reales por el lanzador |
+
+**Las que trae todo copiloto.** `integrations.porDefecto` en la plantilla: `install.py` las habilita
+al instalar, con su perfil. Hoy, `ontologia` en `lectura`. Habilitada no es instalada: el gate del
+repo nuevo es rojo hasta `integ.py deps ontologia --apply` y el lock commiteado. El servidor lo
+registra en Hermes el humano (`integ.py hermes ontologia`).
 
 Un MCP de un servidor remoto del catálogo de Hermes (`hermes mcp install linear`) también se puede
 gobernar: si no tiene manifiesto, cada herramienta suya escala (`integrations.undeclared`). Para
@@ -137,19 +143,27 @@ roto deja pasar (P5): lo caza `integ.py check` en el gate, no el turno del usuar
 | `kind` | Cómo se instala | Dónde |
 |---|---|---|
 | `npm` | `npm install --prefix … --ignore-scripts --save-exact paquete@versión` | `~/.hermes/integraciones/<id>/<versión>/` |
-| `pypi` | un venv propio y `pip install paquete==versión --report` | ahí mismo |
+| `pypi` | un venv propio y `pip install paquete==versión --report`; con `source`, `pip install "paquete @ git+https://…@<commit>"` | ahí mismo |
 | `browser` | el instalador del propio servidor (sabe qué build espera) | `<prefijo>/browsers` |
 | `system` | **no se instala**: se verifica la versión y se imprime el comando para el humano | — |
 
 - **Versiones fijas.** `latest` o un rango son rojo.
+- **Desde git, fijado a un commit.** Un servidor que no está publicado en PyPI lleva
+  `source: "git+https://…@<commit de 40 hex>"`. Una rama o un tag son rojo: se mueven. Otro commit
+  con la misma versión se reinstala.
 - **Lock.** Después de instalar, se escribe `.hermes/integraciones.lock` con el hash de lo
-  instalado: el `integrity` de npm o el sha256 del wheel. Commitealo: el equipo instala lo mismo.
+  instalado: el `integrity` de npm, el sha256 del wheel, o `git-<commit>` si vino de git.
+  Commitealo: el equipo instala lo mismo.
 - **Señal del gate.** `integ.py check` es rojo si el lock no dice lo que el config pide.
 - **Fuera del entorno de Hermes.** Nada se instala ahí ni en el arnés (ADR 0002): cada servidor es
   otro proceso.
 - **Vulnerabilidades.** `drift.py`, semanal, consulta OSV con lo fijado:
   - una vulnerabilidad conocida es rojo;
-  - una versión nueva es aviso: se prueba con `--probe` antes de subirla, nunca sola.
+  - una versión nueva es aviso: se prueba con `--probe` antes de subirla, nunca sola;
+  - lo instalado desde git OSV no lo mide: es aviso siempre, nunca «sin vulnerabilidades».
+- **Datos que sobreviven a la versión.** En `launch.env`, `{prefix}` es la instalación de esta
+  versión y `{datos}` es `~/.hermes/integraciones/<id>/datos`: lo que la integración guarda (una
+  base de conocimiento) no se pierde al subir de versión.
 
 ## Paso a paso: Gmail con perfil asistente
 

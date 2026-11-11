@@ -39,7 +39,7 @@ scripts/cli.py               parametrizar sin editar JSON: `rule add` prueba la 
 scripts/panel.py             el panel en vivo (SSE, 127.0.0.1) sobre el registro de eventos (P22)
 scripts/integ.py             las integraciones: catálogo, `add` prueba ANTES de escribir, dependencias aisladas con lock, `check` en el gate
 scripts/integ_run.py         el lanzador de un servidor MCP: secretos `secret://` sólo en su entorno, límites, `--probe` contra el servidor real
-scripts/casos.py             22 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
+scripts/casos.py             23 casos replicables de punta a punta (P23): casos/<id>/, agente de juguete, plugin real
 scripts/hermes_fuente.py     Hermes desde su código fuente, en el commit verificado (CI: job hermes-real)
 scripts/evals_page.py        la página pública de la evaluación (docs/evaluacion.html): gráficos, intervalos y rúbrica; `--check` en el gate
 scripts/schema_check.py      un validador de JSON Schema (draft 2020-12) de la biblioteca estándar: los esquemas de evals/schema/
