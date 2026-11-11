@@ -2,7 +2,7 @@
   "id": "ontologia",
   "titulo": "Capa semántica y base de conocimiento (auto-ontology-mcp)",
   "descripcion": "El servidor MCP auto-ontology-mcp (Apache-2.0), la capa semántica de NVIDIA Auto Ontology: una ontología sobre las bases del equipo (términos, relaciones, atributos SQL) para contestar preguntas con SQL validado contra ella, y una base de conocimiento propia (conceptos, registros, pasajes de fuentes). No pide clave de modelo: el modelo de Hermes hace el lenguaje y el servidor lo determinista. Guarda todo en SQLite local. Las bases se abren de sólo lectura y el servidor rechaza todo lo que no sea un SELECT; las registra el HUMANO por la CLI, nunca el agente.",
-  "verificado": "2026-11-10 · auto-ontology-mcp 0.6.1, commit b6e1f924 (no está en PyPI: se instala desde git, fijado al commit): `tools/list` real con AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0 (33 herramientas, con anotaciones: sin `add_datasource` ni `scan_datasource`), `--help`, y las variables que lee `config.py`",
+  "verificado": "2026-11-11 · auto-ontology-mcp 0.6.1, commit b6e1f924 (no está en PyPI: se instala desde el fork raalzate/auto-ontology-mcp, fijado al commit; subir de commit es un PR al fork que alguien lee): `tools/list` real con AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0 (33 herramientas, con anotaciones: sin `add_datasource` ni `scan_datasource`), `--help`, y las variables que lee `config.py`",
   "version": "0.6.1",
   "kind": "mcp",
   "server": "ontologia",
@@ -97,7 +97,7 @@
       "kind": "pypi",
       "package": "auto-ontology-mcp",
       "version": "0.6.1",
-      "source": "git+https://github.com/gogoymh/auto-ontology-mcp@b6e1f924f938be69fe272cad9104fa46ae6dbd16",
+      "source": "git+https://github.com/raalzate/auto-ontology-mcp@b6e1f924f938be69fe272cad9104fa46ae6dbd16",
       "bin": "auto-ontology-mcp"
     }
   ],
